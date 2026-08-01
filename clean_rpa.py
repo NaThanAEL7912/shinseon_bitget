@@ -11,8 +11,8 @@ def replace_func_body(text, func_name):
 
 content = replace_func_body(content, 'run_token_sniffer')
 content = replace_func_body(content, 'restart_chrome_debug_port')
-content = replace_func_body(content, 'trigger_voox_rpa_test')
-content = replace_func_body(content, 'execute_vox_emergency_master_internal')
+content = replace_func_body(content, 'trigger_bitget_rpa_test')
+content = replace_func_body(content, 'execute_bitget_emergency_master_internal')
 
 with open(file_path, "w", encoding="utf-8") as f:
     f.write(content)

@@ -5,7 +5,7 @@
 이제 진정한 핵심인 **Phase 2 (엔진 이식)** 작전에 돌입할 차례이옵니다.
 
 ## Phase 2: 퀀트 엔진 실전 매매 연동
-이전 BVOX 버전에서는 `ShinseonV35Engine` 내부에서 `execute_vox_internal_packet` 이라는 함수를 호출하여 브라우저(Playwright) 화면을 억지로 클릭하는 무식한(?) 방식을 사용했사옵니다. 
+이전 BBITGET 버전에서는 `ShinseonV35Engine` 내부에서 `execute_bitget_internal_packet` 이라는 함수를 호출하여 브라우저(Playwright) 화면을 억지로 클릭하는 무식한(?) 방식을 사용했사옵니다. 
 
 이제 이 낡은 방식을 혁신하여 다음과 같이 변경하옵니다.
 

@@ -9,7 +9,7 @@ echo  1. 기존 파이썬 봇 인스턴스 정화 중...
 taskkill /f /im python.exe >nul 2>&1
 taskkill /f /im pythonw.exe >nul 2>&1
 
-echo  2. VOOX 디버깅 크롬 브라우저 상태 확인 중...
+echo  2. Bitget 모니터링 크롬 브라우저 팝업 준비 중...
 set "CHROME_PATH="
 if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
     set "CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe"
@@ -38,11 +38,11 @@ if "%CHROME_PATH%"=="" (
 
 netstat -ano | findstr 9224 >nul 2>&1
 if %errorlevel% neq 0 (
-    echo  [안내] 9224포트 디버깅 크롬을 가동합니다...
-    start "VOOX_Chrome" "%CHROME_PATH%" --remote-debugging-port=9224 --user-data-dir="%~dp0ChromeDebugProfile" https://x.me/futures/trade/BTCUSDT
+    echo  [안내] 9224포트 모니터링 크롬을 가동합니다...
+    start "Bitget_Chrome" "%CHROME_PATH%" --remote-debugging-port=9224 --user-data-dir="%~dp0ChromeDebugProfile" https://www.bitget.com/futures/usdt/BTCUSDT
     timeout /t 1 /nobreak >nul
 ) else (
-    echo  [안내] 9224포트 디버깅 크롬이 이미 가동 중입니다. (로그인 세션 보존)
+    echo  [안내] 9224포트 모니터링 크롬이 이미 가동 중입니다. (로그인 세션 보존)
 )
 
 echo  3. 신선 마스터 대시보드 구동 중...

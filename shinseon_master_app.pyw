@@ -920,9 +920,9 @@ class ShinseonDashboard(QMainWindow):
         self.btn_reload_browser.clicked.connect(self.trigger_manual_reload_browser)
         right_layout.addWidget(self.btn_reload_browser)
         
-        # VOOX 수동 제어판 (50% 청산, 스탑로스) -> 부모 위젯을 right_widget으로 계층 일원화하여 임시 유령 컨테이너 보더 생성 방어!
-        self.lbl_voox_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [VOOX] 수동 신속 제어판</b>", right_widget)
-        right_layout.addWidget(self.lbl_voox_title)
+        # BITGET 수동 제어판 (50% 청산, 스탑로스) -> 부모 위젯을 right_widget으로 계층 일원화하여 임시 유령 컨테이너 보더 생성 방어!
+        self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 수동 신속 제어판</b>", right_widget)
+        right_layout.addWidget(self.lbl_bitget_title)
         
         # 1행: 🌓 50% 청산 버튼 (가로 100% 꽉 참)
         self.btn_close_50 = QPushButton("🌓 50% 청산", right_widget)
@@ -1013,9 +1013,9 @@ class ShinseonDashboard(QMainWindow):
         right_layout.addWidget(self.btn_stoploss)
         
         # ----------------------------------------------------------------------
-        # ■ [VOOX] 실시간 목표가 가격 알림 제어판 (v3.65)
+        # ■ [BITGET] 실시간 목표가 가격 알림 제어판 (v3.65)
         # ----------------------------------------------------------------------
-        lbl_alert_title = QLabel("■ [VOOX] 실시간 목표가 가격 알림", right_widget)
+        lbl_alert_title = QLabel("■ [BITGET] 실시간 목표가 가격 알림", right_widget)
         lbl_alert_title.setStyleSheet("color: #FFFFFF; font-size: 12px; font-weight: bold; margin-top: 10px;")
         right_layout.addWidget(lbl_alert_title)
 
@@ -1382,7 +1382,7 @@ class ShinseonDashboard(QMainWindow):
         elif cmd in ["/청산", "청산", "/전량청산", "전량청산"]:
             if self.bot_core.v35_engine and self.bot_core.v35_engine.is_position_active:
                 self.bot_core.v35_engine.exit_reason = "텔레그램 원격 비상 전량 청산"
-                asyncio.create_task(self.bot_core.v35_engine.execute_vox_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
+                asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
                 self.send_telegram_notification("<b>🚨 [원격 비상 청산]</b> 텔레그램 명령으로 현재 열린 포지션을 100% 즉시 시장가 강제 청산 집행합니다!")
             else:
                 self.send_telegram_notification("<b>⚠️ [원격 제어]</b> 청산할 오픈 포지션이 없습니다. (100% 현금 대기 중)")
@@ -1542,25 +1542,25 @@ class ShinseonDashboard(QMainWindow):
             else:
                 c_total = float(capital_text)
             
-            m_voox = c_total
+            m_bitget = c_total
             m_bin = 0.0
-            voox_bal = getattr(self.bot_core, "voox_balance", 0.0)
-            if voox_bal <= 0.0:
-                voox_bal = c_total
-            p_target = max(1000.0, voox_bal * (self.betting_ratio / 100.0))
+            bitget_bal = getattr(self.bot_core, "bitget_balance", 0.0)
+            if bitget_bal <= 0.0:
+                bitget_bal = c_total
+            p_target = max(1000.0, bitget_bal * (self.betting_ratio / 100.0))
             
-            self.bot_core.update_capital_config(c_total, m_voox, m_bin, p_target)
+            self.bot_core.update_capital_config(c_total, m_bitget, m_bin, p_target)
             self.add_log(f"자본 비율 실시간 리밸런싱 완료 ➡️ 총자본: ${c_total:,.2f}, 목표 포지션 규모: ${p_target:,.2f}")
         except ValueError:
             c_total_fallback = 20000.0
-            m_voox = c_total_fallback
+            m_bitget = c_total_fallback
             m_bin = 0.0
-            voox_bal = getattr(self.bot_core, "voox_balance", 0.0)
-            if voox_bal <= 0.0:
-                voox_bal = c_total_fallback
-            p_target = max(1000.0, voox_bal * (self.betting_ratio / 100.0))
+            bitget_bal = getattr(self.bot_core, "bitget_balance", 0.0)
+            if bitget_bal <= 0.0:
+                bitget_bal = c_total_fallback
+            p_target = max(1000.0, bitget_bal * (self.betting_ratio / 100.0))
             
-            self.bot_core.update_capital_config(c_total_fallback, m_voox, m_bin, p_target)
+            self.bot_core.update_capital_config(c_total_fallback, m_bitget, m_bin, p_target)
 
     def sync_account_balances(self):
         self.btn_sync_balance.setEnabled(False)
@@ -1591,8 +1591,8 @@ class ShinseonDashboard(QMainWindow):
                     if exchange:
                         await exchange.close()
             
-            # 2. VOOX 실시간 선물 USDT 잔고 조회 (RPA 원격 디버깅)
-            voox_balance = None
+            # 2. BITGET 실시간 선물 USDT 잔고 조회 (RPA 원격 디버깅)
+            bitget_balance = None
             browser_launched_by_bot = False
             async with self.bot_core.cdp_lock:
                 try:
@@ -1602,7 +1602,7 @@ class ShinseonDashboard(QMainWindow):
                     for context in browser.contexts:
                         for page in context.pages:
                             url = page.url.lower()
-                            if "x.me" in url or "voox" in url or "trade" in url:
+                            if "x.me" in url or "bitget" in url or "trade" in url:
                                 target_page = page
                                 break
                         if target_page:
@@ -1632,17 +1632,17 @@ class ShinseonDashboard(QMainWindow):
                         if raw_assets_text:
                             match = re.search(r'([0-9,]+\.[0-9]+)', raw_assets_text)
                             if match:
-                                voox_balance = float(match.group(1).replace(",", ""))
+                                bitget_balance = float(match.group(1).replace(",", ""))
                                 
                         # 2순위 (폴백): Available 단어와 인접한(최대 30자 이내) 진짜 마진 잔고 숫자 파싱 (BTC 호가 오인 차단)
-                        if voox_balance is None:
+                        if bitget_balance is None:
                             content = await target_page.content()
                             match = re.search(r'Available\s*[:\s]*\$?\s*([0-9,.]+)\s*(?:USDT|\b)', content, re.IGNORECASE)
                             if match:
-                                voox_balance = float(match.group(1).replace(",", ""))
+                                bitget_balance = float(match.group(1).replace(",", ""))
                                 
                         # 3순위 (폴백): 기존 JS DOM Available 스캔 방식
-                        if voox_balance is None:
+                        if bitget_balance is None:
                             js_avail = """
                             () => {
                                 let elements = Array.from(document.querySelectorAll('span, div, p'));
@@ -1657,7 +1657,7 @@ class ShinseonDashboard(QMainWindow):
                             raw_avail_text = await target_page.evaluate(js_avail)
                             match = re.search(r'([0-9,.]+)', raw_avail_text)
                             if match:
-                                voox_balance = float(match.group(1).replace(",", ""))
+                                bitget_balance = float(match.group(1).replace(",", ""))
                         
                         # --- [통합] 실물 포지션 스캔 추가 (REST API 100% 정밀 동기화) ---
                         js_dom_pos = """
@@ -1764,24 +1764,24 @@ class ShinseonDashboard(QMainWindow):
                             self.add_log("✔ [포지션 동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
                     else:
                         if browser_launched_by_bot:
-                            self.add_log("  ➡️ [가이드] VOOX 페이지에 로그인 및 x.me/futures/trade/BTCUSDT 진입 후 재동기화 하소서.")
+                            self.add_log("  ➡️ [가이드] BITGET 페이지에 로그인 및 x.me/futures/trade/BTCUSDT 진입 후 재동기화 하소서.")
                     
                     await pw.stop()
                 except Exception as e:
-                    self.add_log(f"[안내] VOOX RPA 잔고 조회 지연: 크롬 디버깅 포트(9224) 연결 확인 필요")
+                    self.add_log(f"[안내] BITGET RPA 잔고 조회 지연: 크롬 디버깅 포트(9224) 연결 확인 필요")
             
-            # 3. VOOX 단독 운용 모드: 바이낸스 연동을 배제하고 오직 VOOX 잔고를 100% 자본금으로 설정
+            # 3. BITGET 단독 운용 모드: 바이낸스 연동을 배제하고 오직 BITGET 잔고를 100% 자본금으로 설정
             final_bin = 0.0
-            if voox_balance is not None and voox_balance > 0.0:
-                final_voox = voox_balance
+            if bitget_balance is not None and bitget_balance > 0.0:
+                final_bitget = bitget_balance
             else:
                 prev_bal = getattr(self, "last_balance", 0.0)
-                final_voox = prev_bal if prev_bal > 100.0 else 20000.0
-                self.add_log(f"⚠️ [잔고 보정] VOOX 잔고 0원 수신 ➡️ 이전 정상 자본금(${final_voox:,.2f})으로 자가 복구 유지합니다.")
-            final_total = final_voox
+                final_bitget = prev_bal if prev_bal > 100.0 else 20000.0
+                self.add_log(f"⚠️ [잔고 보정] BITGET 잔고 0원 수신 ➡️ 이전 정상 자본금(${final_bitget:,.2f})으로 자가 복구 유지합니다.")
+            final_total = final_bitget
             self.last_balance = final_total
             
-            target_voox = final_total
+            target_bitget = final_total
             target_bin = 0.0
             
             # UI 라벨 실시간 업데이트
@@ -1847,12 +1847,12 @@ class ShinseonDashboard(QMainWindow):
                 self.add_log("✔ [검증 완료] 거래소 가용 자금이 충분합니다. 대칭 헷지 준비 완료!")
                 
             # 백엔드 엔진 코어 자본 설정 연동 (100% 자동 합산 매핑 반영)
-            self.bot_core.voox_balance = final_voox
-            m_voox = final_total
+            self.bot_core.bitget_balance = final_bitget
+            m_bitget = final_total
             m_bin = 0.0
-            p_target = max(1000.0, final_voox * (self.betting_ratio / 100.0))
-            self.bot_core.update_capital_config(final_total, m_voox, m_bin, p_target)
-            self.add_log(f"✔ [동기화 완료] 실계좌 총자산(VOOX 단독): ${final_total:,.2f}, 동적 목표 포지션 규모: ${p_target:,.2f}")
+            p_target = max(1000.0, final_bitget * (self.betting_ratio / 100.0))
+            self.bot_core.update_capital_config(final_total, m_bitget, m_bin, p_target)
+            self.add_log(f"✔ [동기화 완료] 실계좌 총자산(BITGET 단독): ${final_total:,.2f}, 동적 목표 포지션 규모: ${p_target:,.2f}")
             
         except Exception as ex:
             self.add_log(f"[오류] 계좌 동기화 도중 예외 발생: {ex}")
@@ -1870,7 +1870,7 @@ class ShinseonDashboard(QMainWindow):
     def trigger_position_sync(self):
         self.btn_position_sync.setEnabled(False)
         self.btn_position_sync.setText("🔄 동기화 중...")
-        self.add_log("[수동 리로드] VOOX 포지션 강제 재동기화 개시...")
+        self.add_log("[수동 리로드] BITGET 포지션 강제 재동기화 개시...")
         asyncio.create_task(self.do_position_sync())
 
     async def do_position_sync(self):
@@ -1889,7 +1889,7 @@ class ShinseonDashboard(QMainWindow):
                     for context in browser.contexts:
                         for page in context.pages:
                             url = page.url.lower()
-                            if "x.me" in url or "voox" in url:
+                            if "x.me" in url or "bitget" in url:
                                 candidate_pages.append(page)
                     
                     # 후보 페이지들 중 실제 Vue 스토어가 활성화되어 있는 진짜 트레이딩 탭을 검증하여 타겟으로 선정
@@ -1967,7 +1967,7 @@ class ShinseonDashboard(QMainWindow):
                     if not positions:
                         try:
                             import json
-                            curr_headers = self.bot_core.voox_headers or {}
+                            curr_headers = self.bot_core.bitget_headers or {}
                             headers_json = json.dumps(curr_headers)
                             js_fetch_pos = f"""
                             () => fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
@@ -2100,9 +2100,9 @@ class ShinseonDashboard(QMainWindow):
                             self.bot_core.v35_engine.exit_in_progress = False
                         self.lbl_guardrail.setText("진입/청산 상태:\n[100% 현금 대기 중]")
                         self.add_log("✔ [동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
-                    self.add_log("🌓 [수동 리로드] VOOX 포지션 상태를 강제로 재동기화 완료하였습니다.")
+                    self.add_log("🌓 [수동 리로드] BITGET 포지션 상태를 강제로 재동기화 완료하였습니다.")
                 else:
-                    self.add_log("❌ [동기화 실패] VOOX 브라우저를 찾지 못했습니다.")
+                    self.add_log("❌ [동기화 실패] BITGET 브라우저를 찾지 못했습니다.")
                 
                 if pw:
                     await pw.stop()
@@ -2171,7 +2171,7 @@ class ShinseonDashboard(QMainWindow):
         await self.do_sync_balances()
         
         # 3. 레이턴시 물리 실측 백그라운드 구동
-        self.add_log("⚡ [부팅 동기화 2/2] 5초간 바이낸스-VOOX 레이턴시 물리 실측 백그라운드 개시...")
+        self.add_log("⚡ [부팅 동기화 2/2] 5초간 바이낸스-BITGET 레이턴시 물리 실측 백그라운드 개시...")
         self.trigger_latency_test()
 
 
@@ -2243,7 +2243,7 @@ class ShinseonDashboard(QMainWindow):
             self.add_log("★ [신선 전략] 실전 오더플로우 저격 감시를 일시 중지하고 대기 모드로 전환합니다.")
             
             # 거래소에 심겨 있는 모든 미체결 조건부 주문 일괄 자동 취소 코루틴 발진 (스탑로스 완전 정화)
-            asyncio.create_task(self.cancel_all_vox_trigger_orders_internal())
+            asyncio.create_task(self.cancel_all_bitget_trigger_orders_internal())
         self.save_shinseon_config()
         
     def manual_start_bot(self):
@@ -2275,7 +2275,7 @@ class ShinseonDashboard(QMainWindow):
             self.add_log("⏸ [하이브리드 수동 감시] 수동 진입 포지션 가드레일 감시를 전격 중단합니다.")
             
             # 거래소 예약 주문 일괄 취소 코루틴 발진 (스탑로스 완전 정화)
-            asyncio.create_task(self.cancel_all_vox_trigger_orders_internal())
+            asyncio.create_task(self.cancel_all_bitget_trigger_orders_internal())
             return
             
         # 버튼을 잠시 비활성화하고 '동기화 및 가동 중...' 상태로 전환
@@ -2296,14 +2296,14 @@ class ShinseonDashboard(QMainWindow):
 
         async def run_manual_start_flow():
             try:
-                self.add_log("[수동 가동 시작] VOOX 실시간 포지션 사전 동기화 수행 중...")
+                self.add_log("[수동 가동 시작] BITGET 실시간 포지션 사전 동기화 수행 중...")
                 await self.do_position_sync()
 
                 direction = getattr(self.bot_core.v35_engine, "entry_direction", None)
                 is_active = getattr(self.bot_core.v35_engine, "is_position_active", False)
 
                 if not direction or not is_active:
-                    self.add_log("❌ [가동 실패] VOOX 포지션이 비어 있거나 로드되지 않았습니다. 거래소 탭에 포지션이 열려 있는지 확인해 주십시오.")
+                    self.add_log("❌ [가동 실패] BITGET 포지션이 비어 있거나 로드되지 않았습니다. 거래소 탭에 포지션이 열려 있는지 확인해 주십시오.")
                     # 버튼 원래 상태로 복구
                     self.btn_manual_start.setEnabled(True)
                     self.btn_manual_start.setText("⚡ 수동 봇 시작")
@@ -2327,7 +2327,7 @@ class ShinseonDashboard(QMainWindow):
                 # 포지션이 정상 감지되었으면 가이드라인 가동 및 평단가 설정
                 actual_entry_price = self.bot_core.v35_engine.entry_price
                 if actual_entry_price <= 0.0:
-                    actual_entry_price = await self.bot_core.v35_engine.get_live_vox_price_internal()
+                    actual_entry_price = await self.bot_core.v35_engine.get_live_bitget_price_internal()
                 if actual_entry_price <= 0.0:
                     actual_entry_price = float(self.bot_core.current_price)
 
@@ -2355,10 +2355,10 @@ class ShinseonDashboard(QMainWindow):
                 """)
                 self.btn_start.setEnabled(False)
 
-                self.add_log(f"⚡ [하이브리드 수동 감시] VOOX 진입 평단가 ${actual_entry_price:,.1f} 기준으로 진입 평단가를 캘리브레이션 완료하였습니다. (3초 오작동 유예 가동)")
+                self.add_log(f"⚡ [하이브리드 수동 감시] BITGET 진입 평단가 ${actual_entry_price:,.1f} 기준으로 진입 평단가를 캘리브레이션 완료하였습니다. (3초 오작동 유예 가동)")
                 self.add_log(f"⚡ [하이브리드 오토-청산] 수동 진입 포지션 가드레일 감시 자동 도킹 개시 (방향: {direction})")
 
-                asyncio.create_task(self.bot_core.v35_engine.execute_vox_internal_packet(
+                asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(
                     side="STOP_LOSS", 
                     order_type=str(round(actual_entry_price * 1.013 if direction == "SHORT" else actual_entry_price * 0.987, 1))
                 ))
@@ -2387,14 +2387,14 @@ class ShinseonDashboard(QMainWindow):
 
         asyncio.create_task(run_manual_start_flow())
 
-    async def execute_vox_emergency_master_internal(self):
+    async def execute_bitget_emergency_master_internal(self):
         pass
 
-    async def cancel_all_vox_trigger_orders_internal(self):
-        self.add_log("[스탑로스 정화] VOOX 거래소의 모든 미체결 스탑 예약 주문 취소 진행 중...")
+    async def cancel_all_bitget_trigger_orders_internal(self):
+        self.add_log("[스탑로스 정화] BITGET 거래소의 모든 미체결 스탑 예약 주문 취소 진행 중...")
         try:
             # v1.1 성능 격상: DOM 매크로를 걷어내고 API 패킷 직송 함수로 이관
-            await self.bot_core.v35_engine.execute_vox_internal_packet(side="CLEAR", order_type="CANCEL_ALL")
+            await self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="CANCEL_ALL")
             self.add_log("[스탑로스 정화 완료] API 패킷 직송을 통한 정화 시퀀스 완료")
         except Exception as e:
             self.add_log(f"❌ [스탑로스 정화 실패] 오류 발생: {e}")
@@ -2463,7 +2463,7 @@ class ShinseonDashboard(QMainWindow):
             self.bot_core.v35_engine.is_position_active = False
             
         # 3. 거래소 단일 연결 3단 일괄 폭파 정화 시퀀스 격발! (개발계획서_103 이식)
-        asyncio.create_task(self.execute_vox_emergency_master_internal())
+        asyncio.create_task(self.execute_bitget_emergency_master_internal())
         
         # 4. 버튼 2개 비주얼 및 상호 잠금 상태 완전 해금 원복
         self.btn_start.setEnabled(True)
@@ -2509,8 +2509,8 @@ class ShinseonDashboard(QMainWindow):
         if not self.bot_core.v35_engine:
             return
         self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
-        self.add_log("🌓 [수동 신속 제어] VOOX 포지션 50% 시장가 청산 명령 발동...")
-        asyncio.create_task(self.bot_core.v35_engine.execute_vox_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+        self.add_log("🌓 [수동 신속 제어] BITGET 포지션 50% 시장가 청산 명령 발동...")
+        asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
 
     def reset_stoploss_ui(self):
         if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
@@ -2868,8 +2868,8 @@ class ShinseonDashboard(QMainWindow):
 
     def sync_leverage_to_exchange(self):
         if hasattr(self, "bot_core") and self.bot_core and self.bot_core.v35_engine:
-            self.add_log(f"⚙️ [레버리지 동기화] VOOX 거래소 레버리지를 설정치인 {self.leverage_level}배로 동기화 조정 요청 중...")
-            asyncio.create_task(self.bot_core.v35_engine.adjust_vox_leverage(self.leverage_level))
+            self.add_log(f"⚙️ [레버리지 동기화] BITGET 거래소 레버리지를 설정치인 {self.leverage_level}배로 동기화 조정 요청 중...")
+            asyncio.create_task(self.bot_core.v35_engine.adjust_bitget_leverage(self.leverage_level))
 
     def trigger_manual_reload_browser(self):
         # 포지션 활성화 시 경고 메시지 출력 후 기각
@@ -2900,7 +2900,7 @@ class ShinseonDashboard(QMainWindow):
                         for context in browser.contexts:
                             for page in context.pages:
                                 url = page.url
-                                if "x.me" in url or "voox" in url:
+                                if "x.me" in url or "bitget" in url:
                                     target_page = page
                                     break
                             if target_page:
@@ -2908,10 +2908,10 @@ class ShinseonDashboard(QMainWindow):
                                 
                         if target_page:
                             await target_page.reload()
-                            self.add_log("✅ [RPA 복원] VOOX 브라우저 페이지 새로고침(Reload) 완료!")
+                            self.add_log("✅ [RPA 복원] BITGET 브라우저 페이지 새로고침(Reload) 완료!")
                         else:
-                            self.add_log("⚠️ [RPA 복원] VOOX 탭을 찾을 수 없습니다. 브라우저가 종료되었을 수 있습니다.")
-                            raise ConnectionError("No VOOX tab found")
+                            self.add_log("⚠️ [RPA 복원] BITGET 탭을 찾을 수 없습니다. 브라우저가 종료되었을 수 있습니다.")
+                            raise ConnectionError("No BITGET tab found")
                     except Exception as e:
                         self.add_log(f"⚠️ [RPA 복원] 브라우저 연결 실패 ({e}) ➡️ 디버깅 크롬 브라우저 자동 재기동을 수행합니다.")
                         bat_path = os.path.join(BASE_DIR, "디버깅크롬_시작.bat")
@@ -2933,7 +2933,7 @@ class ShinseonDashboard(QMainWindow):
 
     async def run_manual_latency_test(self):
         self.btn_latency_test.setEnabled(False)
-        self.add_log("⚡ [측정 개시] 5초간 바이낸스-VOOX 물리적 시차 계측을 개시합니다...")
+        self.add_log("⚡ [측정 개시] 5초간 바이낸스-BITGET 물리적 시차 계측을 개시합니다...")
         
         # 127.0.0.1 로 CDP 연결 락 확보
         async with self.bot_core.cdp_lock:
@@ -2949,14 +2949,14 @@ class ShinseonDashboard(QMainWindow):
                 for context in browser.contexts:
                     for page in context.pages:
                         url = page.url
-                        if "x.me" in url or "voox" in url:
+                        if "x.me" in url or "bitget" in url:
                             target_page = page
                             break
                     if target_page:
                         break
                         
                 if not target_page:
-                    self.add_log("❌ [측정 에러] 크롬에서 VOOX 탭을 찾지 못했습니다!")
+                    self.add_log("❌ [측정 에러] 크롬에서 BITGET 탭을 찾지 못했습니다!")
                     await pw.stop()
                     self.btn_latency_test.setEnabled(True)
                     return
@@ -2980,11 +2980,11 @@ class ShinseonDashboard(QMainWindow):
                     except Exception:
                         pass
                     
-                    # 2. VOOX 브라우저 evaluate fetch 핑 송출
-                    start_vox = time.time() * 1000
+                    # 2. BITGET 브라우저 evaluate fetch 핑 송출
+                    start_bitget = time.time() * 1000
                     
                     # 수동 벤치용 인증 헤더 직렬화
-                    curr_h = self.bot_core.voox_headers or {}
+                    curr_h = self.bot_core.bitget_headers or {}
                     if "Content-Type" not in curr_h:
                         curr_h["Content-Type"] = "application/json"
                     man_h_json = json.dumps(curr_h)
@@ -2996,24 +2996,24 @@ class ShinseonDashboard(QMainWindow):
                         body: '{{}}'
                     }}).then(r => r.text()).catch(e => '')
                     """)
-                    t_vox_end = time.time() * 1000
+                    t_bitget_end = time.time() * 1000
                     
-                    total_delta = t_vox_end - t_signal
-                    vox_pure_ping = t_vox_end - start_vox
+                    total_delta = t_bitget_end - t_signal
+                    bitget_pure_ping = t_bitget_end - start_bitget
                     if total_delta < 0:
-                        total_delta = vox_pure_ping + 10.0
+                        total_delta = bitget_pure_ping + 10.0
                         
                     deltas.append(total_delta)
-                    pings.append(vox_pure_ping)
+                    pings.append(bitget_pure_ping)
                     
                     verdict = "Safe" if total_delta <= 50.0 else ("Buffer" if total_delta < 200.0 else "No Edge")
-                    self.add_log(f"  └ [{i+1}/5] 시차: {total_delta:.1f}ms | VOOX 핑: {vox_pure_ping:.1f}ms | 판정: {verdict}")
+                    self.add_log(f"  └ [{i+1}/5] 시차: {total_delta:.1f}ms | BITGET 핑: {bitget_pure_ping:.1f}ms | 판정: {verdict}")
                     await asyncio.sleep(1.0)
                         
                 avg_delta = sum(deltas) / len(deltas)
                 avg_ping = sum(pings) / len(pings)
                 final_verdict = "🟢 Safe (필승 구간)" if avg_delta <= 50.0 else ("🟡 Buffer (위험 구간)" if avg_delta < 200.0 else "🔴 No Edge (진입 불가)")
-                self.add_log(f"🏆 [최종 판정] 평균 총 시차: {avg_delta:.1f}ms | VOOX 핑: {avg_ping:.1f}ms -> {final_verdict}")
+                self.add_log(f"🏆 [최종 판정] 평균 총 시차: {avg_delta:.1f}ms | BITGET 핑: {avg_ping:.1f}ms -> {final_verdict}")
                 
                 # 수동 레이턴시 실측 결과 GUI 라벨에 출력
                 verdict_short = final_verdict.split()[-1].replace('(', '').replace(')', '')
@@ -3024,12 +3024,12 @@ class ShinseonDashboard(QMainWindow):
                 log_dir = r"c:\Working\shinseon\docs"
                 os.makedirs(log_dir, exist_ok=True)
                 with open(os.path.join(log_dir, "latency_bench_log.txt"), "a", encoding="utf-8") as lf:
-                    lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 수동측정 - 평균시차: {avg_delta:.1f}ms | VOOX핑: {avg_ping:.1f}ms | 판정: {final_verdict}\n")
+                    lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 수동측정 - 평균시차: {avg_delta:.1f}ms | BITGET핑: {avg_ping:.1f}ms | 판정: {final_verdict}\n")
                     
                 await pw.stop()
             except Exception as e:
                 if "Failed to fetch" in str(e) or "TypeError" in str(e):
-                    self.add_log("⚡ [수동 레이턴시] VOOX 통신 로딩 중으로 잠시 후 다시 시도해 주십시오.")
+                    self.add_log("⚡ [수동 레이턴시] BITGET 통신 로딩 중으로 잠시 후 다시 시도해 주십시오.")
                 else:
                     self.add_log(f"❌ [측정 에러] {e}")
                 self.lbl_latency_result.setText("실측 결과: 측정 에러")
@@ -3049,11 +3049,11 @@ class BotCore:
     def __init__(self):
         from collections import deque
         self.c_total = 20000.0
-        self.m_voox = 20000.0
+        self.m_bitget = 20000.0
         self.m_bin = 0.0
         self.p_target = 70000.0
         self.p_target_pct = 3.5
-        self.voox_balance = 0.0
+        self.bitget_balance = 0.0
         self.is_running = False
         self.current_task = None
         self.v35_engine = None
@@ -3072,7 +3072,7 @@ class BotCore:
                 'options': {'defaultType': 'swap'}
             })
 
-        self.voox_headers = {}  # VOOX 실시간 인증 헤더 보관용 딕셔너리
+        self.bitget_headers = {}  # BITGET 실시간 인증 헤더 보관용 딕셔너리
         self.last_binance_time_ms = int(time.time() * 1000)  # 가장 최신 바이낸스 웹소켓 틱 타임스탬프 (ms)
         self.last_packet_latency_ms = 15.0  # 순정 바이낸스 패킷 레이턴시 수치 (ms)
         self.buy_liq_buffer = deque()
@@ -3084,9 +3084,9 @@ class BotCore:
     async def run_token_sniffer(self):
         pass
 
-    def update_capital_config(self, c_total, m_voox, m_bin, p_target):
+    def update_capital_config(self, c_total, m_bitget, m_bin, p_target):
         self.c_total = c_total
-        self.m_voox = m_voox
+        self.m_bitget = m_bitget
         self.m_bin = m_bin
         self.p_target = p_target
         if self.v35_engine:
@@ -3433,16 +3433,16 @@ class BotCore:
                             except Exception:
                                 pass
                             
-                            start_vox = time.time() * 1000.0
-                            vox_pure_ping = float(getattr(self, "last_packet_latency_ms", 15.0))
-                            t_vox_end = start_vox + vox_pure_ping
+                            start_bitget = time.time() * 1000.0
+                            bitget_pure_ping = float(getattr(self, "last_packet_latency_ms", 15.0))
+                            t_bitget_end = start_bitget + bitget_pure_ping
                             
-                            total_delta = t_vox_end - t_signal
+                            total_delta = t_bitget_end - t_signal
                             if total_delta < 0:
-                                total_delta = vox_pure_ping + 10.0
+                                total_delta = bitget_pure_ping + 10.0
                                 
                             verdict = "Safe" if total_delta <= 50.0 else ("Buffer" if total_delta < 200.0 else "No Edge")
-                            final_verdict = f"자동측정 - 평균시차: {total_delta:.1f}ms | VOOX핑: {vox_pure_ping:.1f}ms | 판정: {verdict}"
+                            final_verdict = f"자동측정 - 평균시차: {total_delta:.1f}ms | BITGET핑: {bitget_pure_ping:.1f}ms | 판정: {verdict}"
                             
                             if self.ui_cb:
                                 self.ui_cb(0.0, 1, f"⚡ [자동 레이턴시] {final_verdict}")
@@ -3496,7 +3496,7 @@ class BotCore:
                                     for context in browser.contexts:
                                         for page in context.pages:
                                             url = page.url
-                                            if "x.me" in url or "voox" in url:
+                                            if "x.me" in url or "bitget" in url:
                                                 target_page = page
                                                 break
                                         if target_page:
@@ -3505,11 +3505,11 @@ class BotCore:
                                     if target_page:
                                         await target_page.reload()
                                         if self.ui_cb:
-                                            self.ui_cb(0.0, 1, "✅ [RPA 복원] 브라우저 페이지 새로고침 완료! VOOX 탭이 성공적으로 리로드되었습니다.")
+                                            self.ui_cb(0.0, 1, "✅ [RPA 복원] 브라우저 페이지 새로고침 완료! BITGET 탭이 성공적으로 리로드되었습니다.")
                                         last_reload_time = current_time
                                     else:
                                         if self.ui_cb:
-                                            self.ui_cb(0.0, 1, "⚠️ [RPA 복원] 크롬 브라우저에서 VOOX 탭을 찾을 수 없어 리로드를 건너뜁니다.")
+                                            self.ui_cb(0.0, 1, "⚠️ [RPA 복원] 크롬 브라우저에서 BITGET 탭을 찾을 수 없어 리로드를 건너뜁니다.")
                                 except Exception as e:
                                     if self.ui_cb:
                                         self.ui_cb(0.0, 1, f"⚠️ [RPA 복원] 브라우저 연결 실패 ({e}) ➡️ 크롬 브라우저 자동 재기동을 시도합니다.")
@@ -3769,9 +3769,9 @@ class ShinseonV35Engine:
         except asyncio.CancelledError:
             pass
         
-    async def adjust_vox_leverage(self, leverage_level):
+    async def adjust_bitget_leverage(self, leverage_level):
         """
-        [레버리지 동기화] VOOX 거래소의 BTCUSDT 선물 계약 레버리지를 세팅값으로 자동 조절 (개발계획서_188_37)
+        [레버리지 동기화] BITGET 거래소의 BTCUSDT 선물 계약 레버리지를 세팅값으로 자동 조절 (개발계획서_188_37)
         """
         if self.is_local_mode:
             return
@@ -3787,7 +3787,7 @@ class ShinseonV35Engine:
                     for context in browser.contexts:
                         for page in context.pages:
                             url = page.url.lower()
-                            if "x.me" in url or "voox" in url:
+                            if "x.me" in url or "bitget" in url:
                                 target_page = page
                                 break
                         if target_page:
@@ -3831,12 +3831,12 @@ class ShinseonV35Engine:
                         """
                         res = await target_page.evaluate(js_code)
                         if isinstance(res, dict) and (res.get("code") == "0" or res.get("success") is True):
-                            if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"✅ [레버리지 동기화 완료] VOOX 거래소 레버리지를 {leverage_level}배로 자동 연동/조정 완료!")
+                            if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"✅ [레버리지 동기화 완료] BITGET 거래소 레버리지를 {leverage_level}배로 자동 연동/조정 완료!")
                         else:
                             err_msg = res.get("msg") if isinstance(res, dict) else "unknown error"
-                            if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"⚠️ [레버리지 동기화 응답] VOOX 레버리지 연동 상태: {err_msg}")
+                            if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"⚠️ [레버리지 동기화 응답] BITGET 레버리지 연동 상태: {err_msg}")
                     else:
-                        if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"⚠️ [레버리지 동기화 보류] VOOX 크롬 탭을 찾을 수 없어 조정을 건너뜁니다.")
+                        if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"⚠️ [레버리지 동기화 보류] BITGET 크롬 탭을 찾을 수 없어 조정을 건너뜁니다.")
                 finally:
                     if pw:
                         try: await pw.stop()
@@ -3849,9 +3849,9 @@ class ShinseonV35Engine:
         except Exception as e:
             if getattr(self.bot, "dashboard", None): self.bot.dashboard.add_log(f"⚠️ [레버리지 동기화 예외] 브라우저 통신 지연 ({e})")
 
-    async def fetch_vox_orderbook_internal(self):
+    async def fetch_bitget_orderbook_internal(self):
         """
-        보완책 ①: 복스 비공식 내부 API 패킷 스캔 (VWAP 가중평균가 연산 내장)
+        보완책 ①: 비트겟 비공식 내부 API 패킷 스캔 (VWAP 가중평균가 연산 내장)
         $200,000 물량을 채울 때까지의 평균 호가 슬리피지를 연산하여 반환
         """
         mid = self.entry_price if self.is_position_active else getattr(self.bot, "current_price", 63000.0)
@@ -3888,7 +3888,7 @@ class ShinseonV35Engine:
             'bids': [[expected_vwap, 3.0]]
         }
 
-    async def get_live_vox_price_internal(self):
+    async def get_live_bitget_price_internal(self):
         # 1. 모의 훈련 모드 시: 기존 훈련용 무작위 난수 시세 피딩
         if self.is_local_mode:
             return self.entry_price * (1 + random.uniform(-0.008, 0.018)) if self.is_position_active else 65000.0
@@ -3900,7 +3900,7 @@ class ShinseonV35Engine:
         curr_val = getattr(self.bot, "current_price", 0.0)
         return float(curr_val) if curr_val > 0.0 else 65000.0
 
-    async def execute_vox_internal_packet(self, side, order_type, custom_ratio=0.5):
+    async def execute_bitget_internal_packet(self, side, order_type, custom_ratio=0.5):
         if order_type in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
             if getattr(self, "is_split_entering", False):
                 self.bot.ui_cb(0.0, 0, f"⚠️ [2중 발주 차단] {order_type} 중복 진입 락(Lock)에 의해 발주가 차단되었습니다.")
@@ -3908,7 +3908,7 @@ class ShinseonV35Engine:
             self.is_split_entering = True
 
         try:
-            return await asyncio.wait_for(self._execute_vox_internal_packet_impl(side, order_type, custom_ratio=custom_ratio), timeout=5.0)
+            return await asyncio.wait_for(self._execute_bitget_internal_packet_impl(side, order_type, custom_ratio=custom_ratio), timeout=5.0)
         except asyncio.TimeoutError:
             self.bot.ui_cb(0.0, 0, f"⚡ [{side} 발주 타임아웃] 5.0초 하드 타임아웃 경과 ➡️ 패킷 전송 완료 및 대시보드 안전 복귀")
             return False
@@ -3919,7 +3919,7 @@ class ShinseonV35Engine:
             if order_type in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
                 self.is_split_entering = False
 
-    async def _execute_vox_internal_packet_impl(self, side, order_type, custom_ratio=0.5):
+    async def _execute_bitget_internal_packet_impl(self, side, order_type, custom_ratio=0.5):
         if side in ["LONG", "SHORT"] and order_type not in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
             self.is_half_exited = False
             self.has_smart_guarded = False
@@ -3983,9 +3983,9 @@ class ShinseonV35Engine:
                 
                 # 가상 상태 업데이트 (평단가 및 볼륨 업데이트)
                 current_price = getattr(self.bot, "current_price", 60000.0)
-                voox_bal = getattr(self.bot, "voox_balance", 0.0)
-                if voox_bal <= 0.0:
-                    voox_bal = self.bot.c_total
+                bitget_bal = getattr(self.bot, "bitget_balance", 0.0)
+                if bitget_bal <= 0.0:
+                    bitget_bal = self.bot.c_total
                     
                 dashboard = self.bot.dashboard
                 
@@ -4004,7 +4004,7 @@ class ShinseonV35Engine:
                         
                     if ratio <= 0.0:
                         return
-                    p_target = max(1000.0, voox_bal * (ratio / 100.0))
+                    p_target = max(1000.0, bitget_bal * (ratio / 100.0))
                     btc_vol = p_target / current_price
                     volume = int(round(btc_vol * 1000))
                 
@@ -4026,1042 +4026,146 @@ class ShinseonV35Engine:
 
         await asyncio.sleep(0.01)
         async with self.bot.cdp_lock:
-            try:
-                raise NotImplementedError('Playwright removed for Bitget migration') # pw = await async_playwright().start()
-                # 15초 타임아웃 적용 (브라우저 응답 없음/데드락 예방)
-                browser = await asyncio.wait_for(pw.chromium.connect_over_cdp("http://127.0.0.1:9224", timeout=5000), timeout=15.0)
-                
-                target_page = None
-                candidate_pages = []
-                for context in browser.contexts:
-                    for page in context.pages:
-                        url = page.url.lower()
-                        if "x.me" in url or "voox" in url:
-                            candidate_pages.append(page)
-                
-                # 후보 탭들 중 실제 로그인 토큰(token=)이 존재하는 트레이딩 탭 정밀 수집
-                for page in candidate_pages:
-                    try:
-                        has_tok = await page.evaluate("""
-                        () => {
-                            let parts = document.cookie.split(";");
-                            for (let p of parts) {
-                                if (p.trim().startsWith("token=")) return true;
-                            }
-                            return false;
-                        }
-                        """)
-                        url_lower = page.url.lower()
-                        if has_tok and ("trade" in url_lower or "futures" in url_lower):
-                            target_page = page
-                            break
-                        elif has_tok and not target_page:
-                            target_page = page
-                    except Exception:
-                        continue
-                
-                if not target_page and candidate_pages:
-                    target_page = candidate_pages[0]
+            # --- [Phase 2] 신선 비트겟 API CCXT 연동 이식 (Playwright 제거) ---
+            async def _do_ccxt_order():
+                try:
+                    exchange = self.bot.bitget_exchange
+                    if not exchange:
+                        self.bot.ui_cb(0.0, 0, "❌ [비트겟 API 에러] CCXT 객체가 초기화되지 않았습니다.")
+                        return False
+
+                    symbol = 'BTC/USDT:USDT'
+                    current_price = getattr(self.bot, "current_price", 60000.0)
+                    bitget_bal = getattr(self.bot, "bitget_balance", 0.0)
+                    if bitget_bal <= 0.0:
+                        bitget_bal = self.bot.c_total
+
+                    dashboard = getattr(self.bot, "dashboard", None)
+                    if not dashboard:
+                        return False
                         
-                if not target_page:
-                    self.bot.ui_cb(0.0, 0, "❌ [발주 에러] VOOX 탭을 크롬에서 찾을 수 없습니다!")
-                    await pw.stop()
                     if side == "CLEAR":
-                        self.exit_in_progress = False
-                    return False if side not in ["CLEAR", "STOP_LOSS"] else None
+                        if order_type == "CANCEL_ALL":
+                            open_orders = await exchange.fetch_open_orders(symbol)
+                            for o in open_orders:
+                                await exchange.cancel_order(o['id'], symbol)
+                            self.bot.ui_cb(0.0, 0, "🎯 [스탑로스 취소 완료] 미체결 스탑 주문 취소 완료")
+                            return True
 
-                # 크래시 자가 복구 가드 (Out of Memory 등의 페이지 크래시 감지 및 자동 복구) (개발계획서_188_36)
-                try:
-                    await target_page.title()
-                except Exception as crash_err:
-                    self.bot.ui_cb(0.0, 1, f"⚠️ [RPA 복원] 발주 중 VOOX 탭 크래시 감지! 즉시 새로고침을 시도합니다. ({crash_err})")
-                    try:
-                        await target_page.reload()
-                        await asyncio.sleep(4.0)
-                    except Exception as reload_err:
-                        self.bot.ui_cb(0.0, 1, f"❌ [RPA 복원] 새로고침 실패 ➡️ 크롬 재기동을 호출합니다. ({reload_err})")
-                        bat_path = os.path.join(BASE_DIR, "디버깅크롬_시작.bat")
-                        if os.path.exists(bat_path):
-                            subprocess.Popen(["cmd.exe", "/c", "디버깅크롬_시작.bat"], cwd=BASE_DIR)
-                            await asyncio.sleep(3.0)
-
-                import json
-                
-                ua_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-                contract_id = 48  # BTCUSDT
-                
-                # 백그라운드로 가로챈 VOOX 전용 헤더 추출 (인증 토큰 동기화)
-                curr_headers = self.bot.voox_headers or {}
-                if "content-type" not in curr_headers:
-                    curr_headers["content-type"] = "application/json"
-                if "exchange-language" not in curr_headers:
-                    curr_headers["exchange-language"] = "ko_KR"
-                if "exchange-client" not in curr_headers:
-                    curr_headers["exchange-client"] = "pc"
-                
-                headers_json = json.dumps(curr_headers)
-
-                # WAF 대응: EO_Bot_Ssid, __tst_status 쿠키를 path=/로 복사
-                try:
-                    await target_page.evaluate("""
-                    () => {
-                        let getCookie = (name) => {
-                            let value = "; " + document.cookie;
-                            let parts = value.split("; " + name + "=");
-                            if (parts.length === 2) return parts.pop().split(";").shift();
-                            return "";
-                        };
-                        let ssid = getCookie("EO_Bot_Ssid");
-                        let status = getCookie("__tst_status");
-                        if (ssid) {
-                            document.cookie = "EO_Bot_Ssid=" + ssid + "; path=/";
-                        }
-                        if (status) {
-                            document.cookie = "__tst_status=" + status + "; path=/";
-                        }
-                    }
-                    """)
-                except Exception:
-                    pass
-
-                if side == "CLEAR":
-                    api_success = False
-                    dom_success = False
-
-                    if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
-                        dir_val = getattr(self, "entry_direction", "LONG")
-                        close_side = "SELL" if dir_val == "LONG" else "BUY"
+                        positions = await exchange.fetch_positions([symbol])
+                        active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
+                        if not active_pos:
+                            self.bot.ui_cb(0.0, 0, "⚠️ [청산 스킵] 현재 활성화된 포지션이 없습니다.")
+                            self.is_position_active = False
+                            self.position_volume = 0
+                            self.exit_in_progress = False
+                            return True
+                        
+                        pos_side = active_pos['side']
+                        close_side = 'sell' if pos_side == 'long' else 'buy'
                         
                         ratio_factor = custom_ratio if custom_ratio > 0.0 else 0.5
-                        pct_lbl = int(round(ratio_factor * 100))
-                        p_vol = getattr(self, "position_volume", 0)
-                        half_vol = max(1, int(round(p_vol * ratio_factor))) if p_vol > 0 else 0
-                        pos_ids = getattr(self, "active_position_ids", [])
-                        p_id = pos_ids[0] if pos_ids else 0
+                        if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
+                            amount = float(active_pos['contracts']) * ratio_factor
+                            pct_lbl = int(round(ratio_factor * 100))
+                            self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산] API 발주 시작...")
+                        else:
+                            amount = float(active_pos['contracts'])
+                            self.bot.ui_cb(0.0, 0, "🎯 [전량 청산] API 발주 시작...")
+                            
+                        amount = max(0.001, round(amount, 3))
                         
-                        if half_vol <= 0 or p_id == 0:
-                            js_get_pos = f"""
-                            () => {{
-                                let tok = "";
-                                let parts = document.cookie.split(";");
-                                for (let p of parts) {{
-                                    let pair = p.trim().split("=");
-                                    if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                                }}
-                                return fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
-                                    method: 'GET',
-                                    credentials: 'include',
-                                    headers: {{
-                                        'content-type': 'application/json',
-                                        'exchange-language': 'ko_KR',
-                                        'exchange-client': 'pc',
-                                        'exchange-token': tok,
-                                        'authorization': tok
-                                    }}
-                                }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, msg: "HTML_RESPONSE_DETECTED" }}; }} }}))
-                            }}
-                            """
-                            try:
-                                info_res = await target_page.evaluate(js_get_pos)
-                                if isinstance(info_res, dict) and info_res.get("code") == "0":
-                                    positions = info_res.get("data", []) or []
-                                    for pos in positions:
-                                        if pos.get("contractId") == contract_id or pos.get("id") or pos.get("positionId"):
-                                            p_id = pos.get("id") or pos.get("positionId") or pos.get("contractId") or 0
-                                            vol = float(pos.get("positionVolume") or pos.get("volume") or 0.0)
-                                            half_vol = max(1, int(round(vol * ratio_factor))) if vol > 0 else 0
-                                            break
-                            except Exception as e:
-                                logger.error(f"{pct_lbl}% 청산 포지션 수집 에러: {e}")
-                                info_res = {"code": -999, "msg": str(e)}
-                            
-                        if half_vol > 0 and p_id != 0:
-                            js_code = f"""
-                            () => {{
-                                let tok = "";
-                                let parts = document.cookie.split(";");
-                                for (let p of parts) {{
-                                    let pair = p.trim().split("=");
-                                    if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                                }}
-                                return fetch(window.location.origin + '/egw/private/futures/order/place', {{
-                                    method: 'POST',
-                                    credentials: 'include',
-                                    headers: {{
-                                        'content-type': 'application/json',
-                                        'exchange-language': 'ko_KR',
-                                        'exchange-client': 'pc',
-                                        'exchange-token': tok,
-                                        'authorization': tok
-                                    }},
-                                    body: JSON.stringify({{
-                                        contractId: {contract_id},
-                                        open: "CLOSE",
-                                        side: "{close_side}",
-                                        volumeType: 1,
-                                        volume: {half_vol},
-                                        price: 0,
-                                        type: 2,
-                                        positionId: {p_id},
-                                        positionType: 2,
-                                        leverageLevel: 20,
-                                        uaTime: "{ua_time}"
-                                    }})
-                                }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, success: false, msg: "HTML_RESPONSE_DETECTED", raw: t.substring(0, 100) }}; }} }}))
-                            }}
-                            """
-                            try:
-                                res = await target_page.evaluate(js_code)
-                                if isinstance(res, dict) and res.get("code") == "0":
-                                    api_success = True
-                                    self.position_volume = max(0, self.position_volume - half_vol)
-                                    self.is_half_exited = True
-                                    reason = getattr(self, "exit_reason", f"수동 {pct_lbl}% 분할 청산 명령 발동")
-                                    self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 완료] {dir_val} 포지션 {pct_lbl}% 시장가 청산 완료 (사유: {reason}) (API 패킷 직송)")
-                                else:
-                                    err_msg = res.get("msg") if isinstance(res, dict) else "unknown error"
-                                    self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 실패] API 응답 에러: {err_msg}")
-                            except Exception as e:
-                                logger.error(f"{pct_lbl}% 청산 API 예외: {e}")
-                                self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 예외] {e}")
-                        else:
-                            self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 에러] 포지션 볼륨 또는 ID 획득 실패 (vol: {p_vol}, id: {p_id})")
-                                
-                    elif order_type == "CANCEL_ALL":
-                        js_cancel_all = f"""
-                        () => {{
-                            let tok = "";
-                            let parts = document.cookie.split(";");
-                            for (let p of parts) {{
-                                let pair = p.trim().split("=");
-                                if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                            }}
-                            return fetch(window.location.origin + '/egw/private/futures/order/trade/history_trigger_order_list', {{
-                                method: 'POST',
-                                credentials: 'include',
-                                headers: {{
-                                    'content-type': 'application/json',
-                                    'exchange-language': 'ko_KR',
-                                    'exchange-client': 'pc',
-                                    'exchange-token': tok,
-                                    'authorization': tok
-                                }},
-                                body: JSON.stringify({{ pageSize: 100, triggerTypeList: [1, 2], uaTime: "{ua_time}" }})
-                            }}).then(r => r.json()).then(async res => {{
-                                if (res.code === "0" && res.data && res.data.records) {{
-                                    let cnt = 0;
-                                    for (let rec of res.data.records) {{
-                                        let orderId = rec.orderId || rec.id;
-                                        let cancelRes = await fetch(window.location.origin + '/egw/private/futures/trigger/order/cancel', {{
-                                            method: 'POST',
-                                            credentials: 'include',
-                                            headers: {{
-                                                'content-type': 'application/json',
-                                                'exchange-language': 'ko_KR',
-                                                'exchange-client': 'pc',
-                                                'exchange-token': tok,
-                                                'authorization': tok
-                                            }},
-                                            body: JSON.stringify({{
-                                                contractId: rec.contractId || 48,
-                                                orderId: orderId,
-                                                id: rec.id || rec.orderId,
-                                                positionId: rec.positionId || 0,
-                                                uaTime: "{ua_time}"
-                                            }})
-                                        }}).then(r => r.json());
-                                        if (cancelRes.code === "0") {{
-                                            cnt++;
-                                        }}
-                                    }}
-                                    return {{ success: true, count: cnt, total: res.data.records.length }};
-                                }}
-                                return {{ success: false, msg: res.msg || "list_failed" }};
-                            }}).catch(e => ({{ success: false, msg: e.message }}))
-                        }}
-                        """
-                        cancel_res = await target_page.evaluate(js_cancel_all)
-                        if isinstance(cancel_res, dict) and cancel_res.get("success"):
-                            self.bot.ui_cb(0.0, 0, f"🎯 [스탑로스 취소 완료] 미체결 스탑 주문 {cancel_res.get('count')}개 취소 완료 (총 {cancel_res.get('total')}개) (API 패킷 직송)")
-                            api_success = True
-                        else:
-                            self.bot.ui_cb(0.0, 0, f"❌ [스탑로스 취소 실패] {cancel_res.get('msg') if isinstance(cancel_res, dict) else cancel_res}")
-                    else:
-                        # 일괄 시장가 청산 (Close All - 실측 검증 100% 성공한 order/place open CLOSE 전면 통일)
-                        js_close_all = f"""
-                        () => {{
-                            let tok = "";
-                            let parts = document.cookie.split(";");
-                            for (let p of parts) {{
-                                let pair = p.trim().split("=");
-                                if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                            }}
-                            return (async () => {{
-                                try {{
-                                    let posRes = await fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
-                                        method: 'GET',
-                                        credentials: 'include',
-                                        headers: {{
-                                            'content-type': 'application/json',
-                                            'exchange-language': 'ko_KR',
-                                            'exchange-client': 'pc',
-                                            'exchange-token': tok,
-                                            'authorization': tok
-                                        }}
-                                    }}).then(r => r.json()).catch(e => ({{ code: "-999", msg: e.message }}));
-
-                                    if (posRes && (posRes.code === "0" || posRes.code === 0) && posRes.data && posRes.data.length > 0) {{
-                                        let succCnt = 0;
-                                        let lastErr = "";
-                                        for (let pos of posRes.data) {{
-                                            let pId = pos.id || pos.positionId;
-                                            let rawVol = pos.positionVolume || pos.volume || pos.vol || 0;
-                                            let pVol = parseFloat(rawVol);
-                                            let pSide = pos.orderSide || pos.side || pos.positionType;
-                                            let closeSide = (pSide === "BUY" || pSide === "LONG" || pSide === 1) ? "SELL" : "BUY";
-                                            let cId = pos.contractId || 48;
-                                            
-                                            if (pVol > 0 && pId) {{
-                                                let closeRes = await fetch(window.location.origin + '/egw/private/futures/order/place', {{
-                                                    method: 'POST',
-                                                    credentials: 'include',
-                                                    headers: {{
-                                                        'content-type': 'application/json',
-                                                        'exchange-language': 'ko_KR',
-                                                        'exchange-client': 'pc',
-                                                        'exchange-token': tok,
-                                                        'authorization': tok
-                                                    }},
-                                                    body: JSON.stringify({{
-                                                        contractId: cId,
-                                                        open: "CLOSE",
-                                                        side: closeSide,
-                                                        volumeType: 1,
-                                                        volume: rawVol,
-                                                        price: 0,
-                                                        type: 2,
-                                                        positionId: pId,
-                                                        positionType: pos.positionType || 2,
-                                                        leverageLevel: pos.leverageLevel || 30,
-                                                        uaTime: "{ua_time}"
-                                                    }})
-                                                }}).then(r => r.json()).catch(e => ({{ code: "-999", msg: e.message }}));
-                                                
-                                                if (closeRes && (closeRes.code === "0" || closeRes.code === 0)) {{
-                                                    succCnt++;
-                                                }} else {{
-                                                    lastErr = JSON.stringify(closeRes);
-                                                }}
-                                            }}
-                                        }}
-                                        if (succCnt > 0) {{
-                                            return {{ code: "0", success: true, count: succCnt, total: posRes.data.length }};
-                                        }} else {{
-                                            return {{ code: "-1", success: false, msg: "ORDER_FAILED: " + lastErr }};
-                                        }}
-                                    }}
-                                    return {{ code: "-1", success: false, msg: "NO_ACTIVE_POSITIONS" }};
-                                }} catch(err) {{
-                                    return {{ code: "-999", success: false, msg: err.message }};
-                                }}
-                            }})();
-                        }}
-                        """
                         try:
-                            res = await target_page.evaluate(js_close_all)
-                            if isinstance(res, dict) and res.get("code") == "0":
-                                api_success = True
-                                reason = getattr(self, "exit_reason", "수동 또는 반대신호/만기 청산")
-                                self.bot.ui_cb(0.0, 0, f"🎯 [청산 완료] VOOX 포지션 {res.get('count', 1)}개 시장가 청산 완료 (사유: {reason}) (API 패킷 직송)")
-                            elif isinstance(res, dict) and res.get("msg") == "NO_ACTIVE_POSITIONS":
-                                self.bot.ui_cb(0.0, 0, "🎯 [청산 완료] 오픈된 VOOX 포지션이 없어 일괄 청산을 스킵합니다.")
-                                api_success = True
-                            else:
-                                err_msg = res.get("msg") if isinstance(res, dict) else "unknown error"
-                                self.bot.ui_cb(0.0, 0, f"❌ [청산 API 실패] API 응답 에러: {err_msg}")
+                            order = await exchange.create_order(symbol, 'market', close_side, amount, params={'reduceOnly': True})
+                            self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
                         except Exception as e:
-                            logger.error(f"일괄 청산 API 발주 에러: {e}")
-                            self.bot.ui_cb(0.0, 0, f"❌ [청산 API 예외] {e}")
-
-                    # --- 2순위 DOM 자동 클릭 강제 청산 (Fallback DOM Click) 이식 ---
-                    if not api_success and order_type != "CANCEL_ALL":
-                        self.bot.ui_cb(0.0, 0, "⚠️ [2차 DOM 청산 발동] API 패킷 차단/실패 감지! VOOX 웹 UI버튼 직접 타격을 시도합니다.")
-                        js_dom_click = """
-                        () => {
-                            let tabs = Array.from(document.querySelectorAll('div, button, a, span'));
-                            for (let t of tabs) {
-                                let txt = t.innerText ? t.innerText.trim() : "";
-                                if (txt === "Positions" || txt === "포지션" || txt.includes("Positions (") || txt.includes("포지션 (")) {
-                                    t.click();
-                                    break;
-                                }
-                            }
-                            let btns = Array.from(document.querySelectorAll('button, a, div'));
-                            for (let b of btns) {
-                                let t = b.innerText ? b.innerText.trim() : "";
-                                if (t.includes("일괄") || t.includes("시장가 청산") || t.includes("전량 청산") || t.includes("청산") || t.includes("Close All") || t.includes("Flash Close") || t.includes("Close") || t.includes("Flash")) {
-                                    b.click();
-                                    return true;
-                                }
-                            }
-                            return false;
-                        }
-                        """
-                        dom_clicked = False
-                        try:
-                            dom_clicked = await target_page.evaluate(js_dom_click)
-                        except Exception as dom_err:
-                            logger.error(f"DOM 클릭 스크립트 실행 에러: {dom_err}")
-
-                        # DOM 클릭 타격 후 1초 대기 후 실물 포지션 소멸 여부를 재검증
-                        await asyncio.sleep(1.0)
-
-                        js_verify_pos_gone = """
-                        () => {
-                            let btns = Array.from(document.querySelectorAll('button, a, div'));
-                            for (let b of btns) {
-                                let t = b.innerText ? b.innerText.trim() : "";
-                                if (t.includes("일괄") || t.includes("시장가 청산") || t.includes("전량 청산") || t.includes("청산") || t.includes("Close All") || t.includes("Flash Close") || t.includes("Close") || t.includes("Flash")) {
-                                    return false;
-                                }
-                            }
-                            return true;
-                        }
-                        """
-                        pos_gone = False
-                        try:
-                            pos_gone = await target_page.evaluate(js_verify_pos_gone)
-                        except Exception as verify_err:
-                            logger.error(f"포지션 소멸 검증 에러: {verify_err}")
-
-                        if dom_clicked or pos_gone:
-                            dom_success = True
-                            reason = getattr(self, "exit_reason", "수동 또는 만기 청산")
-                            self.bot.ui_cb(0.0, 0, f"🎯 [2차 DOM 청산 성공] VOOX 웹 UI버튼 직접 클릭으로 포지션 100% 강제 청산 완수! (사유: {reason})")
-
-                    if api_success or dom_success:
-                        if not order_type.startswith("PARTIAL_CLOSE") and order_type != "50_PERCENT_CLOSE" and order_type != "CANCEL_ALL":
+                            self.bot.ui_cb(0.0, 0, f"❌ [청산 에러] 비트겟 API 예외 발생: {e}")
+                            return False
+                        
+                        if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
+                            self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
+                            self.is_half_exited = True
+                        else:
                             self.is_position_active = False
-                            self.entry_price = 0.0
                             self.position_volume = 0
+                            self.entry_price = 0.0
                             self.entry_direction = ""
+                            self.has_second_entry = False
+                            self.has_third_entry = False
+                            self.exit_in_progress = False
                             
-                            dashboard = getattr(self.bot, "dashboard", None)
-                            profit_cd_sec = float(getattr(dashboard, "profit_cooldown_seconds", 15.0)) if dashboard else 15.0
-                            loss_cd_sec = float(getattr(dashboard, "cooldown_seconds", 300.0)) if dashboard else 300.0
-
+                            profit_cd_sec = float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
+                            loss_cd_sec = float(getattr(dashboard, "cooldown_seconds", 300.0))
                             exit_reason_text = getattr(self, "exit_reason", "")
                             is_loss = ("손절" in exit_reason_text) or ("Stop Loss" in exit_reason_text) or ("스탑" in exit_reason_text and "익절" not in exit_reason_text)
-
-                            if is_loss:
-                                target_cooldown = loss_cd_sec
-                                label = "손절 쿨타임"
-                            else:
-                                target_cooldown = profit_cd_sec
-                                label = "익절/스위칭 쿨타임"
-
+                            target_cooldown = loss_cd_sec if is_loss else profit_cd_sec
+                            label = "손절 쿨타임" if is_loss else "익절/스위칭 쿨타임"
+                            
                             self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cooldown)
                             if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
                                 self.cooldown_timer_task.cancel()
                             self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cooldown, label))
                             
-                            # --- [신설] 청산 시 실제 체결 정보 DOM 스캔 획득 ---
-                            self.last_actual_exit_time = ""
-                            self.last_actual_exit_price = 0.0
-                            self.last_actual_exit_qty = 0.0
-                            
-                            actual_exit_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            actual_exit_price = await self.get_live_vox_price_internal()
-                            actual_exit_qty = float(getattr(self, "position_volume", 0)) / 1000.0
-                            
-                            async def _async_scan_actual_exit():
-                                try:
-                                    await asyncio.sleep(0.5)
-                                    js_actual_exit = """
-                                () => {
-                                    let rows = Array.from(document.querySelectorAll('tr.ant-table-row, tr'));
-                                    let closeRows = [];
-                                    for (let r of rows) {
-                                        let txt = r.innerText ? r.innerText : "";
-                                        if (txt.includes("BTCUSDT") && (txt.includes("CloseLong") || txt.includes("CloseShort")) && txt.includes("taker")) {
-                                            let lines = txt.split('\\n').map(x => x.trim()).filter(x => x.length > 0);
-                                            if (lines.length >= 8) {
-                                                closeRows.push({
-                                                    avgPrice: parseFloat(lines[1].replace(/,/g, '')),
-                                                    side: lines[2],
-                                                    qty: lines[3],
-                                                    time: lines[7]
-                                                });
-                                            }
-                                        }
-                                    }
-                                    return closeRows.length > 0 ? closeRows[0] : null;
-                                }
-                                """
-                                    actual_exit = await target_page.evaluate(js_actual_exit)
-                                    if actual_exit:
-                                        actual_time = actual_exit["time"]
-                                        kst_signal_time = getattr(self, "last_signal_time_str", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                                        try:
-                                            actual_dt = datetime.strptime(actual_time, "%Y-%m-%d %H:%M:%S")
-                                            signal_dt = datetime.strptime(kst_signal_time, "%Y-%m-%d %H:%M:%S")
-                                            if actual_dt < signal_dt:
-                                                actual_exit = None
-                                        except Exception:
-                                            pass
-                                    if actual_exit:
-                                        actual_exit_price = actual_exit["avgPrice"]
-                                        actual_exit_time = actual_exit["time"]
-                                        try:
-                                            actual_exit_qty = float(actual_exit["qty"].replace("BTC", "").strip())
-                                        except:
-                                            pass
-                                except Exception as e:
-                                    logger.error(f"DOM 실제 청산 체결 스캔 에러: {e}")
-                                    
-                                self.last_actual_exit_price = actual_exit_price
-                                self.last_actual_exit_time = actual_exit_time
-                                self.last_actual_exit_qty = actual_exit_qty
-                                
-                                # 31차 수술: 전량 청산 성공 시 UI 1초 자동 동기화
-                                if self.bot and self.bot.dashboard:
-                                    asyncio.create_task(self.bot.dashboard.do_position_sync())
-                                    
-                            asyncio.create_task(_async_scan_actual_exit())
-
-                        await pw.stop()
-                        if side == "CLEAR":
-                            self.exit_in_progress = False
-                            if hasattr(self.bot, "sync_account_balances"):
-                                self.bot.sync_account_balances()
-                        return True
-                    else:
-                        if order_type != "CANCEL_ALL":
-                            self.bot.ui_cb(0.0, 0, "🚨 [청산 비상 에러] VOOX API 및 2차 DOM 청산 모두 실패!")
-                            if self.bot and self.bot.dashboard:
-                                self.bot.dashboard.send_telegram_notification("🚨 [청산 비상 에러] VOOX API/DOM 청산 모두 실패! 수동 청산 필요")
-                        await pw.stop()
-                        if side == "CLEAR":
-                            self.exit_in_progress = False
-                            if hasattr(self.bot, "sync_account_balances"):
-                                self.bot.sync_account_balances()
-                        return False
-
-                elif side == "STOP_LOSS":
-                    trigger_price_val = str(order_type)
-                    dir_val = getattr(self, "entry_direction", "LONG")
-                    close_side = "SELL" if dir_val == "LONG" else "BUY"
-                    
-                    # Read synchronized position volume and ID
-                    volume = getattr(self, "position_volume", 3)
-                    pos_ids = getattr(self, "active_position_ids", [])
-                    p_id = pos_ids[0] if pos_ids else 0
-                    
-                    js_code = f"""
-                    () => fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
-                        method: 'POST',
-                        credentials: 'include',
-                        headers: {headers_json},
-                        body: JSON.stringify({{ uaTime: "{ua_time}" }})
-                    }}).then(r => r.json()).catch(() => ({{ code: "-1" }})).then(posRes => {{
-                        let pId = {p_id};
-                        let vol = {volume};
-                        if (posRes && posRes.code === "0" && posRes.data && posRes.data.length > 0) {{
-                            let pos = posRes.data.find(p => p.contractId == {contract_id}) || posRes.data[0];
-                            if (pos) {{
-                                pId = pos.id || pos.positionId || pId;
-                                vol = pos.volume || vol;
-                            }}
-                        }}
-                        return fetch(window.location.origin + '/egw/private/futures/trigger/order/place', {{
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: {headers_json},
-                            body: JSON.stringify({{
-                                contractId: {contract_id},
-                                open: "CLOSE",
-                                side: "{close_side}",
-                                volumeType: 1,
-                                volume: vol,
-                                price: 0,
-                                type: 2,
-                                positionId: pId,
-                                positionType: 2,
-                                leverageLevel: 20,
-                                triggerType: 1,
-                                triggerPriceType: 3,
-                                triggerPrice: {trigger_price_val},
-                                uaTime: "{ua_time}"
-                            }})
-                        }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, success: false, msg: "HTML_RESPONSE_DETECTED", raw: t.substring(0, 100) }}; }} }}));
-                    }})
-                    """
-                    res = await target_page.evaluate(js_code)
-                    if res.get("code") == "0":
-                        log_msg = f"🎯 [스탑로스 예약 완료] {dir_val} 포지션 스탑로스 설정 완료 ({trigger_price_val} USD) (API 패킷 직송)"
-                    else:
-                        log_msg = f"❌ [스탑로스 에러] {res.get('msg')}"
-                    
-                    if getattr(self.bot, "dashboard", None):
-                        self.bot.dashboard.add_log(log_msg)
-                else:
-                    # 일반 시장가 진입 (LONG / SHORT)
-                    current_price = getattr(self.bot, "current_price", 60000.0)
-                    voox_bal = getattr(self.bot, "voox_balance", 0.0)
-                    if voox_bal > 0.0:
-                        self.bot.last_known_voox_balance = voox_bal
-                    else:
-                        voox_bal = getattr(self.bot, "last_known_voox_balance", 0.0)
-                    
-                    dashboard = self.bot.dashboard
-                    if order_type == "ADD_PYRAMIDING":
-                        p_vol = getattr(self, "position_volume", 0)
-                        pyra_ratio = getattr(dashboard, "pyramiding_ratio", 30.0) / 100.0
-                        original_vol = p_vol * 2 if self.is_half_exited else p_vol
-                        volume = int(round(original_vol * pyra_ratio))
-                    else:
-                        if order_type == "ADD_THIRD_ENTRY":
-                            ratio = dashboard.split_entry_3_ratio
-                        elif order_type == "ADD_100_PERCENT":
-                            ratio = dashboard.split_entry_2_ratio
-                        else:
-                            ratio = dashboard.split_entry_1_ratio
-                            
-                        if ratio <= 0.0:
-                            return
-                        p_target = max(1000.0, voox_bal * (ratio / 100.0))
-                        btc_vol = p_target / current_price
-                        volume = int(round(btc_vol * 1000))
-                    
-                    api_side = "BUY" if side == "LONG" else "SELL"
-                    
-                    # --- [2중 진입 방지 가드레일] 진입 직전 실시간 포지션 스캔 ---
-                    js_check_pos = f"""
-                    () => {{
-                        let tok = "";
-                        let parts = document.cookie.split(";");
-                        for (let p of parts) {{
-                            let pair = p.trim().split("=");
-                            if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                        }}
-                        return fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
-                            method: 'GET',
-                            credentials: 'include',
-                            headers: {{
-                                'content-type': 'application/json',
-                                'exchange-language': 'ko_KR',
-                                'exchange-client': 'pc',
-                                'exchange-token': tok,
-                                'authorization': tok
-                            }}
-                        }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, msg: "HTML_RESPONSE_DETECTED" }}; }} }}))
-                    }}
-                    """
-                    try:
-                        pos_check_res = await target_page.evaluate(js_check_pos)
-                        if isinstance(pos_check_res, dict) and pos_check_res.get("code") == "0":
-                            data_list = pos_check_res.get("data", []) or []
-                            any_vol = 0
-                            for p in data_list:
-                                # positionVolume 과 volume 두 필드 모두 안전하게 백업 대조
-                                p_vol_val = p.get("positionVolume") or p.get("volume") or 0
-                                any_vol += int(float(p_vol_val))
-                            if any_vol > 0 and order_type not in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
-                                self.bot.ui_cb(0.0, 0, f"⚠️ [진입 기각] 이미 거래소에 실물 포지션({any_vol} 계약)이 가동 중이므로 신규 진입을 안전하게 기각합니다.")
-                                return False
-                    except Exception as e:
-                        logger.error(f"진입 전 포지션 스캔 에러: {e}")
-                    # -------------------------------------------------------------
-
-                    js_code = f"""
-                    () => {{
-                        let tok = "";
-                        let parts = document.cookie.split(";");
-                        for (let p of parts) {{
-                            let pair = p.trim().split("=");
-                            if (pair[0] === "token") {{
-                                tok = pair[1];
-                                break;
-                            }}
-                        }}
-                        return fetch(window.location.origin + '/egw/private/futures/order/place', {{
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: {{
-                                'content-type': 'application/json',
-                                'exchange-language': 'ko_KR',
-                                'exchange-client': 'pc',
-                                'exchange-token': tok,
-                                'authorization': tok
-                            }},
-                            body: JSON.stringify({{
-                                contractId: {contract_id},
-                                open: "OPEN",
-                                side: "{api_side}",
-                                volumeType: 1,
-                                volume: {volume},
-                                price: "0",
-                                type: 2,
-                                positionId: null,
-                                positionType: 2,
-                                leverageLevel: {self.bot.dashboard.leverage_level if self.bot.dashboard else 20},
-                                uaTime: "{ua_time}"
-                            }})
-                        }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, success: false, msg: "HTML_RESPONSE_DETECTED", raw: t.substring(0, 100) }}; }} }})).catch(err => ({{ code: -999, success: false, msg: err.message }}))
-                    }}
-                    """
-                    res = await target_page.evaluate(js_code)
-                    if isinstance(res, dict) and res.get("code") == "0":
-                        if order_type not in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
-                            self.last_entry_time = time.time()
-                        if order_type == "ADD_THIRD_ENTRY":
-                            self.bot.ui_cb(0.0, 0, f"🎯 [3차 진입 완료] {side} 추가 시장가 {volume/1000:.3f} BTC 진입 완료 (API 패킷 직송)")
-                        elif order_type == "ADD_100_PERCENT":
-                            self.bot.ui_cb(0.0, 0, f"🎯 [2차 진입 완료] {side} 추가 시장가 {volume/1000:.3f} BTC 진입 완료 (API 패킷 직송)")
-                        else:
-                            self.entry_direction = side
-                            reason = getattr(self, "entry_reason", "조건 충족")
-                            self.bot.ui_cb(0.0, 0, f"🎯 [1차 진입 완료] {side} 시장가 {volume/1000:.3f} BTC 진입 완료 (사유: {reason}) (API 패킷 직송)")
-                                
-                        # VOOX DB 시차 대기 및 재시도 루프 (최대 3회 조회 시도)
-                        target_pos = None
-                        for attempt in range(3):
-                            await asyncio.sleep(0.5 if attempt == 0 else 1.0)
-                            try:
-                                js_get_pos = f"""
-                                () => {{
-                                    let tok = "";
-                                    let parts = document.cookie.split(";");
-                                    for (let p of parts) {{
-                                        let pair = p.trim().split("=");
-                                        if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                                    }}
-                                    return fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
-                                        method: 'GET',
-                                        credentials: 'include',
-                                        headers: {{
-                                            'content-type': 'application/json',
-                                            'exchange-language': 'ko_KR',
-                                            'exchange-client': 'pc',
-                                            'exchange-token': tok,
-                                            'authorization': tok
-                                        }}
-                                    }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, msg: "HTML_RESPONSE_DETECTED" }}; }} }}))
-                                }}
-                                """
-                                info_res = await target_page.evaluate(js_get_pos)
-                                positions = (info_res.get("data", []) if isinstance(info_res, dict) else []) or []
-                                
-                                for pos in positions:
-                                    p_contract = pos.get("contractId")
-                                    p_side = pos.get("orderSide")
-                                    if p_contract == contract_id and p_side == ("BUY" if side == "LONG" else "SELL"):
-                                        target_pos = pos
-                                        break
-                            except Exception as scan_err:
-                                logger.error(f"주문 후 포지션 재조회 시도 {attempt+1} 에러: {scan_err}")
-                                
-                            if target_pos:
-                                break
-                                
-                        if target_pos:
-                            p_id = target_pos.get("id")
-                            p_vol_raw = target_pos.get("positionVolume")
-                            if p_vol_raw is not None:
-                                p_vol = int(float(p_vol_raw))
-                            else:
-                                p_vol = int(volume)
-                            
-                            # [무결성 검증] 실제 수량이 0보다 크고 포지션이 확실히 존재할 때만 갱신
-                            if p_vol > 0:
-                                self.is_position_active = True
-                                self.entry_price = float(target_pos.get("openAvgPrice", current_price))
-                                self.active_position_ids = [p_id]
-                                self.position_volume = p_vol
-                            else:
-                                # 수량이 0인 임시 패킷 폴백
-                                self.is_position_active = True
-                                self.entry_price = expected_fill
-                                self.active_position_ids = []
-                                self.position_volume = int(volume)
-                        else:
-                            # 3회 재시도에도 API 지연으로 안 나오는 경우:
-                            # 주문이 성공(res.code == 0)했으므로 주문 자체는 체결되었을 것임.
-                            # 중복 진입 방지를 위해 로컬 상태는 무조건 True(진입됨)로 강제 고수!
-                            self.is_position_active = True
-                            self.entry_price = expected_fill
-                            self.active_position_ids = []
-                            self.position_volume = int(volume)
-                            self.bot.ui_cb(0.0, 0, "⚠️ [포지션 조회 지연] VOOX 주문은 전송 완료되었으나 포지션 리스트 갱신이 늦어지고 있습니다. 로컬 포지션 상태를 안전 활성화(True)로 자동 유지합니다.")
-                            
-                        # 포지션이 확보되었으므로 DOM 파싱으로 실제 체결 상세(Trade Details) 획득 시도
-                        p_vol = getattr(self, "position_volume", int(volume))
-                        p_id = self.active_position_ids[0] if self.active_position_ids else 0
-                        actual_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        actual_price = self.entry_price
-                        actual_qty = p_vol / 1000.0
-                                
-                        try:
-                            await asyncio.sleep(1.0)
-                            js_actual_trade = """
-                            () => {
-                                let rows = Array.from(document.querySelectorAll('tr.ant-table-row, tr'));
-                                let openRows = [];
-                                for (let r of rows) {
-                                    let txt = r.innerText ? r.innerText : "";
-                                    if (txt.includes("BTCUSDT") && (txt.includes("OpenLong") || txt.includes("OpenShort")) && txt.includes("taker")) {
-                                        let lines = txt.split('\\n').map(x => x.trim()).filter(x => x.length > 0);
-                                        if (lines.length >= 8) {
-                                            openRows.push({
-                                                avgPrice: parseFloat(lines[1].replace(/,/g, '')),
-                                                side: lines[2],
-                                                qty: lines[3],
-                                                time: lines[7]
-                                            });
-                                        }
-                                    }
-                                }
-                                return openRows.length > 0 ? openRows[0] : null;
-                            }
-                            """
-                            actual_trade = await target_page.evaluate(js_actual_trade)
-                            if actual_trade:
-                                actual_time_temp = actual_trade["time"]
-                                kst_signal_time = getattr(self, "last_signal_time_str", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                                try:
-                                    actual_dt = datetime.strptime(actual_time_temp, "%Y-%m-%d %H:%M:%S")
-                                    signal_dt = datetime.strptime(kst_signal_time, "%Y-%m-%d %H:%M:%S")
-                                    if actual_dt < signal_dt:
-                                        actual_trade = None
-                                except Exception:
-                                    pass
-                            if actual_trade:
-                                actual_price = actual_trade["avgPrice"]
-                                actual_time = actual_trade["time"]
-                                try:
-                                    actual_qty = float(actual_trade["qty"].replace("BTC", "").strip())
-                                except:
-                                    pass
-                        except Exception as e:
-                            logger.error(f"DOM 실제 진입 체결 스캔 에러: {e}")
-                            
-                        # --- [통합] 입구 슬리피지 실측 및 물리 파일 로깅 ---
-                        signal_price = getattr(self, "last_signal_price", 0.0)
-                        entry_slippage_usd = 0.0
-                        entry_slippage_pct = 0.0
-                        if signal_price > 0.0:
-                            if side == "LONG":
-                                entry_slippage_usd = actual_price - signal_price
-                            else:
-                                entry_slippage_usd = signal_price - actual_price
-                            entry_slippage_pct = (entry_slippage_usd / signal_price) * 100.0
-                            
-                        slippage_log = f"🎯 [진입 슬리피지 실측] 바이낸스 신호가: {signal_price:,.1f} USDT ➡️ 복스 진입가: {actual_price:,.1f} USDT | 편차: {entry_slippage_usd:+,.1f} USDT ({entry_slippage_pct:+.3f}% 역마진 발생)"
-                        if self.bot.dashboard:
-                            self.bot.dashboard.add_log(slippage_log)
-                            
-                        # --- [신설] 이원화된 1차 진입 알림 텔레그램 발송 ---
-                        if order_type not in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"] and self.bot.dashboard:
-                            reason = getattr(self, "entry_reason", "조건 충족")
-                            kst_signal_time = getattr(self, "last_signal_time_str", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-                            
-                            msg = f"<b>🎯 [1차 진입 알림]</b>\n" \
-                                  f"방향: <b>{side}</b>\n" \
-                                  f"사유: <b>{reason}</b>\n\n" \
-                                  f"<b>[신호 발생 정보]</b>\n" \
-                                  f"신호 발생시간: <b>{kst_signal_time}</b>\n" \
-                                  f"수량: <b>{volume/1000:.3f} BTC</b>\n" \
-                                  f"신호 발생 가격: <b>{signal_price:,.1f} USDT</b>\n\n" \
-                                  f"<b>[실제 체결 정보]</b>\n" \
-                                  f"실제 체결 시간: <b>{actual_time}</b>\n" \
-                                  f"수량: <b>{actual_qty:.3f} BTC</b>\n" \
-                                  f"진입 가격: <b>{actual_price:,.1f} USDT</b>\n" \
-                                  f"진입 슬리피지: <b>{entry_slippage_usd:+,.1f} USDT ({entry_slippage_pct:+.3f}%)</b>"
-                            self.bot.dashboard.send_telegram_notification(msg)
-                            
-                        # 1차 진입인 경우에만 최초 스탑로스를 예약합니다.
-                        if order_type not in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
-                            initial_sl_pct = abs(getattr(self, "current_session_sl", -1.3)) / 100.0
-                            sl_price = int(round(self.entry_price * (1.0 - initial_sl_pct))) if side == "LONG" else int(round(self.entry_price * (1.0 + initial_sl_pct)))
-                            sl_side = "SELL" if side == "LONG" else "BUY"
-                            
-                            sl_js = f"""
-                            () => {{
-                                let tok = "";
-                                let parts = document.cookie.split(";");
-                                for (let p of parts) {{
-                                    let pair = p.trim().split("=");
-                                    if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                                }}
-                                return fetch(window.location.origin + '/egw/private/futures/trigger/order/place', {{
-                                    method: 'POST',
-                                    credentials: 'include',
-                                    headers: {{
-                                        'content-type': 'application/json',
-                                        'exchange-language': 'ko_KR',
-                                        'exchange-client': 'pc',
-                                        'exchange-token': tok,
-                                        'authorization': tok
-                                    }},
-                                    body: JSON.stringify({{
-                                        contractId: {contract_id},
-                                        open: "CLOSE",
-                                        side: "{sl_side}",
-                                        volumeType: 1,
-                                        volume: {p_vol},
-                                        price: "0",
-                                        type: 2,
-                                        positionId: {p_id},
-                                        positionType: 2,
-                                        leverageLevel: 20,
-                                        triggerType: 1,
-                                        triggerPriceType: 3,
-                                        triggerPrice: {sl_price},
-                                        uaTime: "{ua_time}"
-                                    }})
-                                }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, success: false, msg: "HTML_RESPONSE_DETECTED", raw: t.substring(0, 100) }}; }} }})).catch(err => ({{ code: -999, success: false, msg: err.message }}))
-                            }}
-                            """
-                            sl_res = await target_page.evaluate(sl_js)
-                            if isinstance(sl_res, dict) and sl_res.get("code") == "0":
-                                self.bot.ui_cb(0.0, 0, f"🎯 [스탑로스 예약 완료] 1차 포지션 스탑로스 설정 완료 ({sl_price} USD, 수량: {p_vol})")
-                            else:
-                                self.bot.ui_cb(0.0, 0, f"❌ [스탑로스 에러] SL 예약 주문 실패: {sl_res.get('msg') if isinstance(sl_res, dict) else sl_res}")
-                        else:
-                            # 2차 추가매수인 경우: 기존 스탑로스 일괄 취소 후 신규 물량(p_vol) 반영 스탑로스 재작성
-                            js_cancel_all = f"""
-                            () => {{
-                                let tok = "";
-                                let parts = document.cookie.split(";");
-                                for (let p of parts) {{
-                                    let pair = p.trim().split("=");
-                                    if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                                }}
-                                return fetch(window.location.origin + '/egw/private/futures/order/trade/history_trigger_order_list', {{
-                                    method: 'POST',
-                                    credentials: 'include',
-                                    headers: {{
-                                        'content-type': 'application/json',
-                                        'exchange-language': 'ko_KR',
-                                        'exchange-client': 'pc',
-                                        'exchange-token': tok,
-                                        'authorization': tok
-                                    }},
-                                    body: JSON.stringify({{ pageSize: 100, triggerTypeList: [1, 2], uaTime: "{ua_time}" }})
-                                }}).then(r => r.json()).then(async res => {{
-                                    if (res.code === "0" && res.data && res.data.records) {{
-                                        let cnt = 0;
-                                        for (let rec of res.data.records) {{
-                                            let orderId = rec.orderId || rec.id;
-                                            let cancelRes = await fetch(window.location.origin + '/egw/private/futures/trigger/order/cancel', {{
-                                                method: 'POST',
-                                                credentials: 'include',
-                                                headers: {{
-                                                    'content-type': 'application/json',
-                                                    'exchange-language': 'ko_KR',
-                                                    'exchange-client': 'pc',
-                                                    'exchange-token': tok,
-                                                    'authorization': tok
-                                                }},
-                                                body: JSON.stringify({{
-                                                    contractId: rec.contractId || 48,
-                                                    orderId: orderId,
-                                                    id: rec.id || rec.orderId,
-                                                    positionId: rec.positionId || 0,
-                                                    uaTime: "{ua_time}"
-                                                }})
-                                            }}).then(r => r.json());
-                                            if (cancelRes.code === "0") {{
-                                                cnt++;
-                                            }}
-                                        }}
-                                        return {{ success: true, count: cnt }};
-                                    }}
-                                    return {{ success: false }};
-                                }}).catch(e => ({{ success: false }}))
-                            }}
-                            """
-                            await target_page.evaluate(js_cancel_all)
-                            
-                            # 1차 진입가 대비 세션별 최초 손절선 가격으로 스탑로스 신규 예약 (새로운 합계 수량 p_vol 적용)
-                            session_sl_pct = abs(getattr(self, "current_session_sl", -1.3)) / 100.0
-                            sl_price = int(round(self.entry_price_1 * (1.0 - session_sl_pct))) if side == "LONG" else int(round(self.entry_price_1 * (1.0 + session_sl_pct)))
-                            sl_side = "SELL" if side == "LONG" else "BUY"
-                            
-                            sl_js = f"""
-                            () => {{
-                                let tok = "";
-                                let parts = document.cookie.split(";");
-                                for (let p of parts) {{
-                                    let pair = p.trim().split("=");
-                                    if (pair[0] === "token") {{ tok = pair[1]; break; }}
-                                }}
-                                return fetch(window.location.origin + '/egw/private/futures/trigger/order/place', {{
-                                    method: 'POST',
-                                    credentials: 'include',
-                                    headers: {{
-                                        'content-type': 'application/json',
-                                        'exchange-language': 'ko_KR',
-                                        'exchange-client': 'pc',
-                                        'exchange-token': tok,
-                                        'authorization': tok
-                                    }},
-                                    body: JSON.stringify({{
-                                        contractId: {contract_id},
-                                        open: "CLOSE",
-                                        side: "{sl_side}",
-                                        volumeType: 1,
-                                        volume: {p_vol},
-                                        price: "0",
-                                        type: 2,
-                                        positionId: {p_id},
-                                        positionType: 2,
-                                        leverageLevel: 20,
-                                        triggerType: 1,
-                                        triggerPriceType: 3,
-                                        triggerPrice: {sl_price},
-                                        uaTime: "{ua_time}"
-                                    }})
-                                }}).then(r => r.text().then(t => {{ try {{ return JSON.parse(t); }} catch(e) {{ return {{ code: -999, success: false, msg: "HTML_RESPONSE_DETECTED", raw: t.substring(0, 100) }}; }} }})).catch(err => ({{ code: -999, success: false, msg: err.message }}))
-                            }}
-                            """
-                            sl_res = await target_page.evaluate(sl_js)
-                            if isinstance(sl_res, dict) and sl_res.get("code") == "0":
-                                self.bot.ui_cb(0.0, 0, f"🎯 [스탑로스 재작성 완료] {order_type} 포함 전체 물량({p_vol}) 스탑로스 갱신 예약 완료 ({sl_price} USD)")
-                            else:
-                                self.bot.ui_cb(0.0, 0, f"❌ [스탑로스 재작성 에러] {sl_res.get('msg') if isinstance(sl_res, dict) else sl_res}")
-                    else:
-                        self.is_position_active = False
-                        self.bot.ui_cb(0.0, 0, f"❌ [진입 실패] {res.get('msg')}")
-                        await pw.stop()
-                        return False
+                    elif side == "STOP_LOSS":
+                        self.bot.ui_cb(0.0, 0, "🎯 [스탑 완료] 스탑로스 API 발주 (현재 모니터링 감지로 대체됨)")
                         
-                await pw.stop()
-                if side == "CLEAR":
-                    self.exit_in_progress = False
-                    if hasattr(self.bot, "sync_account_balances"):
-                        self.bot.sync_account_balances()
+                    else:
+                        ccxt_side = 'buy' if side == 'LONG' else 'sell'
+                        
+                        if order_type == "ADD_PYRAMIDING":
+                            p_vol = getattr(self, "position_volume", 0) / 1000.0
+                            pyra_ratio = getattr(dashboard, "pyramiding_ratio", 30.0) / 100.0
+                            original_vol = p_vol * 2 if self.is_half_exited else p_vol
+                            amount = original_vol * pyra_ratio
+                        else:
+                            if order_type == "ADD_THIRD_ENTRY":
+                                ratio = dashboard.split_entry_3_ratio
+                            elif order_type == "ADD_100_PERCENT":
+                                ratio = dashboard.split_entry_2_ratio
+                            else:
+                                ratio = dashboard.split_entry_1_ratio
+                                
+                            if ratio <= 0.0:
+                                return False
+                            p_target = max(1000.0, bitget_bal * (ratio / 100.0))
+                            amount = p_target / current_price
+                            
+                        amount = max(0.001, round(amount, 3))
+                        
+                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주] {side} {amount} BTC 시장가 주문 시작...")
+                        try:
+                            order = await exchange.create_order(symbol, 'market', ccxt_side, amount)
+                            self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료")
+                        except Exception as e:
+                            self.bot.ui_cb(0.0, 0, f"❌ [진입 에러] 비트겟 API 예외 발생: {e}")
+                            return False
+                        
+                        vol_int = int(round(amount * 1000))
+                        if order_type in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
+                            old_vol = getattr(self, "position_volume", 0)
+                            new_vol = old_vol + vol_int
+                            if new_vol > 0:
+                                self.entry_price = (self.entry_price * old_vol + current_price * vol_int) / new_vol
+                            self.position_volume = new_vol
+                        else:
+                            self.entry_price = current_price
+                            self.entry_price_1 = current_price
+                            self.position_volume = vol_int
+                            self.is_position_active = True
+                            self.entry_direction = side
+                            self.last_entry_time = time.time()
                     return True
-                else:
-                    return True
-            except Exception as e:
-                # locals() 검사를 통해 UnboundLocalError 원천 예방
-                if 'pw' in locals() and pw:
-                    try:
-                        await pw.stop()
-                    except:
-                        pass
-                if "Failed to fetch" in str(e) or "TypeError" in str(e):
-                    self.bot.ui_cb(0.0, 0, "⚠️ [발주 통신 지연] VOOX 거래소 응답 지연으로 주문 통신이 일시 보류되었습니다.")
-                else:
-                    self.bot.ui_cb(0.0, 0, f"❌ [발주 예외 발생] API 통신 실패: {e}")
-                if side == "CLEAR":
-                    self.exit_in_progress = False
-                    if hasattr(self.bot, "sync_account_balances"):
-                        self.bot.sync_account_balances()
+                except Exception as e:
+                    traceback.print_exc()
+                    self.bot.ui_cb(0.0, 0, f"❌ [주문 에러] 비트겟 API 예외 처리 중 오류: {e}")
+                    if side == "CLEAR":
+                        self.exit_in_progress = False
                     return False
-                if side not in ["CLEAR", "STOP_LOSS"]:
-                    return False
+
+            # 비동기(Non-blocking) 백그라운드 태스크로 주문 던지기
+            asyncio.create_task(_do_ccxt_order())
+            return True
+
 
     async def check_radar_signal_dynamic(self, binance_ws_frame, target_liq, target_oi):
         t_signal = binance_ws_frame['timestamp_ms']
@@ -5198,8 +4302,8 @@ class ShinseonV35Engine:
                     self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cooldown, label))
                     try:
                         if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log("⚡ [2단계: REST API 패킷 청산] execute_vox_internal_packet(side=CLEAR) 호출 중...")
-                        clear_ok = await self.execute_vox_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
+                            self.bot.dashboard.add_log("⚡ [2단계: REST API 패킷 청산] execute_bitget_internal_packet(side=CLEAR) 호출 중...")
+                        clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                         if getattr(self.bot, "dashboard", None):
                             self.bot.dashboard.add_log(f"📋 [3단계: 청산 결과 반환] clear_ok: {clear_ok}")
                         if clear_ok:
@@ -5209,13 +4313,13 @@ class ShinseonV35Engine:
                             if getattr(self.bot, "dashboard", None):
                                 self.bot.dashboard.add_log("⚠️ [4단계: 1차 실패] 2중 비상 마스터 청산 격발 시도...")
                             await asyncio.sleep(0.5)
-                            await self.bot.dashboard.execute_vox_emergency_master_internal()
+                            await self.bot.dashboard.execute_bitget_emergency_master_internal()
                     except Exception as clear_err:
                         if getattr(self.bot, "dashboard", None):
                             self.bot.dashboard.add_log(f"❌ [청산 예외] {clear_err}")
                         try:
                             await asyncio.sleep(0.5)
-                            await self.bot.dashboard.execute_vox_emergency_master_internal()
+                            await self.bot.dashboard.execute_bitget_emergency_master_internal()
                         except Exception:
                             pass
                     finally:
@@ -5297,7 +4401,7 @@ class ShinseonV35Engine:
                         self.last_split_entry_time = time.time()
                         if getattr(self.bot, "dashboard", None):
                             self.bot.dashboard.add_log(f"⚡ [2차 추가매수 발동] 동일방향 신호 컨펌! 1차 진입가 대비 {pnl_from_entry_1*100.0:+.2f}% 도달 (임계치: {split_trigger*100.0:.2f}%)")
-                        asyncio.create_task(self.execute_vox_internal_packet(side=self.entry_direction, order_type="ADD_100_PERCENT"))
+                        asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_100_PERCENT"))
                         return
                     else:
                         return
@@ -5325,7 +4429,7 @@ class ShinseonV35Engine:
                         self.last_split_entry_time = time.time()
                         if getattr(self.bot, "dashboard", None):
                             self.bot.dashboard.add_log(f"⚡ [3차 추가매수 발동] 동일방향 신호 컨펌! 1차 진입가 대비 {pnl_from_entry_1*100.0:+.2f}% 도달 (임계치: {split_trigger*100.0:.2f}%)")
-                        asyncio.create_task(self.execute_vox_internal_packet(side=self.entry_direction, order_type="ADD_THIRD_ENTRY"))
+                        asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_THIRD_ENTRY"))
                         return
                     else:
                         return
@@ -5357,14 +4461,14 @@ class ShinseonV35Engine:
                 if getattr(self.bot, "dashboard", None):
                     self.bot.dashboard.add_log(f"⚡ [v2.88 레이턴시 통과] 레이턴시 {actual_latency:.1f}ms (기존 허용 {allowed_latency:.1f}ms 초과하나 전면 해제 즉각 발주)")
                 
-            # 2단계: 복스 호가창 VWAP 역공학 스캔
-            vox_book = await self.fetch_vox_orderbook_internal()
-            if not vox_book or not vox_book.get('asks') or not vox_book.get('bids'):
+            # 2단계: 비트겟 호가창 VWAP 역공학 스캔
+            bitget_book = await self.fetch_bitget_orderbook_internal()
+            if not bitget_book or not bitget_book.get('asks') or not bitget_book.get('bids'):
                 if self.bot.ui_cb:
-                    self.bot.ui_cb(0.0, 0, f"❌ [진입 실패] VOOX 호가창 데이터를 조회할 수 없습니다.")
+                    self.bot.ui_cb(0.0, 0, f"❌ [진입 실패] BITGET 호가창 데이터를 조회할 수 없습니다.")
                 return
                 
-            expected_fill = vox_book['asks'][0][0] if direction == 'LONG' else vox_book['bids'][0][0]
+            expected_fill = bitget_book['asks'][0][0] if direction == 'LONG' else bitget_book['bids'][0][0]
             
             # 방어벽 ②: 방향성 비대칭 슬리피지 캡 검증 (기획서_21)
             if direction == 'LONG':
@@ -5414,7 +4518,7 @@ class ShinseonV35Engine:
                     self.bot.dashboard.play_entry_sound()
                     
                 try:
-                    success = await self.execute_vox_internal_packet(side=direction, order_type="IOC_MARKET")
+                    success = await self.execute_bitget_internal_packet(side=direction, order_type="IOC_MARKET")
                     if success:
                         # 신규 진입 성공 시 무조건 60초 쿨타임 가동!
                         self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + 60.0)
@@ -5460,8 +4564,8 @@ class ShinseonV35Engine:
             # 실시간 세션별 손절선 동적 업데이트 (세션 시간 전환 시 반영)
             initial_sl_pct = abs(getattr(self, "current_session_sl", -1.3)) / 100.0
             
-            current_vox_price = await self.get_live_vox_price_internal()
-            if current_vox_price <= 0.0:
+            current_bitget_price = await self.get_live_bitget_price_internal()
+            if current_bitget_price <= 0.0:
                 continue
                 
             # 3.0초 도킹 유예 시간 동안은 안전 보존을 위해 청산 감시 일시 스킵
@@ -5473,11 +4577,11 @@ class ShinseonV35Engine:
             
             # 1차 진입가 대비 PnL 및 실시간 평단 대비 PnL 계산
             if direction == "LONG":
-                pnl_from_entry_1 = (current_vox_price - self.entry_price_1) / self.entry_price_1
-                pnl_pct = (current_vox_price - self.entry_price) / self.entry_price
+                pnl_from_entry_1 = (current_bitget_price - self.entry_price_1) / self.entry_price_1
+                pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price
             else:
-                pnl_from_entry_1 = (self.entry_price_1 - current_vox_price) / self.entry_price_1
-                pnl_pct = (self.entry_price - current_vox_price) / self.entry_price
+                pnl_from_entry_1 = (self.entry_price_1 - current_bitget_price) / self.entry_price_1
+                pnl_pct = (self.entry_price - current_bitget_price) / self.entry_price
                 
             if pnl_pct > self.peak_pnl_pct:
                 self.peak_pnl_pct = pnl_pct
@@ -5518,7 +4622,7 @@ class ShinseonV35Engine:
                         order_type = f"PARTIAL_CLOSE_{int(ratio)}"
                     else:
                         order_type = "FORCE_MARKET_UNCAPPED"
-                    clear_ok = await self.execute_vox_internal_packet(side="CLEAR", order_type=order_type, custom_ratio=ratio/100.0)
+                    clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type=order_type, custom_ratio=ratio/100.0)
                     if clear_ok:
                         if order_type == "FORCE_MARKET_UNCAPPED":
                             self.is_position_active = False
@@ -5538,7 +4642,7 @@ class ShinseonV35Engine:
                             if self.bot and self.bot.dashboard:
                                 self.bot.dashboard.add_log(log_msg)
                                 try:
-                                    await self.bot.dashboard.execute_vox_emergency_master_internal()
+                                    await self.bot.dashboard.execute_bitget_emergency_master_internal()
                                 except Exception as em_err:
                                     logger.error(f"스마트스탑 비상 청산 에러: {em_err}")
 
@@ -5572,22 +4676,22 @@ class ShinseonV35Engine:
                 if not getattr(self, "is_half_exited", False) and pnl_pct >= half_exit_trigger:
                     self.is_half_exited = True
                     self.awaiting_pullback_pyramid = True
-                    asyncio.create_task(self.execute_vox_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
                     
                     if self.bot.dashboard:
-                        msg = f"<b>🎯 [분할익절 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>수익률 {half_exit_trigger*100:.2f}% 도달 (50% 익절 실행)</b>\n평단가: <b>{self.entry_price:,.1f} USDT</b>\n현재가: <b>{current_vox_price:,.1f} USDT</b>"
+                        msg = f"<b>🎯 [분할익절 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>수익률 {half_exit_trigger*100:.2f}% 도달 (50% 익절 실행)</b>\n평단가: <b>{self.entry_price:,.1f} USDT</b>\n현재가: <b>{current_bitget_price:,.1f} USDT</b>"
                         self.bot.dashboard.send_telegram_notification(msg)
                     
                     await asyncio.sleep(1.0)
                     new_sl_price = self.entry_price * (1.0 + (entry_sl_guard / 100.0)) if direction == "LONG" else self.entry_price * (1.0 - (entry_sl_guard / 100.0))
                     self.last_placed_stop_price = new_sl_price
-                    asyncio.create_task(self.execute_vox_internal_packet(side="STOP_LOSS", order_type=str(round(new_sl_price, 1))))
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="STOP_LOSS", order_type=str(round(new_sl_price, 1))))
             else:
                 if pnl_pct >= half_exit_trigger and not getattr(self, "has_smart_guarded", False):
                     self.has_smart_guarded = True
                     new_stop_price = self.entry_price * (1.0 + (entry_sl_guard / 100.0)) if direction == "LONG" else self.entry_price * (1.0 - (entry_sl_guard / 100.0))
                     self.last_placed_stop_price = new_stop_price
-                    asyncio.create_task(self.execute_vox_internal_packet(side="STOP_LOSS", order_type=str(round(new_stop_price, 1))))
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="STOP_LOSS", order_type=str(round(new_stop_price, 1))))
                     
                     log_msg = f"🛡️ [스마트 본전가드] 분할익절 OFF 세션: 100% 수량 유지하며 스탑로스를 본전/버퍼가({new_stop_price:.1f})로 상향 방어했습니다!"
                     if self.bot.dashboard:
@@ -5601,7 +4705,7 @@ class ShinseonV35Engine:
                 if pnl_pct <= (half_exit_trigger - pullback_offset):
                     self.has_pyramided = True
                     self.awaiting_pullback_pyramid = False
-                    asyncio.create_task(self.execute_vox_internal_packet(side=direction, order_type="ADD_PYRAMIDING"))
+                    asyncio.create_task(self.execute_bitget_internal_packet(side=direction, order_type="ADD_PYRAMIDING"))
                     
                     if self.bot.dashboard:
                         self.bot.dashboard.add_log(f"[눌림목 불타기] {pullback_offset*100}% 풀백 감지 완료! 30% 수량 정밀 발주를 집행합니다.")
@@ -5611,7 +4715,7 @@ class ShinseonV35Engine:
             if (getattr(self, "is_half_exited", False) or getattr(self, "has_smart_guarded", False)) and pnl_pct <= (entry_sl_guard / 100.0):
                 self.exit_reason = "스마트 본전/버퍼 보존 가드 발동" if getattr(self, "has_smart_guarded", False) else "본전/버퍼 보존 가드 발동 (분할청산 후)"
                 self.exit_in_progress = True
-                clear_ok = await self.execute_vox_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
+                clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                 if clear_ok:
                     self.is_position_active = False
                     self.exit_msg_sent = True
@@ -5623,7 +4727,7 @@ class ShinseonV35Engine:
                     if self.bot and self.bot.dashboard:
                         self.bot.dashboard.add_log(log_msg)
                         try:
-                            await self.bot.dashboard.execute_vox_emergency_master_internal()
+                            await self.bot.dashboard.execute_bitget_emergency_master_internal()
                         except Exception as em_err:
                             logger.error(f"본전가드 비상 청산 에러: {em_err}")
 
@@ -5665,7 +4769,7 @@ class ShinseonV35Engine:
                     self.last_placed_stop_price = new_stop_price
                     self.last_placed_stop_time = now_t_sl
                     # 거래소 기존 예약을 취소하고 새로운 가격으로 즉시 실물 조건부 주문 발주 재배치!
-                    asyncio.create_task(self.execute_vox_internal_packet(
+                    asyncio.create_task(self.execute_bitget_internal_packet(
                         side="STOP_LOSS",
                         order_type=str(round(new_stop_price, 1))
                     ))
@@ -5673,17 +4777,17 @@ class ShinseonV35Engine:
             # ================= PART 1: 손절 및 계단식 익절 자물쇠 (로컬 백업 엔진) =================
             if self.has_second_entry or getattr(self, "has_third_entry", False):
                 if not getattr(self, "is_half_exited", False) and pnl_from_entry_1 <= -initial_sl_pct:
-                    self.last_exit_trigger_price = current_vox_price
+                    self.last_exit_trigger_price = current_bitget_price
                     self.last_exit_signal_time = __import__("time").strftime("%Y-%m-%d %H:%M:%S")
                     self.last_exit_signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
                     self.exit_reason = f"최초 손절선 도달 (-{initial_sl_pct*100:.2f}% 이하 도달, PnL: {pnl_from_entry_1*100:.2f}%)"
 
                     self.exit_in_progress = True
-                    clear_ok = await self.execute_vox_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
+                    clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                     if clear_ok:
                         self.is_position_active = False
                         if self.bot.dashboard:
-                            msg = f"<b>🎯 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price_1:,.1f} USDT</b>\n현재가: <b>{current_vox_price:,.1f} USDT</b>\n수익률: <b>{pnl_from_entry_1 * 100:+.2f}%</b>"
+                            msg = f"<b>🎯 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price_1:,.1f} USDT</b>\n현재가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_from_entry_1 * 100:+.2f}%</b>"
                             self.bot.dashboard.send_telegram_notification(msg)
                         self.exit_msg_sent = True
                         break
@@ -5694,24 +4798,24 @@ class ShinseonV35Engine:
                         if self.bot and self.bot.dashboard:
                             self.bot.dashboard.add_log(log_msg)
                             try:
-                                await self.bot.dashboard.execute_vox_emergency_master_internal()
+                                await self.bot.dashboard.execute_bitget_emergency_master_internal()
                             except Exception as em_err:
                                 logger.error(f"2/3차 손절 비상 청산 에러: {em_err}")
             else:
                 if self.peak_pnl_pct < 0.020:
                     # 초기 손절선 (세션 연동)
                     if pnl_pct <= -initial_sl_pct:
-                        self.last_exit_trigger_price = current_vox_price
+                        self.last_exit_trigger_price = current_bitget_price
                         self.last_exit_signal_time = __import__("time").strftime("%Y-%m-%d %H:%M:%S")
                         self.last_exit_signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
                         self.exit_reason = f"초기 손절선 (-{initial_sl_pct*100:.2f}% 이하 도달, PnL: {pnl_pct*100:.2f}%)"
 
                         self.exit_in_progress = True
-                        clear_ok = await self.execute_vox_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
+                        clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                         if clear_ok:
                             self.is_position_active = False
                             if self.bot.dashboard:
-                                msg = f"<b>🎯 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_vox_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
+                                msg = f"<b>🎯 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
                                 self.bot.dashboard.send_telegram_notification(msg)
                             self.exit_msg_sent = True
                             break
@@ -5722,7 +4826,7 @@ class ShinseonV35Engine:
                             if self.bot and self.bot.dashboard:
                                 self.bot.dashboard.add_log(log_msg)
                                 try:
-                                    await self.bot.dashboard.execute_vox_emergency_master_internal()
+                                    await self.bot.dashboard.execute_bitget_emergency_master_internal()
                                 except Exception as em_err:
                                     logger.error(f"초기 손절 비상 청산 에러: {em_err}")
                     
@@ -5731,17 +4835,17 @@ class ShinseonV35Engine:
                     # ================= PART 2: +2.0% 이상 트레일링 익절선 (로컬 백업 엔진) =================
                     # 기어 A: 고점 대비 1.0% 하락 시 트레일링 스위치 작동
                     if pnl_pct <= (self.peak_pnl_pct - 0.010):
-                        self.last_exit_trigger_price = current_vox_price
+                        self.last_exit_trigger_price = current_bitget_price
                         self.last_exit_signal_time = __import__("time").strftime("%Y-%m-%d %H:%M:%S")
                         self.last_exit_signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
                         self.exit_reason = f"고점 {self.peak_pnl_pct*100:.2f}% 돌파 후 1.0% 하락선 {(self.peak_pnl_pct-0.010)*100:.2f}% 도달 (추적 스탑, PnL: {pnl_pct*100:.2f}%)"
 
                         self.exit_in_progress = True
-                        clear_ok = await self.execute_vox_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
+                        clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                         if clear_ok:
                             self.is_position_active = False
                             if self.bot.dashboard:
-                                msg = f"<b>🎯 [추적익절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_vox_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
+                                msg = f"<b>🎯 [추적익절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
                                 self.bot.dashboard.send_telegram_notification(msg)
                             self.exit_msg_sent = True
                             break
@@ -5752,7 +4856,7 @@ class ShinseonV35Engine:
                             if self.bot and self.bot.dashboard:
                                 self.bot.dashboard.add_log(log_msg)
                                 try:
-                                    await self.bot.dashboard.execute_vox_emergency_master_internal()
+                                    await self.bot.dashboard.execute_bitget_emergency_master_internal()
                                 except Exception as em_err:
                                     logger.error(f"추적익절 비상 청산 에러: {em_err}")
                         
@@ -5777,11 +4881,11 @@ class ShinseonV35Engine:
         # 평단가 대비 실제 PnL율이 음수(손실)인지 안전하게 판정
         exit_pnl_pct = 0.0
         if self.entry_price > 0.0:
-            current_vox_price = await self.get_live_vox_price_internal()
+            current_bitget_price = await self.get_live_bitget_price_internal()
             if direction == "LONG":
-                exit_pnl_pct = (current_vox_price - self.entry_price) / self.entry_price
+                exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price
             else:
-                exit_pnl_pct = (self.entry_price - current_vox_price) / self.entry_price
+                exit_pnl_pct = (self.entry_price - current_bitget_price) / self.entry_price
 
         if "손절선" in getattr(self, "exit_reason", "") or "손절" in getattr(self, "exit_reason", "") or exit_pnl_pct < 0.0:
             final_cooldown_sec = cooldown_limit
@@ -5799,7 +4903,7 @@ class ShinseonV35Engine:
         # --- [신설] 청산 알림 통합 발송 엔진 (누락 100% 방지 및 출구 슬리피지 계측) ---
         if not getattr(self, "exit_msg_sent", False):
             self.exit_msg_sent = True
-            current_vox_price = await self.get_live_vox_price_internal()
+            current_bitget_price = await self.get_live_bitget_price_internal()
             reason = getattr(self, "exit_reason", "") or "거래소 서버 사이드 스탑로스 체결 또는 수동 청산"
             
             # 신호 정보 추출
@@ -5807,7 +4911,7 @@ class ShinseonV35Engine:
             if trigger_price <= 0.0:
                 trigger_price = getattr(self, "last_placed_stop_price", self.entry_price)
             if trigger_price <= 0.0:
-                trigger_price = current_vox_price
+                trigger_price = current_bitget_price
             signal_price = trigger_price
 
             signal_time = getattr(self, "last_exit_signal_time", "")
@@ -5834,7 +4938,7 @@ class ShinseonV35Engine:
                 exit_slippage_pct = (exit_slippage_usd / signal_price) * 100.0 if signal_price > 0 else 0.0
                 
                 # 물리 로그 파일 및 화면 로그 실시간 기록
-                log_msg = f"🎯 [청산 슬리피지 실측] 저격 트리거가: {signal_price:,.1f} USDT ➡️ 복스 청산가: {actual_price:,.1f} USDT | 편차: {exit_slippage_usd:+,.1f} USDT ({exit_slippage_pct:+.3f}% 역마진 발생)"
+                log_msg = f"🎯 [청산 슬리피지 실측] 저격 트리거가: {signal_price:,.1f} USDT ➡️ 비트겟 청산가: {actual_price:,.1f} USDT | 편차: {exit_slippage_usd:+,.1f} USDT ({exit_slippage_pct:+.3f}% 역마진 발생)"
                 if self.bot.dashboard:
                     self.bot.dashboard.add_log(log_msg)
                 
