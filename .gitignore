@@ -1,0 +1,14 @@
+# 보안 처리 (API 키 유출 방지)
+.env
+
+# 파이썬 캐시
+__pycache__/
+*.pyc
+
+# 로그 및 백업 파일
+*.log
+backup/
+scratch/
+ChromeDebugProfile/
+output.txt
+error.txt

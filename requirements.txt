@@ -1,0 +1,6 @@
+PySide6>=6.5.0
+qasync>=0.23.0
+pyqtgraph>=0.13.0
+ccxt>=4.0.0
+websockets>=11.0
+playwright>=1.35.0
