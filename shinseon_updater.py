@@ -13,23 +13,23 @@ MAIN_APP_PATH = os.path.join(BASE_DIR, "shinseon_master_app.pyw")
 TEMP_APP_PATH = os.path.join(BASE_DIR, "shinseon_master_app_temp.pyw")
 
 # GitHub 원격 설정 (공개 Raw 수송 URL 및 CDN 캐시 바이패스 수송선)
-DEFAULT_CONFIG_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon/master/shinseon_config.json"
-DEFAULT_APP_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon/master/shinseon_master_app.pyw"
+DEFAULT_CONFIG_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_config.json"
+DEFAULT_APP_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_master_app.pyw"
 
 def get_latest_master_urls():
-    sha = "master"
+    sha = "main"
     try:
-        req = urllib.request.Request("https://api.github.com/repos/NaThanAEL7912/shinseon/commits/master", headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
+        req = urllib.request.Request("https://api.github.com/repos/NaThanAEL7912/shinseon_bitget/commits/main", headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             if resp.status == 200:
                 data = json.loads(resp.read().decode('utf-8'))
-                sha = data.get("sha", "master")
-                print(f" [CDN 바이패스] 최신 master 커밋 SHA({sha[:7]}) 기반 동적 수송 URL 결합 완료")
+                sha = data.get("sha", "main")
+                print(f" [CDN 바이패스] 최신 main 커밋 SHA({sha[:7]}) 기반 동적 수송 URL 결합 완료")
     except Exception as e:
-        print(f" [경고] GitHub API SHA 파싱 실패 ({e}), 기본 master URL을 사용합니다.")
+        print(f" [경고] GitHub API SHA 파싱 실패 ({e}), 기본 main URL을 사용합니다.")
     
-    config_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon/{sha}/shinseon_config.json"
-    app_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon/{sha}/shinseon_master_app.pyw"
+    config_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/{sha}/shinseon_config.json"
+    app_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/{sha}/shinseon_master_app.pyw"
     return config_url, app_url
 
 def load_config():
