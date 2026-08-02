@@ -1,13 +1,12 @@
 @echo off
 chcp 65001 >nul
-
+cd /d "%~dp0"
 echo ====================================================
 echo  [SHINSEON] 신선 봇 및 크롬 자동 실행기
 echo ====================================================
 echo.
 echo  1. 기존 파이썬 봇 인스턴스 정화 중...
-taskkill /f /im python.exe >nul 2>&1
-taskkill /f /im pythonw.exe >nul 2>&1
+powershell -Command "Get-CimInstance Win32_Process | Where-Object {($_.Name -eq 'python.exe' -or $_.Name -eq 'pythonw.exe') -and $_.CommandLine -like '*shinseon*'} | Invoke-CimMethod -MethodName Terminate" >nul 2>&1
 
 echo  2. Bitget 모니터링 크롬 브라우저 팝업 준비 중...
 set "CHROME_PATH="
@@ -40,7 +39,7 @@ netstat -ano | findstr 9224 >nul 2>&1
 if %errorlevel% neq 0 (
     echo  [안내] 9224포트 모니터링 크롬을 가동합니다...
     start "Bitget_Chrome" "%CHROME_PATH%" --remote-debugging-port=9224 --user-data-dir="%~dp0ChromeDebugProfile" https://www.bitget.com/futures/usdt/BTCUSDT
-    timeout /t 1 /nobreak >nul
+    ping 127.0.0.1 -n 2 >nul
 ) else (
     echo  [안내] 9224포트 모니터링 크롬이 이미 가동 중입니다. (로그인 세션 보존)
 )

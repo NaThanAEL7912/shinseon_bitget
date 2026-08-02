@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "v4.05",
+    "CURRENT_VERSION": "v4.08",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -65,7 +65,7 @@
     "split_cooldown_seconds": 900.0,
     "cooldown_seconds": 300.0,
     "profit_cooldown_seconds": 15.0,
-    "telegram_enabled": false,
+    "telegram_enabled": true,
     "telegram_token": "8890976392:AAFkGFrep1b9N9P_EQpJY-yNYaMLcd2kEZk",
     "telegram_chat_id": "8279848058",
     "sound_enabled": true,

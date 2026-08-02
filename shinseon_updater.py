@@ -168,8 +168,8 @@ def main():
                 
                 print(f" [알림] 최신 마스터 빌드({latest_version}) 업데이트 완수!")
                 try:
-                    msg = f"신선 봇이 최신 버전({latest_version})으로 성공적으로 업데이트 완료되었습니다!"
-                    ctypes.windll.user32.MessageBoxW(0, msg, "신선 업데이트 수송기", 0x40)
+                    msg = f"신선 봇이 최신 버전({latest_version})으로 성공적으로 업데이트 완료되었습니다! (5초 후 자동 실행)"
+                    ctypes.windll.user32.MessageBoxTimeoutW(0, msg, "신선 업데이트 수송기", 0x40, 0, 5000)
                 except Exception:
                     pass
             except Exception as e_compile:
@@ -179,8 +179,8 @@ def main():
         else:
             print(f" [알림] 현재 최신 버전({latest_version})을 사용 중이옵니다. 봇을 기동합니다.")
             try:
-                msg = f"현재 최신 버전({latest_version})을 사용 중이옵니다. 봇을 기동하겠나이다."
-                ctypes.windll.user32.MessageBoxW(0, msg, "신선 업데이트 수송기", 0x40)
+                msg = f"현재 최신 버전({latest_version})을 사용 중이옵니다. 5초 후 봇을 자동 기동하겠나이다."
+                ctypes.windll.user32.MessageBoxTimeoutW(0, msg, "신선 업데이트 수송기", 0x40, 0, 5000)
             except Exception:
                 pass
 

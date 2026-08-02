@@ -302,7 +302,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "v4.07"  # [기획서_80] 자동 봇 시작 OFF 시 강제 청산 탈취 완벽 차단 핫픽스
+        self.CURRENT_VERSION = "v4.08"  # [기획서_80] 자동 봇 시작 OFF 시 강제 청산 탈취 완벽 차단 핫픽스
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1593,182 +1593,64 @@ class ShinseonDashboard(QMainWindow):
             
             # 2. BITGET 실시간 선물 USDT 잔고 조회 (RPA 원격 디버깅)
             bitget_balance = None
-            browser_launched_by_bot = False
-            async with self.bot_core.cdp_lock:
-                try:
-                    raise NotImplementedError('Playwright removed for Bitget migration') # pw = await async_playwright().start()
-                    browser = await asyncio.wait_for(pw.chromium.connect_over_cdp("http://127.0.0.1:9224", timeout=5000), timeout=10.0)
-                    target_page = None
-                    for context in browser.contexts:
-                        for page in context.pages:
-                            url = page.url.lower()
-                            if "x.me" in url or "bitget" in url or "trade" in url:
-                                target_page = page
-                                break
-                        if target_page:
+            try:
+                if self.bot_core.bitget_exchange is None:
+                    self.add_log("[에러] 비트겟 API 객체가 없습니다. API 키를 확인하십시오.")
+                else:
+                    bal = await self.bot_core.bitget_exchange.fetch_balance()
+                    bitget_balance = float(bal.get('USDT', {}).get('free', 0.0))
+                    
+                    # 포지션 동기화
+                    positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+                    active_pos = None
+                    for p in positions:
+                        pVol = float(p.get('contracts', 0) or 0)
+                        if pVol > 0:
+                            active_pos = p
                             break
-                    if not target_page and browser.contexts and browser.contexts[0].pages:
-                        target_page = browser.contexts[0].pages[0]
-                    
-                    if target_page:
-                        await asyncio.sleep(0.5)
-                        
-                        # 1순위: DOM 정밀 잔고 파싱 (Wallet Balance, Total Assets, Total (USDT))
-                        js_assets = """
-                        () => {
-                            let elements = Array.from(document.querySelectorAll('div, span, td, p'));
-                            for (let el of elements) {
-                                let txt = el.innerText ? el.innerText.trim() : "";
-                                if (txt === "Wallet Balance" || txt === "Total Assets" || txt === "Total (USDT)") {
-                                    if (el.parentElement) {
-                                        return el.parentElement.innerText;
-                                    }
-                                }
-                            }
-                            return "";
-                        }
-                        """
-                        raw_assets_text = await target_page.evaluate(js_assets)
-                        if raw_assets_text:
-                            match = re.search(r'([0-9,]+\.[0-9]+)', raw_assets_text)
-                            if match:
-                                bitget_balance = float(match.group(1).replace(",", ""))
-                                
-                        # 2순위 (폴백): Available 단어와 인접한(최대 30자 이내) 진짜 마진 잔고 숫자 파싱 (BTC 호가 오인 차단)
-                        if bitget_balance is None:
-                            content = await target_page.content()
-                            match = re.search(r'Available\s*[:\s]*\$?\s*([0-9,.]+)\s*(?:USDT|\b)', content, re.IGNORECASE)
-                            if match:
-                                bitget_balance = float(match.group(1).replace(",", ""))
-                                
-                        # 3순위 (폴백): 기존 JS DOM Available 스캔 방식
-                        if bitget_balance is None:
-                            js_avail = """
-                            () => {
-                                let elements = Array.from(document.querySelectorAll('span, div, p'));
-                                for (let el of elements) {
-                                    if (el.innerText && el.innerText.includes("Available")) {
-                                        return el.innerText;
-                                    }
-                                }
-                                return "";
-                            }
-                            """
-                            raw_avail_text = await target_page.evaluate(js_avail)
-                            match = re.search(r'([0-9,.]+)', raw_avail_text)
-                            if match:
-                                bitget_balance = float(match.group(1).replace(",", ""))
-                        
-                        # --- [통합] 실물 포지션 스캔 추가 (REST API 100% 정밀 동기화) ---
-                        js_dom_pos = """
-                        async () => {
-                            let tok = "";
-                            let parts = document.cookie.split(";");
-                            for (let p of parts) {
-                                let pair = p.trim().split("=");
-                                if (pair[0] === "token") { tok = pair[1]; break; }
-                            }
-                            if (!tok && window.localStorage) tok = localStorage.getItem("token") || "";
                             
-                            let activePos = null;
-                            try {
-                                let resp = await fetch(window.location.origin + "/egw/private/futures/order/trade/current_position_list", {
-                                    method: 'GET',
-                                    credentials: 'include',
-                                    headers: {
-                                        'content-type': 'application/json',
-                                        'exchange-language': 'ko_KR',
-                                        'exchange-client': 'pc',
-                                        'exchange-token': tok,
-                                        'authorization': tok
-                                    }
-                                });
-                                let text = await resp.text();
-                                let res = JSON.parse(text);
-                                if (res && (res.code === "0" || res.code === 0) && res.data && res.data.length > 0) {
-                                    let p = res.data[0];
-                                    let rawVol = p.positionVolume || p.volume || p.vol || 0;
-                                    let pVol = parseFloat(rawVol);
-                                    let pPrice = parseFloat(p.openAvgPrice || p.entryPrice || 0);
-                                    let pSide = (p.orderSide || p.side || "BUY").toString().toUpperCase();
-                                    let dir = (pSide === "BUY" || pSide === "LONG" || pSide === "1") ? "LONG" : "SHORT";
-                                    let pIds = [p.id || p.positionId];
-                                    
-                                    if (pVol > 0 && pPrice > 0) {
-                                        activePos = {
-                                            direction: dir,
-                                            entryPrice: pPrice,
-                                            size: pVol / 1000.0,
-                                            volume: Math.round(pVol),
-                                            positionIds: pIds,
-                                            pnlUSDT: ""
-                                        };
-                                    }
-                                }
-                            } catch(e) {}
-                            return activePos;
-                        }
-                        """
-                        active_pos = await target_page.evaluate(js_dom_pos)
-                        if active_pos:
-                            direction = active_pos["direction"]
-                            entry_price = active_pos["entryPrice"]
-                            size_val = active_pos.get("size", 0.0)
-                            pos_ids = active_pos.get("positionIds", [])
-                            if entry_price > 0.0 and size_val > 0.0:
-                                if self.bot_core.v35_engine:
-                                    self.bot_core.v35_engine.position_volume = active_pos.get("volume", int(round(size_val * 1000)))
-                                    if pos_ids:
-                                        self.bot_core.v35_engine.active_position_ids = pos_ids
-                                    if not self.bot_core.v35_engine.is_position_active or self.bot_core.v35_engine.entry_direction != direction:
-                                        self.bot_core.v35_engine.peak_pnl_pct = 0.0
-                                        self.bot_core.v35_engine.entry_price_1 = entry_price
-                                        self.bot_core.v35_engine.is_position_active = True
-                                        self.bot_core.v35_engine.entry_direction = direction
-                                        self.bot_core.v35_engine.entry_price = entry_price
-                                        self.bot_core.v35_engine.has_second_entry = False
-                                        self.bot_core.v35_engine.has_third_entry = False
-                                        if self.bot_core.v35_engine.is_snipe_active:
-                                            asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
-                                    else:
-                                        if self.bot_core.v35_engine.entry_price_1 <= 0.0:
-                                            self.bot_core.v35_engine.entry_price_1 = entry_price
-                                        self.bot_core.v35_engine.is_position_active = True
-                                        self.bot_core.v35_engine.entry_direction = direction
-                                        self.bot_core.v35_engine.entry_price = entry_price
-                                
-                                # PNL USDT 파싱 및 추출 로직 추가
-                                pnl_usdt_str = active_pos.get("pnlUSDT", "")
-                                pnl_val = 0.0
-                                match_pnl = re.search(r'([+-]?[0-9,.]+)\s*USDT', pnl_usdt_str)
-                                if match_pnl:
-                                    pnl_val = float(match_pnl.group(1).replace(",", ""))
-                                else:
-                                    size = active_pos.get("size", 0.0)
-                                    if size > 0.0 and entry_price > 0.0:
-                                        btc_price = getattr(self.bot_core, "current_price", 0.0)
-                                        if btc_price > 0.0:
-                                            if direction == "LONG":
-                                                pnl_val = size * (btc_price - entry_price)
-                                            else:
-                                                pnl_val = size * (entry_price - btc_price)
-                                self.last_pnl_usdt = pnl_val
-                                
-                                self.lbl_guardrail.setText(f"진입/청산 상태:\n[{direction} 진입 완료] 단가: {entry_price:,.0f}")
-                                self.add_log(f"✔ [포지션 동기화 완료] 열린 포지션 감지: {direction} @ {entry_price:,.1f} USD")
-                        else:
+                    if active_pos:
+                        direction = "LONG" if str(active_pos.get('side', '')).lower() == 'long' else "SHORT"
+                        entry_price = float(active_pos.get('entryPrice', 0))
+                        size_val = float(active_pos.get('contracts', 0))
+                        pos_id = active_pos.get('id', "")
+                        
+                        if entry_price > 0.0 and size_val > 0.0:
                             if self.bot_core.v35_engine:
-                                self.bot_core.v35_engine.is_position_active = False
-                            self.last_pnl_usdt = 0.0
-                            self.lbl_guardrail.setText("진입/청산 상태:\n[100% 현금 대기 중]")
-                            self.add_log("✔ [포지션 동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
+                                self.bot_core.v35_engine.position_volume = int(round(size_val * 1000))
+                                if pos_id:
+                                    self.bot_core.v35_engine.active_position_ids = [pos_id]
+                                if not self.bot_core.v35_engine.is_position_active or self.bot_core.v35_engine.entry_direction != direction:
+                                    self.bot_core.v35_engine.peak_pnl_pct = 0.0
+                                    self.bot_core.v35_engine.entry_price_1 = entry_price
+                                    self.bot_core.v35_engine.is_position_active = True
+                                    self.bot_core.v35_engine.entry_direction = direction
+                                    self.bot_core.v35_engine.entry_price = entry_price
+                                    self.bot_core.v35_engine.has_second_entry = False
+                                    self.bot_core.v35_engine.has_third_entry = False
+                                    if self.bot_core.v35_engine.is_snipe_active:
+                                        asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
+                                else:
+                                    if self.bot_core.v35_engine.entry_price_1 <= 0.0:
+                                        self.bot_core.v35_engine.entry_price_1 = entry_price
+                                    self.bot_core.v35_engine.is_position_active = True
+                                    self.bot_core.v35_engine.entry_direction = direction
+                                    self.bot_core.v35_engine.entry_price = entry_price
+                                    
+                            pnl_val = float(active_pos.get('unrealizedPnl', 0) or 0)
+                            self.last_pnl_usdt = pnl_val
+                            
+                            self.lbl_guardrail.setText(f"진입/청산 상태:\n[{direction} 진입 완료] 단가: {entry_price:,.0f}")
+                            self.add_log(f"✔ [포지션 동기화 완료] 열린 포지션 감지: {direction} @ {entry_price:,.1f} USD")
                     else:
-                        if browser_launched_by_bot:
-                            self.add_log("  ➡️ [가이드] BITGET 페이지에 로그인 및 x.me/futures/trade/BTCUSDT 진입 후 재동기화 하소서.")
-                    
-                    await pw.stop()
-                except Exception as e:
-                    self.add_log(f"[안내] BITGET RPA 잔고 조회 지연: 크롬 디버깅 포트(9224) 연결 확인 필요")
+                        if self.bot_core.v35_engine:
+                            self.bot_core.v35_engine.is_position_active = False
+                        self.last_pnl_usdt = 0.0
+                        self.lbl_guardrail.setText("진입/청산 상태:\n[100% 현금 대기 중]")
+                        self.add_log("✔ [포지션 동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
+                        
+            except Exception as e:
+                self.add_log(f"[안내] BITGET 잔고 및 포지션 API 조회 에러: {e}")
             
             # 3. BITGET 단독 운용 모드: 바이낸스 연동을 배제하고 오직 BITGET 잔고를 100% 자본금으로 설정
             final_bin = 0.0
@@ -1874,245 +1756,74 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(self.do_position_sync())
 
     async def do_position_sync(self):
-        browser = None
-        pw = None
         try:
-            async with self.bot_core.cdp_lock:
-                raise NotImplementedError('Playwright removed for Bitget migration') # pw = await async_playwright().start()
-                browser = await pw.chromium.connect_over_cdp("http://127.0.0.1:9224", timeout=5000)
-                
-                # /trade 가 포함된 진짜 선물 트레이딩 화면 탭 후보 수집 (백그라운드 껍데기/서비스 워커 오진 방지 & 0.5초 2차 Retry 기어)
-                target_page = None
-                candidate_pages = []
-                for retry in range(2):
-                    candidate_pages = []
-                    for context in browser.contexts:
-                        for page in context.pages:
-                            url = page.url.lower()
-                            if "x.me" in url or "bitget" in url:
-                                candidate_pages.append(page)
-                    
-                    # 후보 페이지들 중 실제 Vue 스토어가 활성화되어 있는 진짜 트레이딩 탭을 검증하여 타겟으로 선정
-                    for page in candidate_pages:
-                        try:
-                            pos_len = await page.evaluate("""
-                            () => {
-                                let store = null;
-                                try {
-                                    if (window.$nuxt && window.$nuxt.$store) store = window.$nuxt.$store;
-                                } catch(e) {}
-                                if (!store) {
-                                    try {
-                                        let nuxtEl = document.querySelector('#__nuxt') || document.querySelector('#app') || document.body;
-                                        if (nuxtEl && nuxtEl.__vue__ && nuxtEl.__vue__.$store) store = nuxtEl.__vue__.$store;
-                                    } catch(e) {}
-                                }
-                                if (store && store.state && store.state.future) {
-                                    let list = store.state.future.positionListNew || store.state.future.positionList || [];
-                                    return list.length;
-                                }
-                                return 0;
-                            }
-                            """)
-                            target_page = page
-                            if pos_len > 0:
-                                break
-                        except Exception:
-                            continue
-                    
-                    if not target_page and candidate_pages:
-                        target_page = candidate_pages[0]
-                        
-                    if target_page:
-                        break
-                        
-                    if retry < 1:
-                        await asyncio.sleep(0.5)
-                        
-                if target_page:
-                    # 1) 브라우저 인메모리 Vue 스토어에서 포지션 리스트 직접 탈취
-                    js_get_pos_api = """
-                    () => {
-                        let store = null;
-                        try {
-                            if (window.$nuxt && window.$nuxt.$store) {
-                                store = window.$nuxt.$store;
-                            }
-                        } catch(e) {}
-                        if (!store) {
-                            try {
-                                let nuxtEl = document.querySelector('#__nuxt') || document.querySelector('#app') || document.body;
-                                if (nuxtEl && nuxtEl.__vue__ && nuxtEl.__vue__.$store) {
-                                    store = nuxtEl.__vue__.$store;
-                                }
-                            } catch(e) {}
-                        }
-                        if (store && store.state && store.state.future) {
-                            return store.state.future.positionListNew || store.state.future.positionList || [];
-                        }
-                        return [];
+            if not getattr(self.bot_core, 'bitget_exchange', None):
+                self.add_log("❌ [동기화 실패] CCXT Bitget 거래소 객체가 존재하지 않습니다.")
+                return
+
+            positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+            
+            active_pos = None
+            for pos in positions:
+                contracts = float(pos.get('contracts', 0.0))
+                if contracts > 0:
+                    direction = "LONG" if pos.get('side', '').lower() == 'long' else "SHORT"
+                    entry_price = float(pos.get('entryPrice', 0.0))
+                    vol = int(round(contracts * 1000))
+                    pos_id = pos.get('id', '')
+                    active_pos = {
+                        "direction": direction,
+                        "entryPrice": entry_price,
+                        "positionIds": [pos_id] if pos_id else [],
+                        "volume": vol
                     }
-                    """
-                    positions = await target_page.evaluate(js_get_pos_api)
+                    break
                     
-                    # [진단용 덤프 강제 기록]
-                    try:
-                        import json
-                        with open(r"c:\Working\shinseon\scratch\storage_dump.json", "w", encoding="utf-8") as f:
-                            json.dump(positions, f, ensure_ascii=False, indent=2)
-                    except Exception as dump_ex:
-                        pass
-                    
-                    # [2차 방어선] Nuxt API 실패 시 다이렉트 fetch 백업 호출
-                    if not positions:
-                        try:
-                            import json
-                            curr_headers = self.bot_core.bitget_headers or {}
-                            headers_json = json.dumps(curr_headers)
-                            js_fetch_pos = f"""
-                            () => fetch(window.location.origin + '/egw/private/futures/order/trade/current_position_list', {{
-                                method: 'GET',
-                                credentials: 'include',
-                                headers: {headers_json}
-                            }}).then(r => r.text().then(t => {{ try {{ let res = JSON.parse(t); return res.data || []; }} catch(e) {{ return []; }} }}))
-                            """
-                            positions = await target_page.evaluate(js_fetch_pos)
-                        except Exception:
-                            positions = []
-                    
-                    valid_positions = []
-                    for pos in positions:
-                        try:
-                            v = float(pos.get("positionVolume", 0.0))
-                            e = float(pos.get("openAvgPrice", 0.0))
-                            if v > 0.0 and e > 0.0:
-                                valid_positions.append(pos)
-                        except Exception:
-                            pass
-                    positions = valid_positions
-                    
-                    position_ids = [pos.get("id") for pos in positions if pos.get("id")]
-                    
-                    active_pos = None
-                    if positions:
-                        # 인메모리 스토어 결과가 있으면 이를 바탕으로 동기화 데이터 생성
-                        pos = positions[0]
-                        direction = "SHORT" if pos.get("orderSide", "").upper() == "SELL" else "LONG"
-                        entry_price = float(pos.get("openAvgPrice", 0.0))
-                        try:
-                            vol = int(float(pos.get("positionVolume", 0.0)))
-                        except Exception:
-                            vol = 1
-                        active_pos = {
-                            "direction": direction,
-                            "entryPrice": entry_price,
-                            "positionIds": position_ids,
-                            "volume": vol
-                        }
-                    else:
-                        # 2) API 실패 시 DOM 파싱으로 백업 구동
-                        js_dom_pos = """
-                        () => {
-                            let rows = Array.from(document.querySelectorAll('tr.ant-table-row, tr'));
-                            let activePos = null;
-                            for (let r of rows) {
-                                let txt = r.innerText ? r.innerText : "";
-                                if (txt.includes("BTCUSDT") && (txt.includes("Long") || txt.includes("Short")) && !txt.includes("taker") && !txt.includes("Fee")) {
-                                    let lines = txt.split('\\n').map(x => x.trim()).filter(x => x.length > 0);
-                                    let direction = txt.includes("Long") ? "LONG" : "SHORT";
-                                    let entryPrice = 0.0;
-                                    for (let l of lines) {
-                                        let clean = l.replace(/,/g, '');
-                                        if (/^\\d+(\\.\\d+)?$/.test(clean)) {
-                                            let num = parseFloat(clean);
-                                            if (num > 30000 && num < 120000) {
-                                                entryPrice = num;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    let size = 0.0;
-                                    for (let i = 0; i < lines.length - 1; i++) {
-                                        if (lines[i].includes("Long") || lines[i].includes("Short")) {
-                                            let clean = lines[i+1].replace(/[a-zA-Z\\s]/g, '').trim();
-                                            if (/^\\d+(\\.\\d+)?$/.test(clean)) {
-                                                size = parseFloat(clean);
-                                                break;
-                                            }
-                                        }
-                                    }
-                                    
-                                    // [33차 수술] 유령 포지션(0.0) 방지 잠금쇠
-                                    if (entryPrice > 0.0 && size > 0.0) {
-                                        activePos = {
-                                            direction: direction,
-                                            entryPrice: entryPrice,
-                                            positionIds: [], // DOM 파싱 시에는 비워둠 (백업)
-                                            volume: Math.round(size * 1000)
-                                        };
-                                        break;
-                                    }
-                                }
-                            }
-                            return activePos;
-                        }
-                        """
-                        active_pos = await target_page.evaluate(js_dom_pos)
-                        
-                    if active_pos:
-                        direction = active_pos["direction"]
-                        entry_price = active_pos["entryPrice"]
-                        pos_ids = active_pos.get("positionIds", [])
-                        
-                        if self.bot_core.v35_engine:
-                            if not self.bot_core.v35_engine.is_position_active or self.bot_core.v35_engine.entry_direction != direction:
-                                self.bot_core.v35_engine.peak_pnl_pct = 0.0
-                            self.bot_core.v35_engine.is_position_active = True
-                            self.bot_core.v35_engine.entry_direction = direction
-                            self.bot_core.v35_engine.entry_price = entry_price
-                            # [3차 방어선] pos_ids가 빈 목록이더라도 기존 엔진이 확보한 active_position_ids가 있으면 유지
-                            if pos_ids:
-                                self.bot_core.v35_engine.active_position_ids = pos_ids
-                            elif not self.bot_core.v35_engine.active_position_ids:
-                                self.bot_core.v35_engine.active_position_ids = []
-                            self.bot_core.v35_engine.position_volume = active_pos.get("volume", 1)
-                            
-                            # [신설]: 동기화 성공 시 자고 있던 가드레일 루프 즉시 자동 기상!
-                            if not getattr(self.bot_core.v35_engine, "is_guardrail_running", False):
-                                asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
-                                self.add_log(f"⚡ [가드레일 자동 기상] 동기화 성공! 자고 있던 출구 감시 루프가 즉시 기상하여 실시간 감시를 개시합니다. (방향: {direction})")
-                            
-                        self.lbl_guardrail.setText(f"진입/청산 상태:\n[{direction} 진입 완료] 단가: {entry_price:,.0f}")
-                        self.add_log(f"✔ [동기화 완료] 열린 포지션 감지: {direction} @ {entry_price:,.1f} USD (ID 목록: {pos_ids})")
-                        
-                        pass
-                    else:
-                        if self.bot_core.v35_engine:
-                            self.bot_core.v35_engine.is_position_active = False
-                            self.bot_core.v35_engine.entry_price = 0.0
-                            self.bot_core.v35_engine.position_volume = 0
-                            self.bot_core.v35_engine.entry_direction = ""
-                            self.bot_core.v35_engine.is_half_exited = False
-                            self.bot_core.v35_engine.has_pyramided = False
-                            self.bot_core.v35_engine.has_second_entry = False
-                            self.bot_core.v35_engine.has_third_entry = False
-                            self.bot_core.v35_engine.has_smart_guarded = False
-                            self.bot_core.v35_engine.exit_in_progress = False
-                        self.lbl_guardrail.setText("진입/청산 상태:\n[100% 현금 대기 중]")
-                        self.add_log("✔ [동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
-                    self.add_log("🌓 [수동 리로드] BITGET 포지션 상태를 강제로 재동기화 완료하였습니다.")
-                else:
-                    self.add_log("❌ [동기화 실패] BITGET 브라우저를 찾지 못했습니다.")
+            if active_pos:
+                direction = active_pos["direction"]
+                entry_price = active_pos["entryPrice"]
+                pos_ids = active_pos.get("positionIds", [])
                 
-                if pw:
-                    await pw.stop()
+                if self.bot_core.v35_engine:
+                    if not self.bot_core.v35_engine.is_position_active or self.bot_core.v35_engine.entry_direction != direction:
+                        self.bot_core.v35_engine.peak_pnl_pct = 0.0
+                    self.bot_core.v35_engine.is_position_active = True
+                    self.bot_core.v35_engine.entry_direction = direction
+                    self.bot_core.v35_engine.entry_price = entry_price
+                    # [3차 방어선] pos_ids가 빈 목록이더라도 기존 엔진이 확보한 active_position_ids가 있으면 유지
+                    if pos_ids:
+                        self.bot_core.v35_engine.active_position_ids = pos_ids
+                    elif not self.bot_core.v35_engine.active_position_ids:
+                        self.bot_core.v35_engine.active_position_ids = []
+                    self.bot_core.v35_engine.position_volume = active_pos.get("volume", 1)
+                    
+                    # [신설]: 동기화 성공 시 자고 있던 가드레일 루프 즉시 자동 기상!
+                    if not getattr(self.bot_core.v35_engine, "is_guardrail_running", False):
+                        import asyncio
+                        asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
+                        self.add_log(f"⚡ [가드레일 자동 기상] 동기화 성공! 자고 있던 출구 감시 루프가 즉시 기상하여 실시간 감시를 개시합니다. (방향: {direction})")
+                    
+                self.lbl_guardrail.setText(f"진입/청산 상태:\n[{direction} 진입 완료] 단가: {entry_price:,.0f}")
+                self.add_log(f"✔ [동기화 완료] 열린 포지션 감지: {direction} @ {entry_price:,.1f} USD (ID 목록: {pos_ids})")
+            else:
+                if self.bot_core.v35_engine:
+                    self.bot_core.v35_engine.is_position_active = False
+                    self.bot_core.v35_engine.entry_price = 0.0
+                    self.bot_core.v35_engine.position_volume = 0
+                    self.bot_core.v35_engine.entry_direction = ""
+                    self.bot_core.v35_engine.is_half_exited = False
+                    self.bot_core.v35_engine.has_pyramided = False
+                    self.bot_core.v35_engine.has_second_entry = False
+                    self.bot_core.v35_engine.has_third_entry = False
+                    self.bot_core.v35_engine.has_smart_guarded = False
+                    self.bot_core.v35_engine.exit_in_progress = False
+                self.lbl_guardrail.setText("진입/청산 상태:\n[100% 현금 대기 중]")
+                self.add_log("✔ [동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
+            
+            self.add_log("🌓 [수동 리로드] BITGET 포지션 상태를 강제로 재동기화 완료하였습니다.")
+            
         except Exception as e:
             self.add_log(f"❌ [동기화 실패] 포지션 스캔 중 오류 발생: {e}")
-            try:
-                if pw:
-                    await pw.stop()
-            except:
-                pass
         finally:
             self.btn_position_sync.setEnabled(True)
             self.btn_position_sync.setText("🔄 포지션 동기화")
