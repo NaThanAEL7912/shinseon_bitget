@@ -9,12 +9,12 @@ import ctypes
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "shinseon_config.json")
-MAIN_APP_PATH = os.path.join(BASE_DIR, "shinseon_master_app.pyw")
+MAIN_APP_PATH = os.path.join(BASE_DIR, "shinseon_client.pyw")
 TEMP_APP_PATH = os.path.join(BASE_DIR, "shinseon_master_app_temp.pyw")
 
 # GitHub 원격 설정 (공개 Raw 수송 URL 및 CDN 캐시 바이패스 수송선)
 DEFAULT_CONFIG_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_config.json"
-DEFAULT_APP_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_master_app.pyw"
+DEFAULT_APP_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_client.pyw"
 
 def get_latest_master_urls():
     sha = "main"
@@ -29,7 +29,7 @@ def get_latest_master_urls():
         print(f" [경고] GitHub API SHA 파싱 실패 ({e}), 기본 main URL을 사용합니다.")
     
     config_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/{sha}/shinseon_config.json"
-    app_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/{sha}/shinseon_master_app.pyw"
+    app_url = f"https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/{sha}/shinseon_client.pyw"
     return config_url, app_url
 
 def load_config():
@@ -197,7 +197,7 @@ def main():
             except Exception as e_run:
                 print(f" [오류] 마스터 실행 실패: {e_run}")
         else:
-            print(" [오류] 실행할 마스터 파일(shinseon_master_app.pyw)이 존재하지 않습니다.")
+            print(" [오류] 실행할 마스터 파일(shinseon_client.pyw)이 존재하지 않습니다.")
 
 if __name__ == "__main__":
     main()

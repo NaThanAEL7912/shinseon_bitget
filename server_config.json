@@ -1,6 +1,6 @@
 {
-    "CURRENT_VERSION": "V4.12",
-    "auto_start": false,
+    "CURRENT_VERSION": "v4.08",
+    "auto_start": true,
     "manual_threshold": false,
     "target_liq": "400000",
     "target_oi": "0.05",
