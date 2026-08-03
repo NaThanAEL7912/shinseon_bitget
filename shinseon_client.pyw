@@ -1202,6 +1202,9 @@ class ShinseonDashboard(QMainWindow):
                             usdt_total = payload.get('usdt_total', 0.0)
                             self.lbl_capital_display.setText(f"총 가용 자본금: ${usdt_total:,.2f}")
                             self.add_log(f"✅ [잔고 동기화] 실전 계좌 잔고가 업데이트되었습니다: ${usdt_total:,.2f}")
+                        elif msg_type == 'EVT_SYNC_ERROR':
+                            err_msg = payload.get('error', '알 수 없는 오류')
+                            self.add_log(f"❌ [잔고 동기화 실패] 서버 오류: {err_msg}")
                         elif msg_type == 'ui_update':
                             if 'price' in payload:
                                 self.current_price = float(payload['price'])
@@ -1643,11 +1646,13 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_sync_balances(self):
         self.add_log("[뷰어 모드] 잔고 동기화 명령을 서버로 전송합니다.")
-        if self.ws:
+        if hasattr(self, 'ws') and self.ws:
             try:
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
             except Exception as e:
                 self.add_log(f"❌ [웹소켓 에러] 잔고 동기화 전송 실패: {e}")
+        else:
+            self.add_log("❌ [웹소켓 에러] 서버 연결이 끊어졌거나 연결 중입니다.")
         self.btn_sync_balance.setEnabled(True)
         self.btn_sync_balance.setText("🔄 실전 계좌 잔고 동기화")
     def toggle_manual_threshold_inputs(self):
