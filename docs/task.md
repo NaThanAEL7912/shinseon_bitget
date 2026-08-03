@@ -10,3 +10,7 @@
 - [x] [기획서_5] 비트겟 브라우저 다이렉트 오픈 버튼 신설
   - [x] shinseon_client.pyw 내 UI 버튼 추가 (이미 적용됨)
   - [x] 버튼 클릭 시 webbrowser 모듈로 비트겟 URL 호출 기능 연동 (이미 적용됨)
+
+- [/] [기획서_7] 라이선스 서버 파일(license.json) 복구
+  - [ ] docs/license.json 파일 생성 ('나엘로_노트북' 기기 등록)
+  - [ ] GitHub 배포 (V4.20)
