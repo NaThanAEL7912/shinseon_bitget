@@ -2010,7 +2010,7 @@ class WsServer:
                     if cmd == "CMD_SYNC_POSITION":
                         try:
                             if self.bot_core.bitget_exchange:
-                                bal = await asyncio.to_thread(self.bot_core.bitget_exchange.fetch_balance)
+                                bal = await self.bot_core.bitget_exchange.fetch_balance({'type': 'swap'})
                                 usdt_total = bal.get('USDT', {}).get('total', 0.0)
                                 await self.broadcast_event('EVT_SYNC_BALANCE', {'usdt_total': usdt_total})
                         except Exception as e:

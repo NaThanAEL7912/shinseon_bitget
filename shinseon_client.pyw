@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.21"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.22"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -513,7 +513,7 @@ class ShinseonDashboard(QMainWindow):
         header_layout.addWidget(self.btn_session_config)
         right_layout.addLayout(header_layout)
         
-        self.lbl_capital_display = QLabel("총 가용 자본금: $20,000.00 (실시간 동기화 대기)")
+        self.lbl_capital_display = QLabel("총 가용 자본금: $0.00 (실시간 동기화 대기)")
         self.lbl_capital_display.setStyleSheet("font-size: 13px; color: #DEBA9D; font-weight: bold; font-family: 'Consolas'; margin-top: 4px; margin-bottom: 4px;")
         right_layout.addWidget(self.lbl_capital_display)
         
