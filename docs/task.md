@@ -14,3 +14,13 @@
 - [/] [기획서_7] 라이선스 서버 파일(license.json) 복구
   - [ ] docs/license.json 파일 생성 ('나엘로_노트북' 기기 등록)
   - [ ] GitHub 배포 (V4.20)
+
+- [/] [기획서_8] AWS 서버 패키지 설치
+  - [ ] AWS 서버에 aiohttp, ccxt 등 설치
+  - [ ] AWS 서버 봇 재부팅 (tmux)
+
+- [/] [기획서_9] AWS 서버 부팅 크래시 수정
+  - [ ] shinseon_server.py 오타 수정 (self.server_config -> env_vars)
+  - [ ] GitHub 배포 (V4.21)
+  - [ ] AWS 서버에 수정된 shinseon_server.py 업로드 (scp)
+  - [ ] AWS 서버 tmux 재부팅 및 정상 동작 검증
