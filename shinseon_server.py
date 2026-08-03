@@ -64,18 +64,8 @@ class BotCore:
         # 비트겟 CCXT 초기화
         self.bitget_exchange = None
         api_key = self.server_config.get("BITGET_API_KEY", "")
+        api_secret = self.server_config.get("BITGET_SECRET_KEY", "")
         api_password = self.server_config.get("BITGET_PASSPHRASE", "")
-        
-        pem_path = os.path.join(BASE_DIR, "shinseon-key.pem")
-        api_secret = ""
-        if os.path.exists(pem_path):
-            try:
-                with open(pem_path, "r", encoding="utf-8") as f:
-                    api_secret = f.read()
-            except Exception as e:
-                print(f"❌ [경고] RSA 키(.pem) 파일을 읽는 중 오류가 발생했습니다: {e}")
-        else:
-            print("❌ [경고] 비트겟 인증용 shinseon-key.pem 파일을 찾을 수 없습니다! 실전 계좌 연동이 불가능합니다.")
         
         if api_key and api_secret and api_password:
             import ccxt.async_support as ccxt
@@ -86,9 +76,9 @@ class BotCore:
                 'enableRateLimit': True,
                 'options': {'defaultType': 'swap'}
             })
-            print("✅ [API] 비트겟 RSA 방식 API 키 세팅 완료. (ccxt.bitget 초기화 됨)")
+            print("✅ [API] 비트겟 API 키 세팅 완료. (ccxt.bitget 초기화 됨)")
         else:
-            print("❌ [경고] 비트겟 API 키 또는 RSA 패스워드가 누락되었습니다. 실전 잔고/주문 조회가 불가능합니다. server_config.json 및 .pem 파일을 확인하세요.")
+            print("❌ [경고] 비트겟 API 키가 설정되지 않았습니다. 실전 잔고/주문 조회가 불가능합니다. server_config.json을 확인하세요.")
 
 
         self.bitget_headers = {}  # BITGET 실시간 인증 헤더 보관용 딕셔너리

@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.16"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.17"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1709,23 +1709,7 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(self.run_telegram_listener_loop())
         self.add_log("🚀 [부팅 시퀀스] 자동 동기화 및 라이선스 검증 시퀀스를 개시합니다...")
         
-        # 1. 라이선스 비동기 검증 집행 (메인 UI 프리징 해결)
-        self.add_log("🔒 [라이선스 검증] GitHub 라이선스 온라인 인증을 수행하는 중...")
-        try:
-            hw_id = await asyncio.to_thread(get_hardware_uuid)
-            is_licensed, reason = await asyncio.to_thread(check_license_online, hw_id)
-            if not is_licensed:
-                self.add_log(f"❌ [인증 실패] 라이선스 인증 실패: {reason}")
-                
-                # 메인 스레드에서 다이얼로그 호출 및 즉시 종료
-                dialog = ShinseonLicenseDialog(hw_id, reason, parent=self)
-                dialog.exec()
-                sys.exit(0)
-            self.add_log(f"✔ [인증 완료] 정식 라이선스가 확인되었습니다. {reason}")
-        except Exception as license_err:
-            self.add_log(f"❌ [인증 에러] 라이선스 검증 오류 발생: {license_err}")
-            sys.exit(0)
-            
+        self.add_log("✅ [프리패스] 마스터 권한으로 라이선스 체크를 우회합니다.")
         # 2. 통합 동기화 단계 (잔고 + 포지션)
         self.add_log("⚡ [부팅 동기화 1/2] 실전 계좌 잔고 및 포지션 상태 통합 동기화 시동...")
         await self.do_sync_balances()
