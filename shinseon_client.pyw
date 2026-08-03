@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.13"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.14"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1642,7 +1642,12 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(self.do_sync_balances())
 
     async def do_sync_balances(self):
-        self.add_log("[뷰어 모드] 잔고 동기화는 서버에서 처리됩니다.")
+        self.add_log("[뷰어 모드] 잔고 동기화 명령을 서버로 전송합니다.")
+        if self.ws:
+            try:
+                await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
+            except Exception as e:
+                self.add_log(f"❌ [웹소켓 에러] 잔고 동기화 전송 실패: {e}")
         self.btn_sync_balance.setEnabled(True)
         self.btn_sync_balance.setText("🔄 실전 계좌 잔고 동기화")
     def toggle_manual_threshold_inputs(self):

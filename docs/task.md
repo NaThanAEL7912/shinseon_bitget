@@ -1,0 +1,4 @@
+- [/] 클라이언트 버그 수정 (shinseon_client.pyw)
+  - [ ] [버그수정] do_sync_balances 함수 내에 서버로 CMD_SYNC_POSITION 웹소켓 발송 로직 추가하여 잔고 동기화 깡통 버튼 수리
+- [ ] 쫄다구 에이전트 작업 100% 직접 검수 (AGENTS.md 3번 룰 준수)
+- [ ] V4.14 배포 및 버전업 관리 문서 갱신
