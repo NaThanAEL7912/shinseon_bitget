@@ -16,7 +16,7 @@ TEMP_APP_PATH = os.path.join(BASE_DIR, "shinseon_master_app_temp.pyw")
 DEFAULT_CONFIG_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_config.json"
 DEFAULT_APP_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/shinseon_client.pyw"
 
-def get_latest_master_urls():
+def get_latest_main_urls():
     sha = "main"
     try:
         req = urllib.request.Request("https://api.github.com/repos/NaThanAEL7912/shinseon_bitget/commits/main", headers={'User-Agent': 'Mozilla/5.0', 'Cache-Control': 'no-cache'})
@@ -122,7 +122,7 @@ def main():
     try:
         # 1. GitHub 원격 서버의 최신 설정 파일 조회
         print(" GitHub 배포 서버 정보 조회 중...")
-        config_url, app_url = get_latest_master_urls()
+        config_url, app_url = get_latest_main_urls()
         config_bytes = download_file_with_token(config_url)
         remote_config = json.loads(config_bytes.decode('utf-8'))
         
