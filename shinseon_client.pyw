@@ -96,9 +96,9 @@ else:
 
 # GitHub 설정 (라이선스 동기화용)
 GITHUB_OWNER = "NaThanAEL7912"
-GITHUB_REPO = "shinseon"
+GITHUB_REPO = "shinseon_bitget"
 GITHUB_BRANCH = "main"
-LICENSE_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon/main/docs/license.json"
+LICENSE_URL = "https://raw.githubusercontent.com/NaThanAEL7912/shinseon_bitget/main/docs/license.json"
 
 # 2. client_config.json 환경변수 수동 파싱 엔진 (dotenv 패키지 의존성 완전 제거)
 def load_env_file():
@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.18"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.19"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []

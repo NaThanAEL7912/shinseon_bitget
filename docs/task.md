@@ -4,3 +4,9 @@
   - [x] API 키가 없을 경우 터미널에 명확한 에러 로그 출력 (정공법 원칙 준수)
 - [x] 쫄다구 에이전트 작업 100% 직접 검수 (AGENTS.md 3번 룰 준수)
 - [x] 배포 및 버전업 관리 문서 갱신
+
+- [x] [기획서_6] 라이선스 에러 수정
+  - [x] shinseon_client.pyw 내 LICENSE_URL 수정 (shinseon -> shinseon_bitget)
+- [x] [기획서_5] 비트겟 브라우저 다이렉트 오픈 버튼 신설
+  - [x] shinseon_client.pyw 내 UI 버튼 추가 (이미 적용됨)
+  - [x] 버튼 클릭 시 webbrowser 모듈로 비트겟 URL 호출 기능 연동 (이미 적용됨)
