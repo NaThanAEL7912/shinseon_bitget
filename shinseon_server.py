@@ -63,9 +63,9 @@ class BotCore:
         
         # 비트겟 CCXT 초기화
         self.bitget_exchange = None
-        api_key = self.server_config.get("bitget_api_key", "")
-        api_secret = self.server_config.get("bitget_api_secret", "")
-        api_password = self.server_config.get("bitget_api_password", "")
+        api_key = self.server_config.get("BITGET_API_KEY", "")
+        api_secret = self.server_config.get("BITGET_SECRET_KEY", "")
+        api_password = self.server_config.get("BITGET_PASSPHRASE", "")
         
         if api_key and api_secret and api_password:
             import ccxt.async_support as ccxt

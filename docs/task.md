@@ -1,6 +1,6 @@
-﻿- [/] 서버 설정 및 API 인증 기능 개발 (shinseon_server.py)
-  - [ ] server_config.json 에 비트겟 API 키 필드 추가
-  - [ ] shinseon_server.py 에서 config 의 API 키를 읽어 ccxt.bitget 초기화에 주입
-  - [ ] API 키가 없을 경우 터미널에 명확한 에러 로그 출력 (정공법 원칙 준수)
-- [ ] 쫄다구 에이전트 작업 100% 직접 검수 (AGENTS.md 3번 룰 준수)
-- [ ] V4.15 배포 및 버전업 관리 문서 갱신
+﻿- [x] 서버 설정 및 API 인증 기능 개발 (shinseon_server.py)
+  - [x] server_config.json 에 비트겟 API 키 필드 추가
+  - [x] shinseon_server.py 에서 config 의 API 키를 읽어 ccxt.bitget 초기화에 주입
+  - [x] API 키가 없을 경우 터미널에 명확한 에러 로그 출력 (정공법 원칙 준수)
+- [x] 쫄다구 에이전트 작업 100% 직접 검수 (AGENTS.md 3번 룰 준수)
+- [x] 배포 및 버전업 관리 문서 갱신
