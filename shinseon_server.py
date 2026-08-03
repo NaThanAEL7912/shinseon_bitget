@@ -63,15 +63,22 @@ class BotCore:
         
         # 비트겟 CCXT 초기화
         self.bitget_exchange = None
-        if env_vars.get("BITGET_API_KEY"):
+        api_key = self.server_config.get("bitget_api_key", "")
+        api_secret = self.server_config.get("bitget_api_secret", "")
+        api_password = self.server_config.get("bitget_api_password", "")
+        
+        if api_key and api_secret and api_password:
             import ccxt.async_support as ccxt
             self.bitget_exchange = ccxt.bitget({
-                'apiKey': env_vars.get("BITGET_API_KEY"),
-                'secret': env_vars.get("BITGET_SECRET_KEY"),
-                'password': env_vars.get("BITGET_PASSPHRASE"),
+                'apiKey': api_key,
+                'secret': api_secret,
+                'password': api_password,
                 'enableRateLimit': True,
                 'options': {'defaultType': 'swap'}
             })
+            print("✅ [API] 비트겟 API 키 세팅 완료. (ccxt.bitget 초기화 됨)")
+        else:
+            print("❌ [경고] 비트겟 API 키가 설정되지 않았습니다. 실전 잔고/주문 조회가 불가능합니다. server_config.json을 확인하세요.")
 
         self.bitget_headers = {}  # BITGET 실시간 인증 헤더 보관용 딕셔너리
         self.last_binance_time_ms = int(time.time() * 1000)  # 가장 최신 바이낸스 웹소켓 틱 타임스탬프 (ms)

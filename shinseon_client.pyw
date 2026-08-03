@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.14"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.13"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []

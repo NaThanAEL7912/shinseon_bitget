@@ -1,5 +1,8 @@
 {
     "CURRENT_VERSION": "v4.08",
+    "bitget_api_key": "",
+    "bitget_api_secret": "",
+    "bitget_api_password": "",
     "auto_start": true,
     "manual_threshold": false,
     "target_liq": "400000",
