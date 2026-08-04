@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V4.22",
+    "CURRENT_VERSION": "V4.24",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -68,7 +68,7 @@
     "telegram_enabled": true,
     "telegram_token": "8890976392:AAFkGFrep1b9N9P_EQpJY-yNYaMLcd2kEZk",
     "telegram_chat_id": "8279848058",
-    "sound_enabled": true,
+    "sound_enabled": false,
     "half_exit_enabled": true,
     "half_exit_trigger_pct": 0.6,
     "half_exit_close_ratio": 50.0,

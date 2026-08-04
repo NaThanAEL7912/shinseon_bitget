@@ -89,6 +89,86 @@ class BotCore:
         self.price_history = deque()
         self.current_price = 0.0
         self.price_ready = False
+
+        # V4.24 클라이언트-서버 완전동기화 인스턴스 변수
+        self.session_thresholds = {
+            "asia": {"liq": 100000.0, "oi": 0.12, "sl": -0.5, "enabled": True},
+            "europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5, "enabled": True},
+            "us": {"liq": 300000.0, "oi": 0.20, "sl": -1.3, "enabled": True},
+            "pacific": {"liq": 50000.0, "oi": 0.09, "sl": -0.3, "enabled": True},
+            "weekend_asia": {"liq": 100000.0, "oi": 0.12, "sl": -0.5, "enabled": True},
+            "weekend_europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5, "enabled": True},
+            "weekend_us": {"liq": 300000.0, "oi": 0.20, "sl": -1.3, "enabled": True},
+            "weekend_pacific": {"liq": 50000.0, "oi": 0.09, "sl": -0.3, "enabled": True}
+        }
+        self.session_guardrails = {
+            "ASIA": {"trigger": 0.4, "guard": 0.0, "enabled": True},
+            "LONDON": {"trigger": 0.9, "guard": -0.15, "enabled": False},
+            "NY": {"trigger": 0.9, "guard": -0.25, "enabled": False},
+            "PACIFIC": {"trigger": 0.9, "guard": -0.25, "enabled": True},
+            "WEEKEND_ASIA": {"trigger": 0.4, "guard": 0.0, "enabled": True},
+            "WEEKEND_LONDON": {"trigger": 0.9, "guard": -0.15, "enabled": False},
+            "WEEKEND_NY": {"trigger": 0.9, "guard": -0.25, "enabled": False},
+            "WEEKEND_PACIFIC": {"trigger": 0.9, "guard": -0.25, "enabled": True}
+        }
+        self.manual_threshold = False
+        self.target_liq = "2,500,000"
+        self.target_oi = "0.12"
+        self.target_slippage = "0.15"
+        self.manual_config = {
+            "manual_threshold": False,
+            "target_liq": "2,500,000",
+            "target_oi": "0.12",
+            "target_slippage": "0.15"
+        }
+        self.leverage_level = 30
+        self.betting_ratio = 400.0
+        self.split_entry_1_ratio = 250.0
+        self.split_entry_2_ratio = 100.0
+        self.split_entry_2_trigger_pct = -0.3
+        self.split_entry_3_ratio = 50.0
+        self.split_entry_3_trigger_pct = -0.6
+        self.split_cooldown_seconds = 900.0
+        self.cooldown_seconds = 60.0
+        self.profit_cooldown_seconds = 15.0
+        self.half_exit_close_ratio = 50.0
+        self.pyramiding_enabled = True
+        self.pyramiding_ratio = 30.0
+
+        # 저장된 shinseon_config.json 있으면 즉시 자동 로드
+        try:
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shinseon_config.json")
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                self.session_thresholds = cfg.get("session_thresholds", self.session_thresholds)
+                self.session_guardrails = cfg.get("session_guardrails", self.session_guardrails)
+                self.manual_threshold = cfg.get("manual_threshold", self.manual_threshold)
+                self.target_liq = cfg.get("target_liq", self.target_liq)
+                self.target_oi = cfg.get("target_oi", self.target_oi)
+                self.target_slippage = cfg.get("target_slippage", self.target_slippage)
+                self.manual_config = {
+                    "manual_threshold": self.manual_threshold,
+                    "target_liq": self.target_liq,
+                    "target_oi": self.target_oi,
+                    "target_slippage": self.target_slippage
+                }
+                self.leverage_level = cfg.get("leverage_level", self.leverage_level)
+                self.betting_ratio = cfg.get("betting_ratio", self.betting_ratio)
+                self.split_entry_1_ratio = cfg.get("split_entry_1_ratio", self.split_entry_1_ratio)
+                self.split_entry_2_ratio = cfg.get("split_entry_2_ratio", self.split_entry_2_ratio)
+                self.split_entry_2_trigger_pct = cfg.get("split_entry_2_trigger_pct", self.split_entry_2_trigger_pct)
+                self.split_entry_3_ratio = cfg.get("split_entry_3_ratio", self.split_entry_3_ratio)
+                self.split_entry_3_trigger_pct = cfg.get("split_entry_3_trigger_pct", self.split_entry_3_trigger_pct)
+                self.split_cooldown_seconds = cfg.get("split_cooldown_seconds", self.split_cooldown_seconds)
+                self.cooldown_seconds = cfg.get("cooldown_seconds", self.cooldown_seconds)
+                self.profit_cooldown_seconds = cfg.get("profit_cooldown_seconds", self.profit_cooldown_seconds)
+                self.half_exit_close_ratio = cfg.get("half_exit_close_ratio", self.half_exit_close_ratio)
+                self.pyramiding_enabled = cfg.get("pyramiding_enabled", self.pyramiding_enabled)
+                self.pyramiding_ratio = cfg.get("pyramiding_ratio", self.pyramiding_ratio)
+                print("⚙️ [Server BotCore] shinseon_config.json 설정값 자동 로드 완료!")
+        except Exception as e:
+            print(f"⚠️ [Server BotCore] Config 로드 실패: {e}")
         
     async def run_token_sniffer(self):
         pass
@@ -171,8 +251,8 @@ class BotCore:
                     kst_time_str = now_dt.strftime("%H:%M:%S")
                     
                     dashboard = getattr(self, "dashboard", None)
-                    # thresholds 딕셔너리 안전 참조 및 기본값 세팅
-                    thresholds = {
+                    # BotCore session_thresholds 및 dashboard 안전 참조
+                    thresholds = getattr(self, "session_thresholds", {
                         "asia": {"liq": 100000.0, "oi": 0.12, "sl": -0.5},
                         "europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5},
                         "us": {"liq": 300000.0, "oi": 0.20, "sl": -1.3},
@@ -181,7 +261,7 @@ class BotCore:
                         "weekend_europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5},
                         "weekend_us": {"liq": 300000.0, "oi": 0.20, "sl": -1.3},
                         "weekend_pacific": {"liq": 50000.0, "oi": 0.09, "sl": -0.3}
-                    }
+                    })
                     if dashboard and hasattr(dashboard, "session_thresholds"):
                         thresholds = dashboard.session_thresholds
 
@@ -229,24 +309,37 @@ class BotCore:
                     target_oi = thresholds[session_key]["oi"]
                     target_sl = thresholds[session_key]["sl"]
 
-                    if dashboard and dashboard.chk_manual_threshold.isChecked():
+                    is_manual = False
+                    if dashboard and hasattr(dashboard, "chk_manual_threshold"):
+                        is_manual = dashboard.chk_manual_threshold.isChecked()
+                    else:
+                        is_manual = getattr(self, "manual_threshold", False)
+
+                    if is_manual:
                         current_session = f"⚙ 수동 조율 ({kst_time_str})"
-                        try:
+                        if dashboard and hasattr(dashboard, "edit_target_liq"):
                             liq_txt = dashboard.edit_target_liq.text().replace(",", "").strip()
+                            oi_txt = dashboard.edit_target_oi.text().strip()
+                            slip_txt = dashboard.edit_target_slippage.text().strip()
+                        else:
+                            liq_txt = str(getattr(self, "target_liq", "2,500,000")).replace(",", "").strip()
+                            oi_txt = str(getattr(self, "target_oi", "0.12")).strip()
+                            slip_txt = str(getattr(self, "target_slippage", "0.15")).strip()
+
+                        try:
                             target_liq = float(liq_txt) if liq_txt else 100000.0
                         except Exception:
                             target_liq = 100000.0
                         try:
-                            oi_txt = dashboard.edit_target_oi.text().strip()
                             target_oi = float(oi_txt) if oi_txt else 0.02
                         except Exception:
                             target_oi = 0.02
                         try:
-                            slip_txt = dashboard.edit_target_slippage.text().strip()
                             target_slippage = float(slip_txt) if slip_txt else 0.15
                         except Exception:
                             target_slippage = 0.15
-                        self.v35_engine.ENTRY_SLIPPAGE_CAP = target_slippage / 100.0
+                        if self.v35_engine:
+                            self.v35_engine.ENTRY_SLIPPAGE_CAP = target_slippage / 100.0
 
                     # 백엔드 엔진에 세션별 손절선 및 세션 정보 전달
                     if self.v35_engine:
@@ -366,7 +459,9 @@ class BotCore:
                             "weekend_pacific": "WEEKEND_PACIFIC"
                         }
                         s_guard_key = s_map.get(session_key, "NY")
-                        s_guardrails = getattr(dashboard, "session_guardrails", {}).get(s_guard_key, {"trigger": 0.5, "guard": 0.0}) if dashboard else {"trigger": 0.5, "guard": 0.0}
+                        dashboard_guard = getattr(dashboard, "session_guardrails", None)
+                        bot_guard = getattr(self, "session_guardrails", {})
+                        s_guardrails = (dashboard_guard or bot_guard).get(s_guard_key, {"trigger": 0.5, "guard": 0.0})
                         guard_trig = s_guardrails.get("trigger", 0.5)
                         guard_limit = s_guardrails.get("guard", 0.0)
                         
@@ -967,7 +1062,7 @@ class ShinseonV35Engine:
                     self.entry_price = 0.0
                     self.position_volume = 0
                     self.entry_direction = ""
-                    dashboard = getattr(self.bot, "dashboard", None)
+                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
                     profit_cd_sec = float(getattr(dashboard, "profit_cooldown_seconds", 15.0)) if dashboard else 15.0
                     loss_cd_sec = float(getattr(dashboard, "cooldown_seconds", 300.0)) if dashboard else 300.0
 
@@ -996,7 +1091,7 @@ class ShinseonV35Engine:
                 if bitget_bal <= 0.0:
                     bitget_bal = self.bot.c_total
                     
-                dashboard = self.bot.dashboard
+                dashboard = getattr(self.bot, "dashboard", None) or self.bot
                 
                 if order_type == "ADD_PYRAMIDING":
                     p_vol = getattr(self, "position_volume", 0)
@@ -1049,7 +1144,7 @@ class ShinseonV35Engine:
                     if bitget_bal <= 0.0:
                         bitget_bal = self.bot.c_total
 
-                    dashboard = getattr(self.bot, "dashboard", None)
+                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
                     if not dashboard:
                         return False
                         
@@ -1291,7 +1386,7 @@ class ShinseonV35Engine:
                         self.bot.dashboard.add_log(f"🚨 [1단계: 반대 청산 포착] 보유: {self.entry_direction} ➡️ 신호: {direction} | 청산 패킷 직송 개시!")
                     
                     # 쿨다운 선제 부여
-                    dashboard = getattr(self.bot, "dashboard", None)
+                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
                     profit_cd_sec = float(getattr(dashboard, "profit_cooldown_seconds", 15.0)) if dashboard else 15.0
                     loss_cd_sec = float(getattr(dashboard, "cooldown_seconds", 300.0)) if dashboard else 300.0
 
@@ -1384,7 +1479,7 @@ class ShinseonV35Engine:
 
             # 동일 방향 중복 신호가 발생했을 때 -> 2차 / 3차 추가 매수 조건 검증 및 기동
             if self.is_position_active and not is_opposite:
-                dashboard = self.bot.dashboard
+                dashboard = getattr(self.bot, "dashboard", None) or self.bot
                 split_cooldown = dashboard.split_cooldown_seconds
                 
                 # 2차 추가 매수가 아직 격발되지 않은 경우
@@ -1602,7 +1697,7 @@ class ShinseonV35Engine:
 
             # [HOTFIX v4.07] 세션 체크박스가 풀려있는 경우 모든 강제 청산/손절 개입 원천 차단
             g_curr_key = getattr(self, "current_session_key", "us")
-            g_dashboard = getattr(self.bot, "dashboard", None)
+            g_dashboard = getattr(self.bot, "dashboard", None) or self.bot
             g_thresholds_map = getattr(g_dashboard, "session_thresholds", {}) if g_dashboard else {}
             if not g_thresholds_map.get(g_curr_key, {}).get("enabled", True):
                 continue
@@ -1880,7 +1975,7 @@ class ShinseonV35Engine:
         self.has_smart_guarded = False
         self.has_pyramided = False
         self.last_exit_time = time.time()
-        dashboard = self.bot.dashboard
+        dashboard = getattr(self.bot, "dashboard", None) or self.bot
         cooldown_limit = dashboard.cooldown_seconds
         
         # [선제 락킹] 비동기 대기(await)를 타기 전 즉시 쿨다운을 선제 마킹하여 1초 틈새 휩소 격발 차단
@@ -2024,6 +2119,80 @@ class WsServer:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
                         await self.bot_core.execute_emergency()
                         await self.broadcast_event("ui_update", {"msg": "🚨 [긴급 중지] 비상 탈출 로직이 가동되었습니다.", "log_type": 1, "price": self.bot_core.current_price})
+                    elif cmd == "CMD_UPDATE_CONFIG":
+                        config_data = payload.get("config", {})
+                        if config_data and self.bot_core:
+                            if "session_thresholds" in config_data:
+                                self.bot_core.session_thresholds = config_data["session_thresholds"]
+                            if "session_guardrails" in config_data:
+                                self.bot_core.session_guardrails = config_data["session_guardrails"]
+                            if "manual_threshold" in config_data:
+                                self.bot_core.manual_threshold = config_data["manual_threshold"]
+                            if "target_liq" in config_data:
+                                self.bot_core.target_liq = config_data["target_liq"]
+                            if "target_oi" in config_data:
+                                self.bot_core.target_oi = config_data["target_oi"]
+                            if "target_slippage" in config_data:
+                                self.bot_core.target_slippage = config_data["target_slippage"]
+                            if "leverage_level" in config_data:
+                                self.bot_core.leverage_level = config_data["leverage_level"]
+                            if "betting_ratio" in config_data:
+                                self.bot_core.betting_ratio = config_data["betting_ratio"]
+                            if "split_entry_1_ratio" in config_data:
+                                self.bot_core.split_entry_1_ratio = config_data["split_entry_1_ratio"]
+                            if "split_entry_2_ratio" in config_data:
+                                self.bot_core.split_entry_2_ratio = config_data["split_entry_2_ratio"]
+                            if "split_entry_2_trigger_pct" in config_data:
+                                self.bot_core.split_entry_2_trigger_pct = config_data["split_entry_2_trigger_pct"]
+                            if "split_entry_3_ratio" in config_data:
+                                self.bot_core.split_entry_3_ratio = config_data["split_entry_3_ratio"]
+                            if "split_entry_3_trigger_pct" in config_data:
+                                self.bot_core.split_entry_3_trigger_pct = config_data["split_entry_3_trigger_pct"]
+                            if "split_cooldown_seconds" in config_data:
+                                self.bot_core.split_cooldown_seconds = config_data["split_cooldown_seconds"]
+                            if "cooldown_seconds" in config_data:
+                                self.bot_core.cooldown_seconds = config_data["cooldown_seconds"]
+                            if "profit_cooldown_seconds" in config_data:
+                                self.bot_core.profit_cooldown_seconds = config_data["profit_cooldown_seconds"]
+                            if "half_exit_close_ratio" in config_data:
+                                self.bot_core.half_exit_close_ratio = config_data["half_exit_close_ratio"]
+                            if "pyramiding_enabled" in config_data:
+                                self.bot_core.pyramiding_enabled = config_data["pyramiding_enabled"]
+                            if "pyramiding_ratio" in config_data:
+                                self.bot_core.pyramiding_ratio = config_data["pyramiding_ratio"]
+                            
+                            engine = self.bot_core.v35_engine
+                            if engine:
+                                if "leverage_level" in config_data:
+                                    engine.LEVERAGE = int(config_data["leverage_level"])
+                                if "target_slippage" in config_data:
+                                    try:
+                                        slip_val = float(str(config_data["target_slippage"]).strip())
+                                        engine.ENTRY_SLIPPAGE_CAP = slip_val / 100.0
+                                    except Exception:
+                                        pass
+                            
+                            self.bot_core.manual_config = {
+                                "manual_threshold": self.bot_core.manual_threshold,
+                                "target_liq": self.bot_core.target_liq,
+                                "target_oi": self.bot_core.target_oi,
+                                "target_slippage": self.bot_core.target_slippage
+                            }
+                            
+                            try:
+                                config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shinseon_config.json")
+                                file_config = {}
+                                if os.path.exists(config_path):
+                                    with open(config_path, "r", encoding="utf-8") as f:
+                                        file_config = json.load(f)
+                                file_config.update(config_data)
+                                with open(config_path, "w", encoding="utf-8") as f:
+                                    json.dump(file_config, f, indent=4, ensure_ascii=False)
+                            except Exception as e:
+                                logger.error(f"서버 설정 저장 실패: {e}")
+
+                            logger.info("⚙️ [서버 Config 동기화 완료] 클라이언트 파라미터 수신 및 적용 성공")
+                            await self.broadcast_event("ui_update", {"msg": "⚙ [서버 동기화] 클라이언트 트레이딩 파라미터가 AWS 서버에 즉시 반영되었습니다.", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_REQ_CSV":
                         csv_path = "shinseon_data.csv"
                         if os.path.exists(csv_path):

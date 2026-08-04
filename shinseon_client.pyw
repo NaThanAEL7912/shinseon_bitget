@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.22"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.24"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1176,6 +1176,7 @@ class ShinseonDashboard(QMainWindow):
                     self.add_log("[Websocket] 서버 연결 성공!")
                     import json
                     await self.ws.send(json.dumps({'type': 'auth', 'secret': 'SECRET_TOKEN_HERE'}))
+                    self.send_config_to_server()
                     
                     async for message in ws:
                         data = json.loads(message)
@@ -1188,9 +1189,12 @@ class ShinseonDashboard(QMainWindow):
                                 self.lbl_price.setText(f"BTC/USDT 실시간 가격: {self.current_price:,.1f} USDT")
                             if 'log' in data:
                                 self.add_log(data['log'])
-                            if 'liq' in data:
-                                self.bar_liq.setValue(int(data['liq']))
-                                self.bar_liq.setFormat(f"1분 누적 청산: ${int(data['liq']):,} / $2.0M")
+                            if 'liq' in data or 'liq_10s' in data:
+                                liq_val = float(data.get('liq_10s', data.get('liq', 0.0)))
+                                target_liq_val = float(data.get('target_liq', getattr(self, 'target_liq', 2000000.0)))
+                                self.bar_liq.setRange(0, int(target_liq_val))
+                                self.bar_liq.setValue(int(liq_val))
+                                self.bar_liq.setFormat(f"1분 누적 청산: ${int(liq_val):,} / ${target_liq_val:,.0f}")
                         elif msg_type == 'EVT_CSV_DATA':
                             csv_content = payload.get('csv_text', '')
                             csv_path = os.path.join(BASE_DIR, "docs", "downloaded_shinseon_data.csv")
@@ -1209,11 +1213,36 @@ class ShinseonDashboard(QMainWindow):
                             if 'price' in payload:
                                 self.current_price = float(payload['price'])
                                 self.lbl_price.setText(f"BTC/USDT 실시간 가격: {self.current_price:,.1f} USDT")
-                            if 'msg' in payload:
+                            if 'msg' in payload and payload['msg']:
                                 self.add_log(payload['msg'])
-                            if 'liq_10s' in payload:
-                                self.bar_liq.setValue(int(payload['liq_10s']))
-                                self.bar_liq.setFormat(f"1분 누적 청산: ${int(payload['liq_10s']):,} / $2.0M")
+                            
+                            # 오더플로우 레이더 UI 동적 연동 (V4.24): 하드코딩 $2.0M 제거 및 실시간 수신 세션/target_liq 포매팅
+                            current_sess = payload.get('current_session', getattr(self, 'current_session', '로딩 중'))
+                            t_liq = float(payload.get('target_liq', getattr(self, 'target_liq', 2000000.0)))
+                            t_oi = float(payload.get('target_oi', getattr(self, 'target_oi', 1.0)))
+                            l_10s = float(payload.get('liq_10s', 0.0))
+                            o_spd = float(payload.get('oi_speed', 0.0))
+                            p_ms = float(payload.get('ping_ms', 0.0))
+                            p_stat = payload.get('poison_status', '정상 가동 중')
+                            long_l = float(payload.get('long_liq', 0.0))
+                            short_l = float(payload.get('short_liq', 0.0))
+                            exp_dir = payload.get('expected_dir', 'LONG')
+
+                            self.update_live_ui(
+                                price=self.current_price,
+                                guardrail_stage=1,
+                                signal_text=payload.get('msg', ''),
+                                liq_10s=l_10s,
+                                oi_speed=o_spd,
+                                ping_ms=p_ms,
+                                poison_status=p_stat,
+                                current_session=current_sess,
+                                target_liq=t_liq,
+                                target_oi=t_oi,
+                                long_liq=long_l,
+                                short_liq=short_l,
+                                expected_dir=exp_dir
+                            )
                         elif msg_type == 'csv_data':
                             csv_content = data.get('content')
                             with open('downloaded_data.csv', 'w', encoding='utf-8') as f:
@@ -1272,6 +1301,35 @@ class ShinseonDashboard(QMainWindow):
                 await asyncio.sleep(0.2)
 
 
+    def send_config_to_server(self):
+        if hasattr(self, 'ws') and self.ws:
+            try:
+                config_payload = {
+                    "session_thresholds": getattr(self, "session_thresholds", {}),
+                    "session_guardrails": getattr(self, "session_guardrails", {}),
+                    "leverage_level": getattr(self, "leverage_level", 30),
+                    "betting_ratio": getattr(self, "betting_ratio", 400.0),
+                    "split_entry_1_ratio": getattr(self, "split_entry_1_ratio", 250.0),
+                    "split_entry_2_ratio": getattr(self, "split_entry_2_ratio", 100.0),
+                    "split_entry_2_trigger_pct": getattr(self, "split_entry_2_trigger_pct", -0.3),
+                    "split_entry_3_ratio": getattr(self, "split_entry_3_ratio", 50.0),
+                    "split_entry_3_trigger_pct": getattr(self, "split_entry_3_trigger_pct", -0.6),
+                    "split_cooldown_seconds": getattr(self, "split_cooldown_seconds", 900.0),
+                    "cooldown_seconds": getattr(self, "cooldown_seconds", 60.0),
+                    "profit_cooldown_seconds": getattr(self, "profit_cooldown_seconds", 15.0),
+                    "half_exit_close_ratio": getattr(self, "half_exit_close_ratio", 50.0),
+                    "pyramiding_enabled": getattr(self, "pyramiding_enabled", True),
+                    "pyramiding_ratio": getattr(self, "pyramiding_ratio", 30.0),
+                    "manual_threshold": self.chk_manual_threshold.isChecked(),
+                    "target_liq": self.edit_target_liq.text(),
+                    "target_oi": self.edit_target_oi.text(),
+                    "target_slippage": self.edit_target_slippage.text()
+                }
+                packet = {"cmd": "CMD_UPDATE_CONFIG", "config": config_payload}
+                asyncio.create_task(self.ws.send(json.dumps(packet)))
+            except Exception as e:
+                logger.error(f"서버 설정 전송 오류: {e}")
+
     def save_shinseon_config(self):
         try:
             config_path = os.path.join(BASE_DIR, "shinseon_config.json")
@@ -1307,6 +1365,7 @@ class ShinseonDashboard(QMainWindow):
             }
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=4, ensure_ascii=False)
+            self.send_config_to_server()
         except Exception as e:
             logger.error(f"설정 파일 저장 실패: {e}")
 
