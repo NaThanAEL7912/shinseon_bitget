@@ -236,7 +236,8 @@ class BotCore:
         self.spot_price = 0.0
         self.price_basis = 0.0
         self.bitget_current_price = 0.0
-        asyncio.create_task(self.run_bitget_ticker_stream())
+        if self.v35_engine:
+            asyncio.create_task(self.v35_engine.run_bitget_ticker_stream())
         self.open_p = 63100.0
         self.high_p = 63300.0
         self.low_p = 62900.0
@@ -1033,8 +1034,9 @@ class ShinseonV35Engine:
                                 last_p = float(t_info.get("lastPr", 0.0) or t_info.get("markPrice", 0.0) or 0.0)
                                 if last_p > 0.0:
                                     self.bitget_current_price = last_p
-                                    if self.v35_engine:
-                                        self.v35_engine.bitget_current_price = last_p
+                                    b_core = getattr(self, "bot_core", None) or getattr(self, "bot", None)
+                                    if b_core:
+                                        b_core.bitget_current_price = last_p
                 except Exception:
                     pass
                 await asyncio.sleep(0.2)
@@ -1044,11 +1046,11 @@ class ShinseonV35Engine:
         if self.is_local_mode:
             return self.entry_price * (1 + random.uniform(-0.008, 0.018)) if self.is_position_active else 65000.0
             
-        bg_p = getattr(self, "bitget_current_price", 0.0) or getattr(self.bot, "bitget_current_price", 0.0)
+        bg_p = getattr(self, "bitget_current_price", 0.0) or getattr(getattr(self, "bot_core", None), "bitget_current_price", 0.0) or getattr(getattr(self, "bot", None), "bitget_current_price", 0.0)
         if bg_p > 0.0:
             return bg_p
 
-        curr_val = getattr(self.bot, "current_price", 0.0)
+        curr_val = getattr(getattr(self, "bot", None), "current_price", 0.0) or getattr(self, "current_price", 0.0)
         return float(curr_val) if curr_val > 0.0 else 65000.0
 
     async def execute_bitget_internal_packet(self, side, order_type, custom_ratio=0.5):
