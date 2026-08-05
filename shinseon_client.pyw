@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.58"  # ShinSeon_Bitget 비트겟 마크프라이스(markPrice) 최우선 피딩 결합 오차 완사멸 수술 개발 (V4.58)
+        self.CURRENT_VERSION = "V4.59"  # ShinSeon_Bitget calc_price 비트겟 마크프라이스 원천 치환 수술 개발 (V4.59)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
