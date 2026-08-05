@@ -246,9 +246,12 @@ class BotCore:
                     await asyncio.sleep(0.1)
                     
                     # 0. KST 시스템 시간 기반 동적 임계치 실시간 계산 및 수동 오버라이드
-                    now_dt = datetime.now()
-                    hour_val = now_dt.hour
-                    kst_time_str = now_dt.strftime("%H:%M:%S")
+                    # 0. KST 시스템 시간 기반 동적 임계치 실시간 계산 및 수동 오버라이드
+                    from datetime import datetime, timezone, timedelta
+                    kst_tz = timezone(timedelta(hours=9))
+                    kst_dt = datetime.now(timezone.utc).astimezone(kst_tz)
+                    hour_val = kst_dt.hour
+                    kst_time_str = kst_dt.strftime("%H:%M:%S")
                     
                     dashboard = getattr(self, "dashboard", None)
                     # BotCore session_thresholds 및 dashboard 안전 참조
@@ -266,10 +269,9 @@ class BotCore:
                         thresholds = dashboard.session_thresholds
 
                     # 시간대별 세션 판정 및 기본 임계치 추출 (09시~09시 트레이딩 데이 연동 + 1분 완충 타임락 개발계획서_260)
-                    from datetime import timedelta
-                    trading_dt = now_dt - timedelta(hours=9)
-                    is_weekend = trading_dt.weekday() in [5, 6]
-                    minute_val = hour_val * 60 + now_dt.minute
+                    trading_dt = kst_dt - timedelta(hours=9)
+                    is_weekend = kst_dt.weekday() in [5, 6]
+                    minute_val = kst_dt.hour * 60 + kst_dt.minute
                     
                     # 1분 완충 타임락 규칙 적용:
                     # - 아시아: 08:59:00 ~ 15:58:59 (539 <= m < 959)
@@ -658,10 +660,17 @@ class BotCore:
                                 usd_val = q * p
                                 now_t = time.time()
                                 self.liq_buffer.append((now_t, usd_val))
+                                side_label = "SHORT" if o.get("S") == "BUY" else "LONG"
                                 if o.get("S") == "BUY":
                                     self.buy_liq_buffer.append((now_t, usd_val))
                                 elif o.get("S") == "SELL":
                                     self.sell_liq_buffer.append((now_t, usd_val))
+                                
+                                # 💥 바이낸스 찐청산 발생 시 실시간 금액 로그 브로드캐스트
+                                rolling_tot = sum(val for t, val in self.liq_buffer if now_t - t <= 60.0)
+                                cur_price = getattr(self, "current_price", 0.0)
+                                log_msg = f"💥 [바이낸스 찐청산 포착] {side_label} 청산 ${usd_val:,.0f} 발생! (1분 누적: ${rolling_tot:,.0f})"
+                                asyncio.create_task(self.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": cur_price}))
                 except Exception as liq_err:
                     self.liq_wss_connected = False
                     logger.warning(f"선물 청산 WSS 연결 장애: {liq_err}")

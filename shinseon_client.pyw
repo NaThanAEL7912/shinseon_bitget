@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.45"  # ShinSeon_Bitget 로그 폰트 1pt 가독성 확대 및 바이낸스 찐청산 화이트/그린 상태등 개편 개발 (V4.45)
+        self.CURRENT_VERSION = "V4.46"  # ShinSeon_Bitget 바이낸스 찐청산 금액 실시간 로그 기록 및 AWS KST 세션 수술 개발 (V4.46)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
