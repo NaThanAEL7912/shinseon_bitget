@@ -2174,8 +2174,12 @@ class WsServer:
                     elif cmd == "CMD_STOP_BOT":
                         if self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
+                        await self.broadcast_event("ui_update", {"msg": "⏸ [봇 제어] 자동 저격 감시가 정지되었습니다 (보유 포지션 안전 유지)", "log_type": 1, "price": self.bot_core.current_price})
+                    elif cmd == "CMD_EMERGENCY":
+                        if self.bot_core.v35_engine:
+                            self.bot_core.v35_engine.bot_state = "STOPPED"
                         await self.bot_core.execute_emergency()
-                        await self.broadcast_event("ui_update", {"msg": "🚨 [긴급 중지] 비상 탈출 로직이 가동되었습니다.", "log_type": 1, "price": self.bot_core.current_price})
+                        await self.broadcast_event("ui_update", {"msg": "🚨 [비상 탈출] 비상 탈출 로직 가동! 포지션 전량 청산 완료.", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})
                         if config_data and self.bot_core:

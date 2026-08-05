@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.49"  # ShinSeon_Bitget 자동 봇 정지 시 AWS 서버 소켓 파기 결함 원천 수술 개발 (V4.49)
+        self.CURRENT_VERSION = "V4.50"  # ShinSeon_Bitget 자동 봇 정지 시 포지션 유지 보호 및 비상 탈출 분리 수술 개발 (V4.50)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
