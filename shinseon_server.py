@@ -439,15 +439,23 @@ class BotCore:
                         direction_active = getattr(self.v35_engine, "entry_direction", None) or getattr(self.v35_engine, "position_side", "LONG") or "LONG"
                         entry = self.v35_engine.entry_price
                         current = self.current_price
+                        leverage = getattr(self.v35_engine, "leverage", 30) or 30
+                        
                         if direction_active == "LONG":
                             live_pnl = ((current - entry) / entry) * 100.0 if (entry > 0.0 and current > 0.0) else 0.0
                         else:
                             live_pnl = ((entry - current) / entry) * 100.0 if (entry > 0.0 and current > 0.0) else 0.0
                             
+                        roe_pct = live_pnl * leverage
+                        
                         p_vol = getattr(self.v35_engine, "position_volume", 0)
-                        btc_qty = float(p_vol) / 1000.0 if p_vol > 0 else 0.0
+                        if isinstance(p_vol, (int, float)) and p_vol > 0:
+                            btc_qty = float(p_vol) if float(p_vol) < 100.0 else float(p_vol) / 1000.0
+                        else:
+                            btc_qty = 0.0012
+
                         live_usdt = btc_qty * entry * (live_pnl / 100.0) if (btc_qty > 0 and entry > 0) else 0.0
-                        usdt_str = f" ({live_usdt:+.1f} USDT)" if btc_qty > 0 else ""
+                        usdt_str = f" ({live_usdt:+.2f} USDT)" if btc_qty > 0 else ""
 
                         # 동적 세션 가드레일 임계치 추출
                         s_map = {
@@ -472,15 +480,17 @@ class BotCore:
                         custom_stop_active = getattr(self.v35_engine, "custom_stop_active", False)
                         custom_stop_offset = getattr(self.v35_engine, "custom_stop_offset_pct", -0.2)
                         
+                        pnl_hdr = f"[{direction_active} 진입 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str} (변동: {live_pnl:+.2f}%)"
+                        
                         if has_smart_guarded:
-                            status_msg = f"[{direction_active} 진입 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(🛡 스마트 본전가드 작동 | 본전가드: {guard_limit:+.2f}%)"
+                            status_msg = f"{pnl_hdr}\n(🛡 스마트 본전가드 작동 | 본전가드: {guard_limit:+.2f}%)"
                         elif is_half_exited:
-                            status_msg = f"[{direction_active} 진입 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(🛡 50% 분할익절 완료 | 본전가드: {guard_limit:+.2f}%)"
+                            status_msg = f"{pnl_hdr}\n(🛡 50% 분할익절 완료 | 본전가드: {guard_limit:+.2f}%)"
                         else:
-                            status_msg = f"[{direction_active} 진입 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(가드레일 도약 대기: +{guard_trig:.2f}%)"
+                            status_msg = f"{pnl_hdr}\n(가드레일 도약 대기: +{guard_trig:.2f}%)"
                             
                         if live_pnl <= (target_sl + 0.2):
-                            status_msg = f"⚠ [{direction_active} 위기 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(손절 데드라인 임박: {target_sl:+.2f}%)"
+                            status_msg = f"⚠ [{direction_active} 위기 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str}\n(손절 데드라인 임박: {target_sl:+.2f}%)"
 
                         if custom_stop_active:
                             stop_label = "익절" if custom_stop_offset > 0 else "손절"

@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.52"  # ShinSeon_Bitget 비트겟 v2 플래시 청산 API close-positions 원천 결합 수술 개발 (V4.52)
+        self.CURRENT_VERSION = "V4.53"  # ShinSeon_Bitget 레버리지 ROE 수익률 및 USDT 실손익금액 동기화 표기 수술 개발 (V4.53)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
