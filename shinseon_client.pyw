@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.39"  # ShinSeon_Bitget 소켓 재연결 시 자동 동기화 보호막 이식 및 수동 동기화 자동 재시도 원천 복구 개발 (V4.39)
+        self.CURRENT_VERSION = "V4.40"  # ShinSeon_Bitget 웹소켓 데몬 태스크 클래스 내부 완전 이식 및 부팅 즉시 100% 자동 연동 원천 복구 개발 (V4.40)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1883,6 +1883,7 @@ class ShinseonDashboard(QMainWindow):
                 dialog.exec()
                 sys.exit(0)
             self.add_log(f"✔ [인증 완료] 정식 라이선스가 확인되었습니다. {reason}")
+            self.ws_task = asyncio.create_task(self.connect_websocket())
         except Exception as license_err:
             self.add_log(f"❌ [인증 에러] 라이선스 검증 오류 발생: {license_err}")
             sys.exit(0)
