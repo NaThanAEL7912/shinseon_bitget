@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.32"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.33"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1161,8 +1161,17 @@ class ShinseonDashboard(QMainWindow):
             self.add_log("[안내] 모의 투자 시뮬레이션 모드로 가동이 준비되었습니다.")
 
     
+    def is_ws_active(self):
+        if not hasattr(self, 'ws') or self.ws is None:
+            return False
+        state = getattr(self.ws, 'state', None)
+        if state is not None:
+            state_name = getattr(state, 'name', str(state))
+            return state_name == 'OPEN' or state == 1 or str(state) == 'State.OPEN'
+        return getattr(self.ws, 'open', True)
+
     def request_csv_download(self):
-        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
+        if self.is_ws_active():
             import json
             asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_CSV'})))
             self.add_log("[CSV] 💾 서버에 데이터 다운로드를 요청했습니다.")
@@ -1339,7 +1348,7 @@ class ShinseonDashboard(QMainWindow):
 
 
     def send_config_to_server(self):
-        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
+        if self.is_ws_active():
             try:
                 config_payload = {
                     "session_thresholds": getattr(self, "session_thresholds", {}),
@@ -1747,7 +1756,7 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_sync_balances(self):
         self.add_log("[뷰어 모드] 잔고 동기화 명령을 서버로 전송합니다.")
-        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
+        if self.is_ws_active():
             try:
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
             except Exception as e:
@@ -1771,7 +1780,7 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_position_sync(self):
         try:
-            if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
+            if self.is_ws_active():
                 import json
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
                 self.add_log("📡 [서버 명령] 포지션 동기화 명령을 서버로 전송했습니다.")
@@ -1852,7 +1861,7 @@ class ShinseonDashboard(QMainWindow):
 
     def start_bot(self):
         try:
-            if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
+            if self.is_ws_active():
                 import json
                 if self.btn_start.text() == "▶ 자동 봇 시작":
                     asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_START_BOT"})))
@@ -2105,7 +2114,7 @@ class ShinseonDashboard(QMainWindow):
     def emergency_close(self):
         self.add_log("🚨 [긴급 탈출] 긴급 정지 및 청산 명령을 서버로 전송합니다!")
         
-        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
+        if self.is_ws_active():
             import json
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_STOP_BOT"})))
             self.add_log("📡 [서버 명령] 긴급 중지 명령 전송 완료")
