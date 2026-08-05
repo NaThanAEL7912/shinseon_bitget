@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.41"  # ShinSeon_Bitget 웹소켓 데몬 태스크 클래스 내부 완전 이식 및 부팅 즉시 100% 자동 연동 원천 복구 개발 (V4.40)
+        self.CURRENT_VERSION = "V4.42"  # ShinSeon_Bitget 부팅 시 경고 로그 오발사 차단 및 웹소켓 자동 동기화 클린 복구 개발 (V4.42)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1398,7 +1398,7 @@ class ShinseonDashboard(QMainWindow):
             except Exception as e:
                 logger.error(f"서버 설정 전송 오류: {e}")
         else:
-            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
+            pass
 
     def save_shinseon_config(self):
         try:
