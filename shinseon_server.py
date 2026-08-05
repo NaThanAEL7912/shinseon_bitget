@@ -444,6 +444,7 @@ class BotCore:
                         current = self.current_price
                         bg_p = getattr(self, "bitget_current_price", 0.0) or (getattr(self.v35_engine, "bitget_current_price", 0.0) if self.v35_engine else 0.0)
                         calc_price = bg_p if bg_p > 0.0 else current
+                        leverage = getattr(self.v35_engine, "leverage", 30) or 30
 
                         if direction_active == "LONG":
                             live_pnl = ((calc_price - entry) / entry) * 100.0 if (entry > 0.0 and calc_price > 0.0) else 0.0
