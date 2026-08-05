@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.43"  # ShinSeon_Bitget qasync 이벤트루프 블로킹 소멸 및 웹소켓 100% 즉시 안착 원천 복구 개발 (V4.43)
+        self.CURRENT_VERSION = "V4.44"  # ShinSeon_Bitget 실시간 레이더 로그 중복 출력 제거 및 단일행 정갈화 개발 (V4.44)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1245,11 +1245,6 @@ class ShinseonDashboard(QMainWindow):
                             if 'price' in payload:
                                 self.current_price = float(payload['price'])
                                 self.lbl_price.setText(f"BTC/USDT 실시간 가격: {self.current_price:,.1f} USDT")
-                            if 'msg' in payload and payload['msg']:
-                                ui_msg = payload['msg']
-                                ignore_keywords = ["100% 현금 대기 중", "실전 저격 감시 가동 중"]
-                                if not any(kw in ui_msg for kw in ignore_keywords):
-                                    self.add_log(ui_msg)
                             
                             # 오더플로우 레이더 UI 동적 연동 (V4.24/V4.26): 하드코딩 $2.0M 제거 및 실시간 수신 세션/target_liq 포매팅
                             current_sess = payload.get('current_session', getattr(self, 'current_session', '로딩 중'))
