@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.36"  # Python 3.14 qasync 태스크 재진입 충돌 수술 및 부팅 접속 성공률 100% 원천 복구
+        self.CURRENT_VERSION = "V4.37"  # Python 3.14 qasync 태스크 재진입 충돌 수술 및 부팅 접속 성공률 100% 원천 복구
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1846,15 +1846,7 @@ class ShinseonDashboard(QMainWindow):
             self.add_log(f"❌ [인증 에러] 라이선스 검증 오류 발생: {license_err}")
             sys.exit(0)
             
-        # 2. 통합 동기화 단계 (잔고 + 포지션)
-        self.add_log("⚡ [부팅 동기화 1/2] 실전 계좌 잔고 및 포지션 상태 통합 동기화 시동...")
-        await self.do_sync_balances()
-        
-        # 3. 레이턴시 물리 실측 백그라운드 구동
-        self.add_log("⚡ [부팅 동기화 2/2] 5초간 바이낸스-BITGET 레이턴시 물리 실측 백그라운드 개시...")
-        self.trigger_latency_test()
-        
-        # 4. 비트겟 사이트 자동 팝업 (사용자 요청)
+        # 2. 비트겟 사이트 자동 팝업 (사용자 요청)
         import webbrowser
         try:
             webbrowser.open_new("https://www.bitget.com/futures/usdt/BTCUSDT")
