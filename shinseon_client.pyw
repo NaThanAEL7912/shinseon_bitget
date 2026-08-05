@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.25"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.26"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1229,7 +1229,7 @@ class ShinseonDashboard(QMainWindow):
                             if 'msg' in payload and payload['msg']:
                                 self.add_log(payload['msg'])
                             
-                            # 오더플로우 레이더 UI 동적 연동 (V4.24): 하드코딩 $2.0M 제거 및 실시간 수신 세션/target_liq 포매팅
+                            # 오더플로우 레이더 UI 동적 연동 (V4.24/V4.26): 하드코딩 $2.0M 제거 및 실시간 수신 세션/target_liq 포매팅
                             current_sess = payload.get('current_session', getattr(self, 'current_session', '로딩 중'))
                             t_liq = float(payload.get('target_liq', getattr(self, 'target_liq', 2000000.0)))
                             t_oi = float(payload.get('target_oi', getattr(self, 'target_oi', 1.0)))
@@ -1240,6 +1240,24 @@ class ShinseonDashboard(QMainWindow):
                             long_l = float(payload.get('long_liq', 0.0))
                             short_l = float(payload.get('short_liq', 0.0))
                             exp_dir = payload.get('expected_dir', 'LONG')
+
+                            liq_wss_connected = payload.get('liq_wss_connected', True)
+                            has_real_force = payload.get('has_real_force', False)
+
+                            if not liq_wss_connected:
+                                status_color = "#FF4D4D"
+                                status_icon = "🚨"
+                                status_msg = "바이낸스 끊김 (재접속 중)"
+                            elif has_real_force:
+                                status_color = "#00FFCC"
+                                status_icon = "🟢"
+                                status_msg = "바이낸스 1분 찐청산"
+                            else:
+                                status_color = "#D0D0D0"
+                                status_icon = "⚪"
+                                status_msg = "바이낸스 1분 청산"
+
+                            self.lbl_radar_title.setText(f"<b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b><br><span style='color:{status_color}; font-size: 11px; font-weight:bold;'>{status_icon} {status_msg}</span> <span style='color:#DEBA9D; font-size: 11px; font-weight:bold;'>({current_sess})</span>")
 
                             self.update_live_ui(
                                 price=self.current_price,
@@ -1254,7 +1272,9 @@ class ShinseonDashboard(QMainWindow):
                                 target_oi=t_oi,
                                 long_liq=long_l,
                                 short_liq=short_l,
-                                expected_dir=exp_dir
+                                expected_dir=exp_dir,
+                                liq_wss_connected=liq_wss_connected,
+                                has_real_force=has_real_force
                             )
                         elif msg_type == 'csv_data':
                             csv_content = data.get('content')
@@ -2274,7 +2294,7 @@ class ShinseonDashboard(QMainWindow):
                 summary_list.append(f"${a['target']:,.1f}({dir_sym})")
             self.lbl_active_price_alerts.setText(f"🔔 감시 중 ({len(self.price_alerts)}건): " + ", ".join(summary_list))
 
-    def update_live_ui(self, price, guardrail_stage, signal_text, liq_10s=0.0, oi_speed=0.0, ping_ms=0.0, poison_status="정상 가동 중", current_session="로딩 중", target_liq=2000000.0, target_oi=1.00, long_liq=0.0, short_liq=0.0, expected_dir="LONG"):
+    def update_live_ui(self, price, guardrail_stage, signal_text, liq_10s=0.0, oi_speed=0.0, ping_ms=0.0, poison_status="정상 가동 중", current_session="로딩 중", target_liq=2000000.0, target_oi=1.00, long_liq=0.0, short_liq=0.0, expected_dir="LONG", liq_wss_connected=None, has_real_force=None):
         # 텔레그램 원격 제어 정보 조회용 인스턴스 캐시 업데이트 (개발계획서_178)
         self.last_price = price
         self.last_current_session = current_session
@@ -2308,8 +2328,13 @@ class ShinseonDashboard(QMainWindow):
                     self.update_price_alert_ui()
         
         # 0. KST 세션 정보 상단 라벨 갱신
-        is_connected = getattr(self.bot_core, "liq_wss_connected", True)
-        has_real_force = (time.time() - getattr(self.bot_core, "last_real_forceorder_time", 0.0)) <= 60.0
+        if liq_wss_connected is None:
+            is_connected = getattr(self.bot_core, "liq_wss_connected", True)
+        else:
+            is_connected = liq_wss_connected
+
+        if has_real_force is None:
+            has_real_force = (time.time() - getattr(self.bot_core, "last_real_forceorder_time", 0.0)) <= 60.0
 
         if not is_connected:
             blink = (int(time.time() * 2) % 2 == 0)

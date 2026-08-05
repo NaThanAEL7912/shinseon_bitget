@@ -487,6 +487,9 @@ class BotCore:
                     elif self.v35_engine.is_snipe_active:
                         status_msg = "🟢 실전 저격 감시 가동 중..."
                         
+                    has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
+                    liq_wss_connected = getattr(self, "liq_wss_connected", True)
+
                     ui_callback(
                         self.current_price,
                         1,
@@ -500,7 +503,9 @@ class BotCore:
                         target_oi=target_oi,
                         long_liq=long_liq,
                         short_liq=short_liq,
-                        expected_dir=direction
+                        expected_dir=direction,
+                        has_real_force=has_real_force,
+                        liq_wss_connected=liq_wss_connected
                     )
                     
                 except Exception as ex:
