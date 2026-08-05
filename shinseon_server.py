@@ -567,7 +567,7 @@ class BotCore:
                                         lf.write(c)
                                 except Exception:
                                     pass
-                            asyncio.to_thread(_write_bench, log_path, log_line)
+                            asyncio.create_task(asyncio.to_thread(_write_bench, log_path, log_line))
 
                     await asyncio.wait_for(_do_bench(), timeout=2.0)
                 except Exception as ex:
