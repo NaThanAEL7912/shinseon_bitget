@@ -1031,12 +1031,12 @@ class ShinseonV35Engine:
                             data = await resp.json()
                             if data.get("code") == "00000" and data.get("data"):
                                 t_info = data["data"][0]
-                                last_p = float(t_info.get("lastPr", 0.0) or t_info.get("markPrice", 0.0) or 0.0)
-                                if last_p > 0.0:
-                                    self.bitget_current_price = last_p
+                                mark_p = float(t_info.get("markPrice", 0.0) or t_info.get("lastPr", 0.0) or 0.0)
+                                if mark_p > 0.0:
+                                    self.bitget_current_price = mark_p
                                     b_core = getattr(self, "bot_core", None) or getattr(self, "bot", None)
                                     if b_core:
-                                        b_core.bitget_current_price = last_p
+                                        b_core.bitget_current_price = mark_p
                 except Exception:
                     pass
                 await asyncio.sleep(0.2)
