@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.24"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.25"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -735,6 +735,7 @@ class ShinseonDashboard(QMainWindow):
         self.lbl_guardrail = QLabel("진입/청산 상태:\n[100% 현금 대기 중]")
         self.lbl_guardrail.setStyleSheet("font-size: 12px; color: #DEBA9D; font-weight: bold; line-height: 1.4;")
         right_layout.addWidget(self.lbl_guardrail)
+        self.lbl_position_status = self.lbl_guardrail
         
         # ⚡ 레이턴시 실측 기어 및 결과 라벨 이식 (부모를 right_widget으로 변경)
         self.lbl_latency_gear_title = QLabel("<br><b style='color:#FFFFFF; font-size: 11px;'>■ [雷達] 레이턴시 실측 기어</b>", right_widget)
@@ -1206,6 +1207,18 @@ class ShinseonDashboard(QMainWindow):
                             usdt_total = payload.get('usdt_total', 0.0)
                             self.lbl_capital_display.setText(f"총 가용 자본금: ${usdt_total:,.2f}")
                             self.add_log(f"✅ [잔고 동기화] 실전 계좌 잔고가 업데이트되었습니다: ${usdt_total:,.2f}")
+                        elif msg_type == 'EVT_SYNC_POSITION':
+                            has_pos = payload.get('has_position', False)
+                            if has_pos:
+                                side = payload.get('side', 'LONG')
+                                contracts = payload.get('contracts', 0.0)
+                                entry_price = payload.get('entry_price', 0.0)
+                                leverage = payload.get('leverage', 10)
+                                self.lbl_position_status.setText(f"진입/청산 상태:\n[{side} 진입 중: {contracts} BTC @ ${entry_price:,.1f} ({leverage}x)]")
+                                self.add_log(f"✅ [포지션 동기화] {side} 진입 중: {contracts} BTC @ ${entry_price:,.1f} ({leverage}x)")
+                            else:
+                                self.lbl_position_status.setText("진입/청산 상태:\n[100% 현금 대기 중]")
+                                self.add_log("✅ [포지션 동기화] 활성 포지션 없음 (100% 현금 대기 중)")
                         elif msg_type == 'EVT_SYNC_ERROR':
                             err_msg = payload.get('error', '알 수 없는 오류')
                             self.add_log(f"❌ [잔고 동기화 실패] 서버 오류: {err_msg}")

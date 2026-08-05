@@ -2108,6 +2108,33 @@ class WsServer:
                                 bal = await self.bot_core.bitget_exchange.fetch_balance({'type': 'swap'})
                                 usdt_total = bal.get('USDT', {}).get('total', 0.0)
                                 await self.broadcast_event('EVT_SYNC_BALANCE', {'usdt_total': usdt_total})
+                                
+                                positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+                                active_pos = next((p for p in positions if float(p.get('contracts', 0) or p.get('size', 0) or 0) > 0), None)
+                                
+                                if active_pos:
+                                    side = active_pos.get('side', 'long').upper()
+                                    contracts = float(active_pos.get('contracts', 0) or active_pos.get('size', 0) or 0)
+                                    entry_price = float(active_pos.get('entryPrice', 0) or active_pos.get('price', 0) or 0)
+                                    leverage = int(active_pos.get('leverage', 10) or 10)
+                                    
+                                    if self.bot_core.v35_engine:
+                                        self.bot_core.v35_engine.is_position_active = True
+                                        self.bot_core.v35_engine.position_side = side
+                                        self.bot_core.v35_engine.entry_price = entry_price
+                                        self.bot_core.v35_engine.position_volume = contracts
+                                        
+                                    await self.broadcast_event('EVT_SYNC_POSITION', {
+                                        'has_position': True,
+                                        'side': side,
+                                        'contracts': contracts,
+                                        'entry_price': entry_price,
+                                        'leverage': leverage
+                                    })
+                                else:
+                                    if self.bot_core.v35_engine:
+                                        self.bot_core.v35_engine.is_position_active = False
+                                    await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
                         except Exception as e:
                             print(f"Position sync error: {e}")
                     elif cmd == "CMD_START_BOT":
