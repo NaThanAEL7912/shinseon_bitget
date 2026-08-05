@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.47"  # ShinSeon_Bitget 추정 청산 포함 1분 청산 금액 실시간 로그 릴레이 완전 소통 개발 (V4.47)
+        self.CURRENT_VERSION = "V4.48"  # ShinSeon_Bitget 신규 순수 청산 발생액 실시간 로그 분리 포매팅 개발 (V4.48)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2512,16 +2512,18 @@ class ShinseonDashboard(QMainWindow):
                 self.lbl_poison_walls.setStyleSheet("font-size: 11px; color: #C5A07A; font-weight: bold;")
         
         # 3. 실시간 하트비트 스캔 로그 수술 (어떠한 PnL 수치 변화에도 1.0초 당 최대 1회만 알림 로그 송출 가드)
-        # 3. 실시간 하트비트 스캔 및 청산 포착 독립 로그 수술
+        # 3. 실시간 하트비트 스캔 및 신규 청산 발생액(delta_liq) 독립 로그 수술
         now_t = time.time()
-        # 청산 수치($10k+) 포착 시 즉시 독립 알림 로그 송출
-        if liq_10s > 0 and (liq_10s != getattr(self, "_last_logged_liq", 0.0)):
+        last_logged_liq = getattr(self, "_last_logged_liq", 0.0)
+        if liq_10s > last_logged_liq:
+            delta_liq = liq_10s - last_logged_liq
             self._last_logged_liq = liq_10s
-            if now_t - getattr(self, "_last_liq_alert_t", 0.0) >= 2.0:
-                self._last_liq_alert_t = now_t
+            if delta_liq >= 5000.0: # $5k 이상 신규 청산 파동 발생 시 즉시 격발
                 side_label = "SHORT" if short_liq > long_liq else "LONG"
                 tag_str = "찐청산" if getattr(self, "_last_has_real_force", False) else "청산포착"
-                self.add_log(f"💥 [바이낸스 {tag_str}] {side_label} 1분 누적 청산: ${liq_10s:,.0f} (L: ${long_liq:,.0f}, S: ${short_liq:,.0f})")
+                self.add_log(f"💥 [바이낸스 {tag_str}] {side_label} 신규 청산 ${delta_liq:,.0f} 발생! (1분 누적: ${liq_10s:,.0f})")
+        elif liq_10s < last_logged_liq:
+            self._last_logged_liq = liq_10s
 
         ignore_keywords = ["100% 현금 대기 중", "실전 저격 감시 가동 중"]
         if not any(kw in signal_text for kw in ignore_keywords):
