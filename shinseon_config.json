@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V4.50",
+    "CURRENT_VERSION": "V4.51",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -26,7 +26,7 @@
         },
         "pacific": {
             "liq": 150000.0,
-            "oi": 0.12,
+            "oi": 0.15,
             "sl": -0.3,
             "enabled": true
         },

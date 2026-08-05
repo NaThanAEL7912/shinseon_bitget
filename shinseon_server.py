@@ -2176,10 +2176,10 @@ class WsServer:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
                         await self.broadcast_event("ui_update", {"msg": "⏸ [봇 제어] 자동 저격 감시가 정지되었습니다 (보유 포지션 안전 유지)", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_EMERGENCY":
-                        if self.bot_core.v35_engine:
+                        if self.bot_core and self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
-                        await self.bot_core.execute_emergency()
-                        await self.broadcast_event("ui_update", {"msg": "🚨 [비상 탈출] 비상 탈출 로직 가동! 포지션 전량 청산 완료.", "log_type": 1, "price": self.bot_core.current_price})
+                            asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
+                        await self.broadcast_event("ui_update", {"msg": "🚨 [비상 탈출] 비상 탈출 로직 가동! 비트겟 100% 전량 시장가 청산 주문 발주 완료.", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})
                         if config_data and self.bot_core:

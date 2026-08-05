@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.50"  # ShinSeon_Bitget 자동 봇 정지 시 포지션 유지 보호 및 비상 탈출 분리 수술 개발 (V4.50)
+        self.CURRENT_VERSION = "V4.51"  # ShinSeon_Bitget 비상 탈출 CMD_EMERGENCY 전용 시장가 청산 패킷 결합 수술 개발 (V4.51)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2152,14 +2152,18 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(self.bot_core.run_engine(self.update_live_ui, self.set_live_candles))
 
     def emergency_close(self):
-        self.add_log("🚨 [긴급 탈출] 긴급 정지 및 청산 명령을 서버로 전송합니다!")
+        self.add_log("🚨 [비상 탈출] 비상 탈출 및 100% 포지션 전량 시장가 청산 명령 발주!")
         
         if self.is_ws_active():
             import json
-            asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_STOP_BOT"})))
-            self.add_log("📡 [서버 명령] 긴급 중지 명령 전송 완료")
+            asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_EMERGENCY"})))
+            self.add_log("📡 [서버 명령] CMD_EMERGENCY 비상 탈출 명령 전송 완료")
         else:
             self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
+
+        # 클라이언트 백엔드 엔진 직접 청산 코루틴 발진 (더블 프로텍션)
+        if hasattr(self, "bot_core") and getattr(self.bot_core, "v35_engine", None):
+            asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
         
         # 4. 버튼 2개 비주얼 및 상호 잠금 상태 완전 해금 원복
         self.btn_start.setEnabled(True)
