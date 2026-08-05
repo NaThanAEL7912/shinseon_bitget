@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.44"  # ShinSeon_Bitget 실시간 레이더 로그 중복 출력 제거 및 단일행 정갈화 개발 (V4.44)
+        self.CURRENT_VERSION = "V4.45"  # ShinSeon_Bitget 로그 폰트 1pt 가독성 확대 및 바이낸스 찐청산 화이트/그린 상태등 개편 개발 (V4.45)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1118,7 +1118,7 @@ class ShinseonDashboard(QMainWindow):
         self.txt_log = QPlainTextEdit()
         self.txt_log.setReadOnly(True)
         self.txt_log.setMaximumBlockCount(200)  # [과부하 박멸] 초고속 200줄 자동 링버퍼 (HTML 파싱 0ms)
-        self.txt_log.setStyleSheet("border: none; background-color: transparent; padding: 0px; font-family: 'Consolas', monospace; font-size: 11px; color: #D3C4BA;")
+        self.txt_log.setStyleSheet("border: none; background-color: transparent; padding: 0px; font-family: 'Consolas', monospace; font-size: 12px; color: #D3C4BA;")
         log_container_layout.addWidget(self.txt_log)
         
         log_widget = QWidget()
@@ -1265,10 +1265,14 @@ class ShinseonDashboard(QMainWindow):
                                 status_color = "#FF4D4D"
                                 status_icon = "🚨"
                                 status_msg = "바이낸스 끊김 (재접속 중)"
-                            else:
+                            elif has_real_force:
                                 status_color = "#00FFCC"
                                 status_icon = "🟢"
-                                status_msg = "바이낸스 1분 누적 청산 (하이브리드 $10k+)"
+                                status_msg = "바이낸스 1분 누적 청산 (실시간 찐청산 감지)"
+                            else:
+                                status_color = "#FFFFFF"
+                                status_icon = "⚪"
+                                status_msg = "바이낸스 1분 누적 청산 (체결량 추정)"
 
                             self.lbl_radar_title.setText(f"<b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b><br><span style='color:{status_color}; font-size: 11px; font-weight:bold;'>{status_icon} {status_msg}</span> <span style='color:#DEBA9D; font-size: 11px; font-weight:bold;'>({current_sess})</span>")
 
