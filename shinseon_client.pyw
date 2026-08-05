@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.28"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.29"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1227,7 +1227,10 @@ class ShinseonDashboard(QMainWindow):
                                 self.current_price = float(payload['price'])
                                 self.lbl_price.setText(f"BTC/USDT 실시간 가격: {self.current_price:,.1f} USDT")
                             if 'msg' in payload and payload['msg']:
-                                self.add_log(payload['msg'])
+                                ui_msg = payload['msg']
+                                ignore_keywords = ["100% 현금 대기 중", "실전 저격 감시 가동 중"]
+                                if not any(kw in ui_msg for kw in ignore_keywords):
+                                    self.add_log(ui_msg)
                             
                             # 오더플로우 레이더 UI 동적 연동 (V4.24/V4.26): 하드코딩 $2.0M 제거 및 실시간 수신 세션/target_liq 포매팅
                             current_sess = payload.get('current_session', getattr(self, 'current_session', '로딩 중'))
@@ -2461,15 +2464,17 @@ class ShinseonDashboard(QMainWindow):
                 self.lbl_poison_walls.setStyleSheet("font-size: 11px; color: #C5A07A; font-weight: bold;")
         
         # 3. 실시간 하트비트 스캔 로그 수술 (어떠한 PnL 수치 변화에도 1.0초 당 최대 1회만 알림 로그 송출 가드)
-        now_t = time.time()
-        if now_t - getattr(self, "_last_heartbeat_log_t", 0.0) >= 1.0:
-            self._last_heartbeat_log_t = now_t
-            clean_log_text = signal_text.replace("\n", " ")
-            if signal_text != getattr(self, "last_signal_text", ""):
-                self.add_log(f"레이더 피드 ➡️ {clean_log_text}")
-                self.last_signal_text = signal_text
-            else:
-                self.add_log(f"레이더 스캔 ➡️ {clean_log_text} (청산: ${liq_10s:,.0f}, OI: {oi_speed:+.3f}%)")
+        ignore_keywords = ["100% 현금 대기 중", "실전 저격 감시 가동 중"]
+        if not any(kw in signal_text for kw in ignore_keywords):
+            now_t = time.time()
+            if now_t - getattr(self, "_last_heartbeat_log_t", 0.0) >= 1.0:
+                self._last_heartbeat_log_t = now_t
+                clean_log_text = signal_text.replace("\n", " ")
+                if signal_text != getattr(self, "last_signal_text", ""):
+                    self.add_log(f"레이더 피드 ➡️ {clean_log_text}")
+                    self.last_signal_text = signal_text
+                else:
+                    self.add_log(f"레이더 스캔 ➡️ {clean_log_text} (청산: ${liq_10s:,.0f}, OI: {oi_speed:+.3f}%)")
             
         if "⚡ [자동 레이턴시]" in signal_text:
             # 자동 레이턴시 결과는 전용 라벨에 깔끔하게 이식

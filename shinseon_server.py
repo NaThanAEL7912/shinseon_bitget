@@ -2266,7 +2266,11 @@ def ui_callback(current_price, log_type, msg, **kwargs):
         data.update(kwargs)
         # Event type message
         asyncio.create_task(ws_server.broadcast_event("ui_update", data))
-    logger.info(f"[UI] {msg}")
+        if getattr(ws_server, "_last_logged_ui_msg", None) != msg:
+            ws_server._last_logged_ui_msg = msg
+            logger.info(f"[UI] {msg}")
+    else:
+        logger.info(f"[UI] {msg}")
 
 def chart_callback(candles):
     if ws_server:
