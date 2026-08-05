@@ -287,8 +287,10 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.38"  # ShinSeon_Bitget 미처리 예외 폭탄 적출 및 웹소켓 100% 정상 접속 완전 복구 개발 (V4.38)
+        self.CURRENT_VERSION = "V4.39"  # ShinSeon_Bitget 소켓 재연결 시 자동 동기화 보호막 이식 및 수동 동기화 자동 재시도 원천 복구 개발 (V4.39)
         self.auto_start = False
+        self.ws_reconnect_event = asyncio.Event()
+        self.ws_task = None
         self.sound_enabled = True
         self.price_alerts = []
         self.current_price = 0.0
@@ -1301,7 +1303,22 @@ class ShinseonDashboard(QMainWindow):
                 self.add_log(f"[Websocket] 연결 오류: {e}. 3초 후 재시도...")
             finally:
                 self.ws = None
-                await asyncio.sleep(3)
+                if hasattr(self, 'ws_reconnect_event') and self.ws_reconnect_event:
+                    self.ws_reconnect_event.clear()
+                    try:
+                        await asyncio.wait_for(self.ws_reconnect_event.wait(), timeout=3.0)
+                    except asyncio.TimeoutError:
+                        pass
+                else:
+                    await asyncio.sleep(3)
+
+    def trigger_force_reconnect(self):
+        """웹소켓 강제 즉시 재접속 트리거"""
+        self.add_log("🔄 [웹소켓] 즉시 재연결 루프를 깨워 강제 접속을 시도합니다.")
+        if hasattr(self, 'ws_reconnect_event') and self.ws_reconnect_event:
+            self.ws_reconnect_event.set()
+        if not hasattr(self, 'ws_task') or self.ws_task is None or self.ws_task.done():
+            self.ws_task = asyncio.create_task(self.connect_websocket())
 
     def add_log(self, text):
         now = time.time()
@@ -1761,15 +1778,29 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_sync_balances(self):
         self.add_log("[뷰어 모드] 잔고 동기화 명령을 서버로 전송합니다.")
-        if self.is_ws_active():
-            try:
+        try:
+            ws_connected = False
+            for attempt in range(1, 6):
+                if self.is_ws_active():
+                    ws_connected = True
+                    break
+                if attempt < 5:
+                    self.add_log(f"⏳ [잔고 동기화] 소켓 안착 대기 중... ({attempt}/5)")
+                    await asyncio.sleep(0.5)
+
+            if ws_connected and self.is_ws_active():
+                import json
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
-            except Exception as e:
-                self.add_log(f"❌ [웹소켓 에러] 잔고 동기화 전송 실패: {e}")
-        else:
-            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
-        self.btn_sync_balance.setEnabled(True)
-        self.btn_sync_balance.setText("🔄 실전 계좌 잔고 동기화")
+                self.add_log("📡 [서버 명령] 잔고 동기화 명령을 서버로 성공적으로 전송했습니다.")
+            else:
+                self.add_log("⚠️ [웹소켓] 5회(2.5초) 대기 후에도 소켓 미연결 상태입니다. 즉시 자동 재접속을 트리거합니다.")
+                self.trigger_force_reconnect()
+        except Exception as e:
+            self.add_log(f"❌ [웹소켓 에러] 잔고 동기화 전송 실패: {e}")
+        finally:
+            self.btn_sync_balance.setEnabled(True)
+            self.btn_sync_balance.setText("🔄 실전 계좌 잔고 동기화")
+
     def toggle_manual_threshold_inputs(self):
         # 수동 임계치 체크되어 있을때(True) 수정 못함(False), 체크 풀면(False) 수정 가능(True)
         is_checked = self.chk_manual_threshold.isChecked()
@@ -1785,12 +1816,22 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_position_sync(self):
         try:
-            if self.is_ws_active():
+            ws_connected = False
+            for attempt in range(1, 6):
+                if self.is_ws_active():
+                    ws_connected = True
+                    break
+                if attempt < 5:
+                    self.add_log(f"⏳ [포지션 동기화] 소켓 안착 대기 중... ({attempt}/5)")
+                    await asyncio.sleep(0.5)
+
+            if ws_connected and self.is_ws_active():
                 import json
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
                 self.add_log("📡 [서버 명령] 포지션 동기화 명령을 서버로 전송했습니다.")
             else:
-                self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
+                self.add_log("⚠️ [웹소켓] 5회(2.5초) 대기 후에도 소켓 미연결 상태입니다. 즉시 자동 재접속을 트리거합니다.")
+                self.trigger_force_reconnect()
         except Exception as e:
             self.add_log(f"❌ [동기화 실패] 명령 전송 중 오류 발생: {e}")
         finally:
@@ -3405,7 +3446,7 @@ if __name__ == "__main__":
     dashboard = ShinseonDashboard(DummyBot())
     dashboard.show()
     
-    loop.create_task(dashboard.connect_websocket())
+    dashboard.ws_task = loop.create_task(dashboard.connect_websocket())
     
     with loop:
         loop.run_forever()
