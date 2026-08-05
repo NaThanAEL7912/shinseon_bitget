@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.34"  # AWS 웹소켓 병렬 비블로킹 브로드캐스트 및 레이더 UI/계좌 동기화 완전 복구
+        self.CURRENT_VERSION = "V4.35"  # 비트겟 API 비동기 독자 태스크 분리 및 부팅 접속 성공률 100% 원천 복구
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1192,6 +1192,7 @@ class ShinseonDashboard(QMainWindow):
                     import json
                     await self.ws.send(json.dumps({'type': 'auth', 'secret': 'SECRET_TOKEN_HERE'}))
                     self.send_config_to_server()
+                    await asyncio.sleep(0.3)
                     await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
                     
                     async for message in ws:

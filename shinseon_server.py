@@ -2102,6 +2102,56 @@ class WsServer:
         self.clients = set()
         self.last_chart_time = 0
 
+    async def handle_sync_position(self, websocket):
+        logger.info("📡 [CMD_SYNC_POSITION] 클라이언트 동기화 요청 수신")
+        try:
+            if self.bot_core.bitget_exchange:
+                bal = await self.bot_core.bitget_exchange.fetch_balance({'type': 'swap'})
+                usdt_total = bal.get('USDT', {}).get('total', 0.0)
+                logger.info(f"💰 [CMD_SYNC_POSITION] 비트겟 API 잔고 조회 성공: usdt_total={usdt_total}")
+                await self.broadcast_event('EVT_SYNC_BALANCE', {'usdt_total': usdt_total})
+                logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_BALANCE 송신 완료 ({usdt_total} USDT)")
+                
+                positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+                active_pos = next((p for p in positions if float(p.get('contracts', 0) or p.get('size', 0) or 0) > 0), None)
+                logger.info(f"📊 [CMD_SYNC_POSITION] 비트겟 API 포지션 조회 성공: active_pos={active_pos}")
+                
+                if active_pos:
+                    side = active_pos.get('side', 'long').upper()
+                    contracts = float(active_pos.get('contracts', 0) or active_pos.get('size', 0) or 0)
+                    entry_price = float(active_pos.get('entryPrice', 0) or active_pos.get('price', 0) or 0)
+                    leverage = int(active_pos.get('leverage', 10) or 10)
+                    
+                    if self.bot_core.v35_engine:
+                        self.bot_core.v35_engine.is_position_active = True
+                        self.bot_core.v35_engine.entry_direction = side
+                        self.bot_core.v35_engine.position_side = side
+                        self.bot_core.v35_engine.entry_price = entry_price
+                        self.bot_core.v35_engine.position_volume = contracts
+                        
+                    payload = {
+                        'has_position': True,
+                        'side': side,
+                        'contracts': contracts,
+                        'entry_price': entry_price,
+                        'leverage': leverage
+                    }
+                    await self.broadcast_event('EVT_SYNC_POSITION', payload)
+                    logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: {payload}")
+                else:
+                    if self.bot_core.v35_engine:
+                        self.bot_core.v35_engine.is_position_active = False
+                        self.bot_core.v35_engine.position_volume = 0
+                    await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
+                    logger.info("📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False)")
+            else:
+                err_msg = "bitget_exchange가 초기화되지 않았습니다. server_config.json 키 설정을 확인하세요."
+                logger.warning(f"⚠️ [CMD_SYNC_POSITION] {err_msg}")
+                await self.broadcast_event('EVT_SYNC_ERROR', {'error': err_msg})
+        except Exception as e:
+            logger.error(f"❌ [CMD_SYNC_POSITION] 동기화 중 예외 발생: {e}")
+            await self.broadcast_event('EVT_SYNC_ERROR', {'error': str(e)})
+
     async def register(self, websocket):
         self.clients.add(websocket)
         try:
@@ -2110,54 +2160,7 @@ class WsServer:
                     payload = json.loads(message)
                     cmd = payload.get("cmd")
                     if cmd == "CMD_SYNC_POSITION":
-                        logger.info("📡 [CMD_SYNC_POSITION] 클라이언트 동기화 요청 수신")
-                        try:
-                            if self.bot_core.bitget_exchange:
-                                bal = await self.bot_core.bitget_exchange.fetch_balance({'type': 'swap'})
-                                usdt_total = bal.get('USDT', {}).get('total', 0.0)
-                                logger.info(f"💰 [CMD_SYNC_POSITION] 비트겟 API 잔고 조회 성공: usdt_total={usdt_total}")
-                                await self.broadcast_event('EVT_SYNC_BALANCE', {'usdt_total': usdt_total})
-                                logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_BALANCE 송신 완료 ({usdt_total} USDT)")
-                                
-                                positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
-                                active_pos = next((p for p in positions if float(p.get('contracts', 0) or p.get('size', 0) or 0) > 0), None)
-                                logger.info(f"📊 [CMD_SYNC_POSITION] 비트겟 API 포지션 조회 성공: active_pos={active_pos}")
-                                
-                                if active_pos:
-                                    side = active_pos.get('side', 'long').upper()
-                                    contracts = float(active_pos.get('contracts', 0) or active_pos.get('size', 0) or 0)
-                                    entry_price = float(active_pos.get('entryPrice', 0) or active_pos.get('price', 0) or 0)
-                                    leverage = int(active_pos.get('leverage', 10) or 10)
-                                    
-                                    if self.bot_core.v35_engine:
-                                        self.bot_core.v35_engine.is_position_active = True
-                                        self.bot_core.v35_engine.entry_direction = side
-                                        self.bot_core.v35_engine.position_side = side
-                                        self.bot_core.v35_engine.entry_price = entry_price
-                                        self.bot_core.v35_engine.position_volume = contracts
-                                        
-                                    payload = {
-                                        'has_position': True,
-                                        'side': side,
-                                        'contracts': contracts,
-                                        'entry_price': entry_price,
-                                        'leverage': leverage
-                                    }
-                                    await self.broadcast_event('EVT_SYNC_POSITION', payload)
-                                    logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: {payload}")
-                                else:
-                                    if self.bot_core.v35_engine:
-                                        self.bot_core.v35_engine.is_position_active = False
-                                        self.bot_core.v35_engine.position_volume = 0
-                                    await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
-                                    logger.info("📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False)")
-                            else:
-                                err_msg = "bitget_exchange가 초기화되지 않았습니다. server_config.json 키 설정을 확인하세요."
-                                logger.warning(f"⚠️ [CMD_SYNC_POSITION] {err_msg}")
-                                await self.broadcast_event('EVT_SYNC_ERROR', {'error': err_msg})
-                        except Exception as e:
-                            logger.error(f"❌ [CMD_SYNC_POSITION] 동기화 중 예외 발생: {e}")
-                            await self.broadcast_event('EVT_SYNC_ERROR', {'error': str(e)})
+                        asyncio.create_task(self.handle_sync_position(websocket))
                     elif cmd == "CMD_START_BOT":
                         if self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "RUNNING"
