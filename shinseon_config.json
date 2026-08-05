@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V4.53",
+    "CURRENT_VERSION": "V4.54",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -27,7 +27,7 @@
         "pacific": {
             "liq": 150000.0,
             "oi": 0.15,
-            "sl": -0.3,
+            "sl": -1.3,
             "enabled": true
         },
         "weekend_asia": {

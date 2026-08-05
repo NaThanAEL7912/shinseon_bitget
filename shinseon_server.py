@@ -441,10 +441,19 @@ class BotCore:
                         current = self.current_price
                         leverage = getattr(self.v35_engine, "leverage", 30) or 30
                         
-                        if direction_active == "LONG":
-                            live_pnl = ((current - entry) / entry) * 100.0 if (entry > 0.0 and current > 0.0) else 0.0
+                        b_roe = getattr(self.v35_engine, "bitget_roe_pct", None)
+                        b_usdt = getattr(self.v35_engine, "bitget_unrealized_pnl", None)
+                        b_mark = getattr(self.v35_engine, "bitget_mark_price", None)
+                        
+                        if b_mark and b_mark > 0.0:
+                            calc_price = b_mark
                         else:
-                            live_pnl = ((entry - current) / entry) * 100.0 if (entry > 0.0 and current > 0.0) else 0.0
+                            calc_price = current
+
+                        if direction_active == "LONG":
+                            live_pnl = ((calc_price - entry) / entry) * 100.0 if (entry > 0.0 and calc_price > 0.0) else 0.0
+                        else:
+                            live_pnl = ((entry - calc_price) / entry) * 100.0 if (entry > 0.0 and calc_price > 0.0) else 0.0
                             
                         roe_pct = live_pnl * leverage
                         
@@ -454,7 +463,14 @@ class BotCore:
                         else:
                             btc_qty = 0.0012
 
-                        live_usdt = btc_qty * entry * (live_pnl / 100.0) if (btc_qty > 0 and entry > 0) else 0.0
+                        if b_usdt is not None and abs(b_usdt) > 0.0001:
+                            live_usdt = b_usdt
+                        else:
+                            live_usdt = btc_qty * entry * (live_pnl / 100.0) if (btc_qty > 0 and entry > 0) else 0.0
+                        
+                        if b_roe is not None and abs(b_roe) > 0.0001:
+                            roe_pct = b_roe
+
                         usdt_str = f" ({live_usdt:+.2f} USDT)" if btc_qty > 0 else ""
 
                         # 동적 세션 가드레일 임계치 추출
@@ -2193,6 +2209,10 @@ class WsServer:
                         self.bot_core.v35_engine.position_side = side
                         self.bot_core.v35_engine.entry_price = entry_price
                         self.bot_core.v35_engine.position_volume = contracts
+                        self.bot_core.v35_engine.leverage = leverage
+                        self.bot_core.v35_engine.bitget_roe_pct = float(active_pos.get('percentage', 0.0) or 0.0)
+                        self.bot_core.v35_engine.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
+                        self.bot_core.v35_engine.bitget_mark_price = float(active_pos.get('markPrice', 0.0) or 0.0)
                         
                     payload = {
                         'has_position': True,
