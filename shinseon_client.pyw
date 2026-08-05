@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.26"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.27"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1409,7 +1409,10 @@ class ShinseonDashboard(QMainWindow):
                 with open(config_path, "r", encoding="utf-8") as f:
                     config_data = json.load(f)
                 
-                self.CURRENT_VERSION = config_data.get("CURRENT_VERSION", self.CURRENT_VERSION)
+                # 버전 오버라이드 방지 (코드 내 지정된 최신 버전을 우선 유지)
+                file_ver = config_data.get("CURRENT_VERSION", "")
+                if file_ver and not self.CURRENT_VERSION:
+                    self.CURRENT_VERSION = file_ver
                 
                 # 수동 임계치 체크박스 복구 (로딩 도중 상태 변경 신호가 발생하여 미완성 상태가 저장되는 루프 방지)
                 self.chk_manual_threshold.blockSignals(True)

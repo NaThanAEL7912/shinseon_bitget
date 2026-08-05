@@ -434,7 +434,7 @@ class BotCore:
                     latency_show = float(getattr(self, "last_packet_latency_ms", 15.0))
                     status_msg = "100% 현금 대기 중 (저격 대기)"
                     if self.v35_engine.is_position_active:
-                        direction_active = getattr(self.v35_engine, "entry_direction", "LONG")
+                        direction_active = getattr(self.v35_engine, "entry_direction", None) or getattr(self.v35_engine, "position_side", "LONG") or "LONG"
                         entry = self.v35_engine.entry_price
                         current = self.current_price
                         if direction_active == "LONG":
@@ -827,6 +827,8 @@ class ShinseonV35Engine:
         
         self.ENTRY_SLIPPAGE_CAP = 0.0003  # 진입 허용 슬리피지 (0.03%)
         
+        self.entry_direction = "LONG"
+        self.position_side = "LONG"
         self.is_position_active = False
         self.is_snipe_active = False      # 저격 감시 승인 상태 스위치
         self.exit_in_progress = False     # 선제 청산 중복 방지 락 플래그 (개발계획서_171)
@@ -2125,6 +2127,7 @@ class WsServer:
                                     
                                     if self.bot_core.v35_engine:
                                         self.bot_core.v35_engine.is_position_active = True
+                                        self.bot_core.v35_engine.entry_direction = side
                                         self.bot_core.v35_engine.position_side = side
                                         self.bot_core.v35_engine.entry_price = entry_price
                                         self.bot_core.v35_engine.position_volume = contracts
@@ -2139,6 +2142,7 @@ class WsServer:
                                 else:
                                     if self.bot_core.v35_engine:
                                         self.bot_core.v35_engine.is_position_active = False
+                                        self.bot_core.v35_engine.position_volume = 0
                                     await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
                         except Exception as e:
                             print(f"Position sync error: {e}")
