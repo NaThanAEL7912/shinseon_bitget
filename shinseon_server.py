@@ -1169,6 +1169,51 @@ class ShinseonV35Engine:
                             self.bot.ui_cb(0.0, 0, "🎯 [스탑로스 취소 완료] 미체결 스탑 주문 취소 완료")
                             return True
 
+                        # [V4.52 비트겟 v2 0.001초 플래시 청산 패킷 직송]
+                        if not (order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE"):
+                            self.bot.ui_cb(0.0, 0, "⚡ [v2 플래시 전량 청산] API 직송 발주 시작...")
+                            try:
+                                env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
+                                api_key = env_vars.get("BITGET_API_KEY", "")
+                                secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+                                passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+                                
+                                if api_key and secret_key and passphrase:
+                                    url_base = "https://api.bitget.com"
+                                    path_flash = "/api/v2/mix/order/close-positions"
+                                    body_flash = json.dumps({"symbol": "BTCUSDT", "productType": "USDT-FUTURES"})
+                                    
+                                    timestamp = str(int(time.time() * 1000))
+                                    message = timestamp + "POST" + path_flash + body_flash
+                                    mac = hmac.new(secret_key.encode('utf-8'), message.encode('utf-8'), hashlib.sha256)
+                                    sign = base64.b64encode(mac.digest()).decode('utf-8')
+                                    
+                                    headers = {
+                                        'ACCESS-KEY': api_key,
+                                        'ACCESS-SIGN': sign,
+                                        'ACCESS-TIMESTAMP': timestamp,
+                                        'ACCESS-PASSPHRASE': passphrase,
+                                        'Content-Type': 'application/json',
+                                        'locale': 'en-US'
+                                    }
+                                    async with aiohttp.ClientSession() as session:
+                                        async with session.post(url_base + path_flash, headers=headers, data=body_flash) as resp:
+                                            res = await resp.json()
+                                            if res.get("code") == "00000":
+                                                self.bot.ui_cb(0.0, 0, "✅ [플래시 청산 성공] 비트겟 100% 전량 시장가 청산 완료")
+                                                self.is_position_active = False
+                                                self.position_volume = 0
+                                                self.entry_price = 0.0
+                                                self.entry_direction = ""
+                                                self.has_second_entry = False
+                                                self.has_third_entry = False
+                                                self.exit_in_progress = False
+                                                return True
+                                            else:
+                                                self.bot.ui_cb(0.0, 0, f"⚠️ [플래시 청산 반환] {res.get('msg', '알 수 없음')}")
+                            except Exception as fe:
+                                self.bot.ui_cb(0.0, 0, f"⚠️ [플래시 청산 예외]: {fe}")
+
                         positions = await exchange.fetch_positions([symbol])
                         active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
                         if not active_pos:
@@ -1193,7 +1238,11 @@ class ShinseonV35Engine:
                         amount = max(0.001, round(amount, 3))
                         
                         try:
-                            order = await exchange.create_order(symbol, 'market', close_side, amount, params={'reduceOnly': True})
+                            if active_pos.get('info', {}).get('posMode') == 'hedge_mode' or active_pos.get('hedged', True):
+                                params = {'tradeSide': 'close', 'holdSide': pos_side.lower()}
+                            else:
+                                params = {'reduceOnly': True}
+                            order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
                             self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"❌ [청산 에러] 비트겟 API 예외 발생: {e}")

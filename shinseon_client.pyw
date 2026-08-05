@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.51"  # ShinSeon_Bitget 비상 탈출 CMD_EMERGENCY 전용 시장가 청산 패킷 결합 수술 개발 (V4.51)
+        self.CURRENT_VERSION = "V4.52"  # ShinSeon_Bitget 비트겟 v2 플래시 청산 API close-positions 원천 결합 수술 개발 (V4.52)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
