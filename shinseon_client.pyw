@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.54"  # ShinSeon_Bitget 비트겟 마크프라이스 포지션 ROE 100% 정밀 동기화 수술 개발 (V4.54)
+        self.CURRENT_VERSION = "V4.55"  # ShinSeon_Bitget 실시간 틱 시세 1초 10회 초당 ROE 실시간 갱신 복구 수술 개발 (V4.55)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
