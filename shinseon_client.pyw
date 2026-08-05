@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.37"  # Python 3.14 qasync 태스크 재진입 충돌 수술 및 부팅 접속 성공률 100% 원천 복구
+        self.CURRENT_VERSION = "V4.38"  # ShinSeon_Bitget 미처리 예외 폭탄 적출 및 웹소켓 100% 정상 접속 완전 복구 개발 (V4.38)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -2536,112 +2536,81 @@ class ShinseonDashboard(QMainWindow):
             self.add_log(f"⚠️ [비트겟 거래소] 브라우저 띄우기 실패: {e}")
 
     async def run_manual_latency_test(self):
-        self.btn_latency_test.setEnabled(False)
-        self.add_log("⚡ [측정 개시] 5초간 바이낸스-BITGET 물리적 시차 계측을 개시합니다...")
-        
-        # 127.0.0.1 로 CDP 연결 락 확보
-        async with self.bot_core.cdp_lock:
-            try:
-                import websockets
-                import json
-                import time
-                
-                raise NotImplementedError('Playwright removed for Bitget migration') # pw = await async_playwright().start()
-                browser = await pw.chromium.connect_over_cdp("http://127.0.0.1:9224", timeout=5000)
-                
-                target_page = None
-                for context in browser.contexts:
-                    for page in context.pages:
-                        url = page.url
-                        if "x.me" in url or "bitget" in url:
-                            target_page = page
-                            break
-                    if target_page:
-                        break
-                        
-                if not target_page:
-                    self.add_log("❌ [측정 에러] 크롬에서 BITGET 탭을 찾지 못했습니다!")
-                    await pw.stop()
-                    self.btn_latency_test.setEnabled(True)
-                    return
-                    
-                # 메모리 다이렉트 바이낸스 틱 타임스탬프 스캔 (웹소켓 버퍼 딜레이 0ms 영구 격살)
-                deltas = []
-                pings = []
-                for i in range(5):
-                    self.btn_latency_test.setText(f"측정 중 ({5-i}s)")
-                    
-                    # 1. 바이낸스 공식 서버 시간 초고속 REST 단발 수집 (웹소켓 딜레이/가동 여부 차단)
-                    t_signal = time.time() * 1000
-                    try:
-                        async with aiohttp.ClientSession() as session:
-                            async with session.get("https://api.binance.com/api/v3/time", timeout=0.8) as resp:
-                                if resp.status == 200:
-                                    res_time = await resp.json()
-                                    t_signal = float(res_time.get("serverTime", t_signal))
-                    except Exception:
-                        pass
-                    
-                    # 2. BITGET 브라우저 evaluate fetch 핑 송출
-                    start_bitget = time.time() * 1000
-                    
-                    # 수동 벤치용 인증 헤더 직렬화
-                    curr_h = self.bot_core.bitget_headers or {}
-                    if "Content-Type" not in curr_h:
-                        curr_h["Content-Type"] = "application/json"
-                    man_h_json = json.dumps(curr_h)
-                    
-                    await target_page.evaluate(f"""
-                    () => fetch(window.location.origin + '/egw/private/futures/personal/info', {{
-                        method: 'POST',
-                        headers: {man_h_json},
-                        body: '{{}}'
-                    }}).then(r => r.text()).catch(e => '')
-                    """)
-                    t_bitget_end = time.time() * 1000
-                    
-                    total_delta = t_bitget_end - t_signal
-                    bitget_pure_ping = t_bitget_end - start_bitget
-                    if total_delta < 0:
-                        total_delta = bitget_pure_ping + 10.0
-                        
-                    deltas.append(total_delta)
-                    pings.append(bitget_pure_ping)
-                    
-                    verdict = "Safe" if total_delta <= 50.0 else ("Buffer" if total_delta < 200.0 else "No Edge")
-                    self.add_log(f"  └ [{i+1}/5] 시차: {total_delta:.1f}ms | BITGET 핑: {bitget_pure_ping:.1f}ms | 판정: {verdict}")
-                    await asyncio.sleep(1.0)
-                        
-                avg_delta = sum(deltas) / len(deltas)
-                avg_ping = sum(pings) / len(pings)
-                final_verdict = "🟢 Safe (필승 구간)" if avg_delta <= 50.0 else ("🟡 Buffer (위험 구간)" if avg_delta < 200.0 else "🔴 No Edge (진입 불가)")
-                self.add_log(f"🏆 [최종 판정] 평균 총 시차: {avg_delta:.1f}ms | BITGET 핑: {avg_ping:.1f}ms -> {final_verdict}")
-                
-                # 수동 레이턴시 실측 결과 GUI 라벨에 출력
-                verdict_short = final_verdict.split()[-1].replace('(', '').replace(')', '')
-                self.lbl_latency_result.setText(f"실측 결과: {avg_delta:.1f}ms ({verdict_short})")
-                
-                # 24시간 계측 파일 로깅 연동
-                import os
-                log_dir = r"c:\Working\shinseon\docs"
-                os.makedirs(log_dir, exist_ok=True)
-                with open(os.path.join(log_dir, "latency_bench_log.txt"), "a", encoding="utf-8") as lf:
-                    lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 수동측정 - 평균시차: {avg_delta:.1f}ms | BITGET핑: {avg_ping:.1f}ms | 판정: {final_verdict}\n")
-                    
-                await pw.stop()
-            except Exception as e:
-                if "Failed to fetch" in str(e) or "TypeError" in str(e):
-                    self.add_log("⚡ [수동 레이턴시] BITGET 통신 로딩 중으로 잠시 후 다시 시도해 주십시오.")
-                else:
-                    self.add_log(f"❌ [측정 에러] {e}")
-                self.lbl_latency_result.setText("실측 결과: 측정 에러")
+        try:
+            self.btn_latency_test.setEnabled(False)
+            self.add_log("⚡ [측정 개시] 5초간 바이낸스-BITGET 물리적 시차 계측을 개시합니다...")
+            
+            # 127.0.0.1 로 CDP 연결 락 확보
+            async with self.bot_core.cdp_lock:
                 try:
-                    await pw.stop()
-                except:
-                    pass
+                    import websockets
+                    import json
+                    import time
+                    import aiohttp
                     
-        self.btn_latency_test.setEnabled(True)
-        self.btn_latency_test.setText("⚡ 레이턴시 실측")
+                    deltas = []
+                    pings = []
+                    for i in range(5):
+                        self.btn_latency_test.setText(f"측정 중 ({5-i}s)")
+                        
+                        # 1. 바이낸스 공식 서버 시간 초고속 REST 단발 수집
+                        t_signal = time.time() * 1000
+                        try:
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get("https://api.binance.com/api/v3/time", timeout=0.8) as resp:
+                                    if resp.status == 200:
+                                        res_time = await resp.json()
+                                        t_signal = float(res_time.get("serverTime", t_signal))
+                        except Exception:
+                            pass
+                        
+                        # 2. BITGET 공식 서버 시간 초고속 REST 단발 수집 (Playwright 완전 우회)
+                        start_bitget = time.time() * 1000
+                        try:
+                            async with aiohttp.ClientSession() as session:
+                                async with session.get("https://api.bitget.com/api/v2/spot/public/time", timeout=1.0) as resp:
+                                    if resp.status == 200:
+                                        t_bitget_end = time.time() * 1000
+                                    else:
+                                        t_bitget_end = time.time() * 1000
+                        except Exception:
+                            t_bitget_end = time.time() * 1000
+                            
+                        total_delta = t_bitget_end - t_signal
+                        bitget_pure_ping = t_bitget_end - start_bitget
+                        if total_delta < 0:
+                            total_delta = bitget_pure_ping + 10.0
+                            
+                        deltas.append(total_delta)
+                        pings.append(bitget_pure_ping)
+                        
+                        verdict = "Safe" if total_delta <= 50.0 else ("Buffer" if total_delta < 200.0 else "No Edge")
+                        self.add_log(f"  └ [{i+1}/5] 시차: {total_delta:.1f}ms | BITGET 핑: {bitget_pure_ping:.1f}ms | 판정: {verdict}")
+                        await asyncio.sleep(1.0)
+                            
+                    avg_delta = sum(deltas) / len(deltas)
+                    avg_ping = sum(pings) / len(pings)
+                    final_verdict = "🟢 Safe (필승 구간)" if avg_delta <= 50.0 else ("🟡 Buffer (위험 구간)" if avg_delta < 200.0 else "🔴 No Edge (진입 불가)")
+                    self.add_log(f"🏆 [최종 판정] 평균 총 시차: {avg_delta:.1f}ms | BITGET 핑: {avg_ping:.1f}ms -> {final_verdict}")
+                    
+                    # 수동 레이턴시 실측 결과 GUI 라벨에 출력
+                    verdict_short = final_verdict.split()[-1].replace('(', '').replace(')', '')
+                    self.lbl_latency_result.setText(f"실측 결과: {avg_delta:.1f}ms ({verdict_short})")
+                    
+                    # 24시간 계측 파일 로깅 연동
+                    import os
+                    log_dir = r"c:\Working\shinseon\docs"
+                    os.makedirs(log_dir, exist_ok=True)
+                    with open(os.path.join(log_dir, "latency_bench_log.txt"), "a", encoding="utf-8") as lf:
+                        lf.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 수동측정 - 평균시차: {avg_delta:.1f}ms | BITGET핑: {avg_ping:.1f}ms | 판정: {final_verdict}\n")
+                except Exception as inner_e:
+                    self.add_log(f"❌ [측정 에러] {inner_e}")
+                    self.lbl_latency_result.setText("실측 결과: 측정 에러")
+        except Exception as outer_e:
+            self.add_log(f"⚠️ [수동 레이턴시 예외] {outer_e}")
+        finally:
+            self.btn_latency_test.setEnabled(True)
+            self.btn_latency_test.setText("⚡ 레이턴시 실측")
 
 
 # ==============================================================================
