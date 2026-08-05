@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.40"  # ShinSeon_Bitget 웹소켓 데몬 태스크 클래스 내부 완전 이식 및 부팅 즉시 100% 자동 연동 원천 복구 개발 (V4.40)
+        self.CURRENT_VERSION = "V4.41"  # ShinSeon_Bitget 웹소켓 데몬 태스크 클래스 내부 완전 이식 및 부팅 즉시 100% 자동 연동 원천 복구 개발 (V4.40)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1188,7 +1188,7 @@ class ShinseonDashboard(QMainWindow):
         while True:
             try:
                 self.add_log(f"[Websocket] 일본 AWS 릴레이 서버 연결 시도: {url}")
-                async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
+                async with websockets.connect(url, open_timeout=5.0, ping_interval=20, ping_timeout=20) as ws:
                     self.ws = ws
                     self.add_log("[Websocket] 서버 연결 성공!")
                     import json
