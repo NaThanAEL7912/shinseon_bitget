@@ -2259,19 +2259,19 @@ class WsServer:
             self.clients.discard(websocket)
 
     async def broadcast_event(self, event_type, data):
-        # 0s delay for events
         if not self.clients:
             return
         msg = json.dumps({"type": event_type, "data": data})
-        for client in list(self.clients):
+        async def _safe_send(client):
             try:
                 await client.send(msg)
-            except Exception as e:
-                logger.error(f"⚠️ [WS Broadcast] 전송 실패 폐기 소켓 제거: {e}")
+            except Exception:
                 self.clients.discard(client)
-            
+        tasks = [_safe_send(c) for c in list(self.clients)]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
     async def broadcast_throttled(self, event_type, data):
-        # 0.5s throttling
         now = time.time()
         if now - self.last_chart_time < 0.5:
             return
@@ -2279,12 +2279,14 @@ class WsServer:
         if not self.clients:
             return
         msg = json.dumps({"type": event_type, "data": data})
-        for client in list(self.clients):
+        async def _safe_send(client):
             try:
                 await client.send(msg)
-            except Exception as e:
-                logger.error(f"⚠️ [WS Broadcast Throttled] 전송 실패 폐기 소켓 제거: {e}")
+            except Exception:
                 self.clients.discard(client)
+        tasks = [_safe_send(c) for c in list(self.clients)]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 ws_server = None
 

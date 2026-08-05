@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.33"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.34"  # AWS 웹소켓 병렬 비블로킹 브로드캐스트 및 레이더 UI/계좌 동기화 완전 복구
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -539,7 +539,7 @@ class ShinseonDashboard(QMainWindow):
 
         
         # v3.5 오더플로우 레이더 감시 정보 패널 (상단 이관 완료 및 게이지 바 장착) (부모를 right_widget으로 변경)
-        self.lbl_radar_title = QLabel("<br><b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b>", right_widget)
+        self.lbl_radar_title = QLabel("<b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b><br><span style='color:#00FFCC; font-size: 11px; font-weight:bold;'>🟢 바이낸스 1분 누적 청산 (하이브리드 $10k+)</span>", right_widget)
         right_layout.addWidget(self.lbl_radar_title)
         
         # --- 임계치 수동 설정 제어반 (개발계획서_145) ---
@@ -1162,13 +1162,16 @@ class ShinseonDashboard(QMainWindow):
 
     
     def is_ws_active(self):
-        if not hasattr(self, 'ws') or self.ws is None:
+        try:
+            if not hasattr(self, 'ws') or self.ws is None:
+                return False
+            state = getattr(self.ws, 'state', None)
+            if state is not None:
+                state_name = getattr(state, 'name', str(state))
+                return state_name == 'OPEN' or state == 1 or str(state) == 'State.OPEN'
+            return getattr(self.ws, 'open', True)
+        except Exception:
             return False
-        state = getattr(self.ws, 'state', None)
-        if state is not None:
-            state_name = getattr(state, 'name', str(state))
-            return state_name == 'OPEN' or state == 1 or str(state) == 'State.OPEN'
-        return getattr(self.ws, 'open', True)
 
     def request_csv_download(self):
         if self.is_ws_active():
