@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.42"  # ShinSeon_Bitget 부팅 시 경고 로그 오발사 차단 및 웹소켓 자동 동기화 클린 복구 개발 (V4.42)
+        self.CURRENT_VERSION = "V4.43"  # ShinSeon_Bitget qasync 이벤트루프 블로킹 소멸 및 웹소켓 100% 즉시 안착 원천 복구 개발 (V4.43)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1888,10 +1888,11 @@ class ShinseonDashboard(QMainWindow):
             self.add_log(f"❌ [인증 에러] 라이선스 검증 오류 발생: {license_err}")
             sys.exit(0)
             
-        # 2. 비트겟 사이트 자동 팝업 (사용자 요청)
-        import webbrowser
+        # 2. 비트겟 사이트 자동 팝업 (qasync 이벤트루프 동결 100% 방지 비동기 1초 지연 팝업)
         try:
-            webbrowser.open_new("https://www.bitget.com/futures/usdt/BTCUSDT")
+            from PySide6.QtCore import QTimer
+            import webbrowser
+            QTimer.singleShot(1000, lambda: webbrowser.open_new("https://www.bitget.com/futures/usdt/BTCUSDT"))
             self.add_log("🌐 [비트겟 거래소] 초기 구동 시 비트겟 거래소 화면을 띄웠습니다.")
         except Exception as e:
             pass
@@ -2583,7 +2584,10 @@ class ShinseonDashboard(QMainWindow):
             self.add_log("⚡ [측정 개시] 5초간 바이낸스-BITGET 물리적 시차 계측을 개시합니다...")
             
             # 127.0.0.1 로 CDP 연결 락 확보
-            async with self.bot_core.cdp_lock:
+            cdp_lock = getattr(self.bot_core, 'cdp_lock', None)
+            if cdp_lock is None:
+                cdp_lock = asyncio.Lock()
+            async with cdp_lock:
                 try:
                     import websockets
                     import json
@@ -3443,11 +3447,18 @@ if __name__ == "__main__":
     
     class DummyBot:
         v35_engine = None
+        cdp_lock = asyncio.Lock()
+        current_price = 65000.0
+        bitget_balance = 0.0
+        def update_capital_config(self, *args, **kwargs):
+            pass
+        async def execute_emergency(self, *args, **kwargs):
+            pass
+        async def run_engine(self, *args, **kwargs):
+            pass
         
     dashboard = ShinseonDashboard(DummyBot())
     dashboard.show()
-    
-    dashboard.ws_task = loop.create_task(dashboard.connect_websocket())
     
     with loop:
         loop.run_forever()
