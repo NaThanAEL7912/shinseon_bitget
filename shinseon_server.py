@@ -235,6 +235,8 @@ class BotCore:
         self.current_price = 0.0
         self.spot_price = 0.0
         self.price_basis = 0.0
+        self.bitget_current_price = 0.0
+        asyncio.create_task(self.run_bitget_ticker_stream())
         self.open_p = 63100.0
         self.high_p = 63300.0
         self.low_p = 62900.0
@@ -1017,15 +1019,35 @@ class ShinseonV35Engine:
             'bids': [[expected_vwap, 3.0]]
         }
 
+    async def run_bitget_ticker_stream(self):
+        logger.info("⚡ [BITGET TICKER] 비트겟 전용 선물 실시간 시세 스트림 가동 (200ms)")
+        url = "https://api.bitget.com/api/v2/mix/market/ticker?symbol=BTCUSDT&productType=USDT-FUTURES"
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    async with session.get(url, timeout=2.0) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data.get("code") == "00000" and data.get("data"):
+                                t_info = data["data"][0]
+                                last_p = float(t_info.get("lastPr", 0.0) or t_info.get("markPrice", 0.0) or 0.0)
+                                if last_p > 0.0:
+                                    self.bitget_current_price = last_p
+                                    if self.v35_engine:
+                                        self.v35_engine.bitget_current_price = last_p
+                except Exception:
+                    pass
+                await asyncio.sleep(0.2)
+
     async def get_live_bitget_price_internal(self):
         # 1. 모의 훈련 모드 시: 기존 훈련용 무작위 난수 시세 피딩
         if self.is_local_mode:
             return self.entry_price * (1 + random.uniform(-0.008, 0.018)) if self.is_position_active else 65000.0
             
-        # 2. 실물 라이브 모드 시: 실시간 무결한 바이낸스 마크 가격 다이렉트 피딩 (난수 차단)
-        if not getattr(self.bot, "price_ready", False):
-            return 0.0
-            
+        bg_p = getattr(self, "bitget_current_price", 0.0) or getattr(self.bot, "bitget_current_price", 0.0)
+        if bg_p > 0.0:
+            return bg_p
+
         curr_val = getattr(self.bot, "current_price", 0.0)
         return float(curr_val) if curr_val > 0.0 else 65000.0
 
