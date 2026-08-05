@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.30"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.31"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1251,14 +1251,10 @@ class ShinseonDashboard(QMainWindow):
                                 status_color = "#FF4D4D"
                                 status_icon = "🚨"
                                 status_msg = "바이낸스 끊김 (재접속 중)"
-                            elif has_real_force:
+                            else:
                                 status_color = "#00FFCC"
                                 status_icon = "🟢"
-                                status_msg = "바이낸스 1분 찐청산"
-                            else:
-                                status_color = "#D0D0D0"
-                                status_icon = "⚪"
-                                status_msg = "바이낸스 1분 청산"
+                                status_msg = "바이낸스 1분 누적 청산 (하이브리드 $10k+)"
 
                             self.lbl_radar_title.setText(f"<b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b><br><span style='color:{status_color}; font-size: 11px; font-weight:bold;'>{status_icon} {status_msg}</span> <span style='color:#DEBA9D; font-size: 11px; font-weight:bold;'>({current_sess})</span>")
 
@@ -2347,14 +2343,10 @@ class ShinseonDashboard(QMainWindow):
             status_color = "#FF4D4D" if blink else "#888888"
             status_icon = "🚨" if blink else "⚪"
             status_msg = "바이낸스 끊김 (재접속 중)"
-        elif has_real_force:
+        else:
             status_color = "#00FFCC"
             status_icon = "🟢"
-            status_msg = "바이낸스 1분 찐청산"
-        else:
-            status_color = "#D0D0D0"
-            status_icon = "⚪"
-            status_msg = "바이낸스 1분 청산"
+            status_msg = "바이낸스 1분 누적 청산 (하이브리드 $10k+)"
 
         self.lbl_radar_title.setText(
             f"<b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b><br>"

@@ -777,6 +777,14 @@ class BotCore:
                                     self.agg_buy_vol += q
                                 else:
                                     self.agg_sell_vol += q
+                                    
+                                if usd_val >= 10000.0:
+                                    now_t = time.time()
+                                    self.liq_buffer.append((now_t, usd_val))
+                                    if not is_buyer_maker:
+                                        self.buy_liq_buffer.append((now_t, usd_val))
+                                    else:
+                                        self.sell_liq_buffer.append((now_t, usd_val))
                                         
                         except Exception as parse_err:
                             logger.error(f"웹소켓 데이터 처리 에러: {parse_err}")
