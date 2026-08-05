@@ -664,7 +664,7 @@ class BotCore:
                                     self.sell_liq_buffer.append((now_t, usd_val))
                 except Exception as liq_err:
                     self.liq_wss_connected = False
-                    logger.warning(f"선물 청산 WSS 연결 장애 (현물 aggTrade 우회 대체 작동 중): {liq_err}")
+                    logger.warning(f"선물 청산 WSS 연결 장애: {liq_err}")
                     await asyncio.sleep(0.5)
                     
         # [실전 연동 2]: 바이낸스 공식 선물 실시간 OI REST API 초고속(0.2초 주기) 폴링 테스크
@@ -777,14 +777,6 @@ class BotCore:
                                     self.agg_buy_vol += q
                                 else:
                                     self.agg_sell_vol += q
-
-                                if usd_val >= 5000.0:
-                                    now_t = time.time()
-                                    self.liq_buffer.append((now_t, usd_val))
-                                    if not is_buyer_maker:
-                                        self.buy_liq_buffer.append((now_t, usd_val))
-                                    else:
-                                        self.sell_liq_buffer.append((now_t, usd_val))
                                         
                         except Exception as parse_err:
                             logger.error(f"웹소켓 데이터 처리 에러: {parse_err}")
