@@ -813,9 +813,6 @@ class BotCore:
         """🚨 긴급 청산 실행 및 비동기 작업 정리 (실물 발주는 대시보드 마스터 함수에서 단일 연결로 처리)"""
         if self.v35_engine and self.v35_engine.is_position_active:
             self.v35_engine.is_position_active = False
-            
-        if self.current_task and not self.current_task.done():
-            self.current_task.cancel()
         await asyncio.sleep(0.1)
 
 
