@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.46"  # ShinSeon_Bitget 바이낸스 찐청산 금액 실시간 로그 기록 및 AWS KST 세션 수술 개발 (V4.46)
+        self.CURRENT_VERSION = "V4.47"  # ShinSeon_Bitget 추정 청산 포함 1분 청산 금액 실시간 로그 릴레이 완전 소통 개발 (V4.47)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1260,6 +1260,7 @@ class ShinseonDashboard(QMainWindow):
 
                             liq_wss_connected = payload.get('liq_wss_connected', True)
                             has_real_force = payload.get('has_real_force', False)
+                            self._last_has_real_force = has_real_force
 
                             if not liq_wss_connected:
                                 status_color = "#FF4D4D"
@@ -2511,9 +2512,19 @@ class ShinseonDashboard(QMainWindow):
                 self.lbl_poison_walls.setStyleSheet("font-size: 11px; color: #C5A07A; font-weight: bold;")
         
         # 3. 실시간 하트비트 스캔 로그 수술 (어떠한 PnL 수치 변화에도 1.0초 당 최대 1회만 알림 로그 송출 가드)
+        # 3. 실시간 하트비트 스캔 및 청산 포착 독립 로그 수술
+        now_t = time.time()
+        # 청산 수치($10k+) 포착 시 즉시 독립 알림 로그 송출
+        if liq_10s > 0 and (liq_10s != getattr(self, "_last_logged_liq", 0.0)):
+            self._last_logged_liq = liq_10s
+            if now_t - getattr(self, "_last_liq_alert_t", 0.0) >= 2.0:
+                self._last_liq_alert_t = now_t
+                side_label = "SHORT" if short_liq > long_liq else "LONG"
+                tag_str = "찐청산" if getattr(self, "_last_has_real_force", False) else "청산포착"
+                self.add_log(f"💥 [바이낸스 {tag_str}] {side_label} 1분 누적 청산: ${liq_10s:,.0f} (L: ${long_liq:,.0f}, S: ${short_liq:,.0f})")
+
         ignore_keywords = ["100% 현금 대기 중", "실전 저격 감시 가동 중"]
         if not any(kw in signal_text for kw in ignore_keywords):
-            now_t = time.time()
             if now_t - getattr(self, "_last_heartbeat_log_t", 0.0) >= 1.0:
                 self._last_heartbeat_log_t = now_t
                 clean_log_text = signal_text.replace("\n", " ")
