@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.59"  # ShinSeon_Bitget calc_price 비트겟 마크프라이스 원천 치환 수술 개발 (V4.59)
+        self.CURRENT_VERSION = "V4.60"  # ShinSeon_Bitget 스마트 스탑 ROE% 30배 기준 전격 전환 및 WSS 패킷 완공 수술 개발 (V4.60)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -939,7 +939,7 @@ class ShinseonDashboard(QMainWindow):
         lbl_offset = QLabel("오프셋(%):", right_widget)
         lbl_offset.setStyleSheet("color: #DEBA9D; font-size: 11px; font-weight: bold;")
 
-        self.edit_stoploss_offset = QLineEdit("0.2", right_widget)
+        self.edit_stoploss_offset = QLineEdit("6.0", right_widget)
         self.edit_stoploss_offset.setMaximumWidth(45)
         self.edit_stoploss_offset.setAlignment(Qt.AlignmentFlag.AlignCenter if hasattr(Qt, "AlignmentFlag") else Qt.AlignCenter)
         self.edit_stoploss_offset.setStyleSheet("""
@@ -2012,92 +2012,126 @@ class ShinseonDashboard(QMainWindow):
                             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C7355, stop:1 #594733);
                             color: #F5EFEB;
                             font-weight: bold; 
-                            font-size: 13px; 
-                            padding: 11px; 
-                            border-radius: 4px;
-                            border: 1px solid #735D43;
-                            border-top: 1.5px solid rgba(255, 255, 255, 0.25);
-                        }
-                        QPushButton:hover {
-                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A18663, stop:1 #8C7355);
-                        }
-                    """)
-                    return
+               def trigger_close_50(self):
+        if not self.bot_core.v35_engine:
+            return
+        self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
+        self.add_log("🌓 [수동 신속 제어] BITGET 포지션 50% 시장가 청산 명령 발동...")
+        asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+        if hasattr(self, "ws") and self.ws:
+            asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
 
-                # 포지션이 정상 감지되었으면 가이드라인 가동 및 평단가 설정
-                actual_entry_price = self.bot_core.v35_engine.entry_price
-                if actual_entry_price <= 0.0:
-                    actual_entry_price = await self.bot_core.v35_engine.get_live_bitget_price_internal()
-                if actual_entry_price <= 0.0:
-                    actual_entry_price = float(self.bot_core.current_price)
+    def reset_stoploss_ui(self):
+        if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
+            self.bot_core.v35_engine.custom_stop_active = False
+        if hasattr(self, "edit_stoploss_offset"):
+            self.edit_stoploss_offset.setEnabled(True)
+        if hasattr(self, "edit_stoploss_ratio"):
+            self.edit_stoploss_ratio.setEnabled(True)
+        if hasattr(self, "btn_stoploss"):
+            self.btn_stoploss.setText("🛡️ 스마트 스탑 설정")
+            self.btn_stoploss.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
+                    color: #DEBA9D;
+                    font-weight: bold;
+                    font-size: 11px;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #A88869;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
+                }
+            """)
 
-                self.bot_core.v35_engine.entry_price = actual_entry_price
-                self.bot_core.v35_engine.peak_pnl_pct = 0.0
-                self.bot_core.v35_engine.is_position_active = True
+    def trigger_stoploss_setting(self):
+        if not self.bot_core.v35_engine:
+            return
+        
+        # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
+        if getattr(self.bot_core.v35_engine, "custom_stop_active", False):
+            self.bot_core.v35_engine.custom_stop_active = False
+            self.reset_stoploss_ui()
+            self.add_log("🧹 [스마트 스탑 해제] 스마트 스탑 감시가 해제되었습니다.")
+            if hasattr(self, "ws") and self.ws:
+                asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
+            return
 
-                import time
-                self.bot_core.v35_engine.grace_period_until = time.time() + 3.0
+        # 2. 감시 미설정 상태이면 포지션 확인 후 감시 개시 (토글 ON)
+        if not self.bot_core.v35_engine.is_position_active:
+            self.add_log("⚠️ [스마트 스탑 실패] 현재 열려있는 포지션이 없습니다.")
+            return
 
-                # UI 업데이트 및 활성화
-                self.btn_manual_start.setEnabled(True)
-                self.btn_manual_start.setText("⏸ 수동 봇 정지")
-                self.btn_manual_start.setStyleSheet("""
-                    QPushButton {
-                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
-                        color: #DEBA9D;
-                        font-weight: bold; 
-                        font-size: 13px; 
-                        padding: 11px; 
-                        border-radius: 4px;
-                        border: 1px solid #423E3B;
-                        border-top: 1.5px solid rgba(255, 255, 255, 0.2);
-                    }
-                """)
-                self.btn_start.setEnabled(False)
-
-                self.add_log(f"⚡ [하이브리드 수동 감시] BITGET 진입 평단가 ${actual_entry_price:,.1f} 기준으로 진입 평단가를 캘리브레이션 완료하였습니다. (3초 오작동 유예 가동)")
-                self.add_log(f"⚡ [하이브리드 오토-청산] 수동 진입 포지션 가드레일 감시 자동 도킹 개시 (방향: {direction})")
-
-                asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(
-                    side="STOP_LOSS", 
-                    order_type=str(round(actual_entry_price * 1.013 if direction == "SHORT" else actual_entry_price * 0.987, 1))
-                ))
-
-                asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
-
-            except Exception as e:
-                self.add_log(f"❌ [가동 실패] 수동 가동 중 예외 발생: {e}")
-                self.btn_manual_start.setEnabled(True)
-                self.btn_manual_start.setText("⚡ 수동 봇 시작")
-                self.btn_manual_start.setStyleSheet("""
-                    QPushButton {
-                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C7355, stop:1 #594733);
-                        color: #F5EFEB;
-                        font-weight: bold; 
-                        font-size: 13px; 
-                        padding: 11px; 
-                        border-radius: 4px;
-                        border: 1px solid #735D43;
-                        border-top: 1.5px solid rgba(255, 255, 255, 0.25);
-                    }
-                    QPushButton:hover {
-                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A18663, stop:1 #8C7355);
-                    }
-                """)
-
-        asyncio.create_task(run_manual_start_flow())
-
-    async def execute_bitget_emergency_master_internal(self):
-        pass
-
-    async def cancel_all_bitget_trigger_orders_internal(self):
-        self.add_log("[스탑로스 정화] BITGET 거래소의 모든 미체결 스탑 예약 주문 취소 진행 중...")
         try:
-            # v1.1 성능 격상: DOM 매크로를 걷어내고 API 패킷 직송 함수로 이관
-            await self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="CANCEL_ALL")
-            self.add_log("[스탑로스 정화 완료] API 패킷 직송을 통한 정화 시퀀스 완료")
-        except Exception as e:
-            self.add_log(f"❌ [스탑로스 정화 실패] 오류 발생: {e}")
+            offset_val = float(self.edit_stoploss_offset.text().strip())
+        except Exception:
+            offset_val = 6.0
+            self.edit_stoploss_offset.setText("6.0")
+
+        try:
+            ratio_val = float(self.edit_stoploss_ratio.text().strip())
+        except Exception:
+            ratio_val = 100.0
+            self.edit_stoploss_ratio.setText("100")
+
+        entry_price = getattr(self.bot_core.v35_engine, "entry_price", 0.0)
+        entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
+        cur_price = getattr(self, "current_price", 0.0)
+        if cur_price <= 0.0:
+            cur_price = getattr(self, "last_price", 0.0)
+
+        if entry_price > 0.0 and cur_price > 0.0:
+            if entry_dir == "LONG":
+                cur_pnl = ((cur_price - entry_price) / entry_price) * 100.0
+            else:
+                cur_pnl = ((entry_price - cur_price) / entry_price) * 100.0
+        else:
+            cur_pnl = getattr(self.bot_core.v35_engine, "last_live_pnl_pct", 0.0)
+
+        leverage_val = getattr(self.bot_core.v35_engine, "leverage", 30) or 30
+        cur_roe = cur_pnl * leverage_val
+
+        self.bot_core.v35_engine.custom_stop_set_roe = cur_roe
+        self.bot_core.v35_engine.custom_stop_offset_roe = offset_val
+        self.bot_core.v35_engine.custom_stop_close_ratio = ratio_val
+        self.bot_core.v35_engine.custom_stop_active = True
+
+        if hasattr(self, "edit_stoploss_offset"):
+            self.edit_stoploss_offset.setEnabled(False)
+        if hasattr(self, "edit_stoploss_ratio"):
+            self.edit_stoploss_ratio.setEnabled(False)
+
+        if not getattr(self.bot_core.v35_engine, "is_guardrail_running", False):
+            entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
+            asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(entry_dir))
+
+        if hasattr(self, "ws") and self.ws:
+            asyncio.create_task(self.ws.send(json.dumps({
+                'cmd': 'CMD_SET_SMART_STOP',
+                'active': True,
+                'offset_roe': offset_val,
+                'ratio': ratio_val,
+                'set_roe': cur_roe
+            })))
+
+        self.btn_stoploss.setText("🟢 스마트 스탑 해제")
+        self.btn_stoploss.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E4D2B, stop:1 #11331B);
+                color: #00FFCC;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 8px;
+                border-radius: 4px;
+                border: 1px solid #00FFCC;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #29663A, stop:1 #1E4D2B);
+            }
+        """)
+
+        self.add_log(f"🛡️ [스마트 스탑 설정] 현재ROE: {cur_roe:+.2f}%, 설정오프셋: {offset_val:+.2f}% ROE, 청산비율: {ratio_val:.0f}% 감시 개시")
         
     def showEvent(self, event):
         super().showEvent(event)

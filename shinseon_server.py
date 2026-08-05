@@ -483,7 +483,7 @@ class BotCore:
                         is_half_exited = getattr(self.v35_engine, "is_half_exited", False)
                         has_smart_guarded = getattr(self.v35_engine, "has_smart_guarded", False)
                         custom_stop_active = getattr(self.v35_engine, "custom_stop_active", False)
-                        custom_stop_offset = getattr(self.v35_engine, "custom_stop_offset_pct", -0.2)
+                        custom_stop_offset = getattr(self.v35_engine, "custom_stop_offset_roe", getattr(self.v35_engine, "custom_stop_offset_pct", -6.0))
                         
                         pnl_hdr = f"[{direction_active} 진입 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str} (변동: {live_pnl:+.2f}%)"
                         
@@ -499,7 +499,7 @@ class BotCore:
 
                         if custom_stop_active:
                             stop_label = "익절" if custom_stop_offset > 0 else "손절"
-                            status_msg += f"\n(🛡 스마트 스탑 가드: {custom_stop_offset:+.2f}% {stop_label} 감시 중)"
+                            status_msg += f"\n(🛡 스마트 스탑 가드: {custom_stop_offset:+.2f}% ROE {stop_label} 감시 중)"
 
                     elif self.v35_engine.is_snipe_active:
                         status_msg = "🟢 실전 저격 감시 가동 중..."
@@ -1802,18 +1802,19 @@ class ShinseonV35Engine:
 
             # [v2.80/v2.96/v3.62/v3.77] 실시간 토글형 인메모리 스마트 PnL 오프셋 스탑 감시 (상대적 위치 기반 듀얼 방향성 Engine)
             if getattr(self, "custom_stop_active", False):
-                offset_val = getattr(self, "custom_stop_offset_pct", -0.2)
-                pnl_at_set = getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0)
-                live_pnl = pnl_pct * 100.0
+                leverage_val = getattr(self, "leverage", 30) or 30
+                offset_val = getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", -6.0))
+                pnl_at_set = getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val))
+                live_roe = pnl_pct * 100.0 * leverage_val
 
                 if offset_val < pnl_at_set:
-                    # 설정값이 현재 PnL보다 아래 ➡️ 하방 하락/보존/손절 모드
-                    is_triggered = (live_pnl <= offset_val)
+                    # 설정값이 현재 ROE보다 아래 ➡️ 하방 하락/보존/손절 모드
+                    is_triggered = (live_roe <= offset_val)
                     cond_str = "이하"
                     stop_label = "손절/보존"
                 else:
-                    # 설정값이 현재 PnL보다 위 ➡️ 상방 상승/반등/익절 모드
-                    is_triggered = (live_pnl >= offset_val)
+                    # 설정값이 현재 ROE보다 위 ➡️ 상방 상승/반등/익절 모드
+                    is_triggered = (live_roe >= offset_val)
                     cond_str = "이상"
                     stop_label = "상승/반등익절"
 
@@ -1828,7 +1829,7 @@ class ShinseonV35Engine:
                     if clear_ok:
                         if order_type == "FORCE_MARKET_UNCAPPED":
                             self.is_position_active = False
-                        log_msg = f"🛡️ [스마트 스탑 발동] 실시간 PnL({live_pnl:+.2f}%)이 설정값({offset_val:+.2f}%) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산: {order_type})"
+                        log_msg = f"🛡️ [스마트 스탑 발동] 실시간 ROE({live_roe:+.2f}%)가 설정값({offset_val:+.2f}% ROE) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산: {order_type})"
                         if self.bot and self.bot.dashboard:
                             self.bot.dashboard.add_log(log_msg)
                             if hasattr(self.bot.dashboard, "reset_stoploss_ui"):
@@ -2269,6 +2270,22 @@ class WsServer:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
                             asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
                         await self.broadcast_event("ui_update", {"msg": "🚨 [비상 탈출] 비상 탈출 로직 가동! 비트겟 100% 전량 시장가 청산 주문 발주 완료.", "log_type": 1, "price": self.bot_core.current_price})
+                    elif cmd == "CMD_CLOSE_50":
+                        if self.bot_core and self.bot_core.v35_engine:
+                            asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                        await self.broadcast_event("ui_update", {"msg": "🌓 [수동 50% 청산] 비트겟 50% 분할 시장가 청산 발주 완료.", "log_type": 1, "price": self.bot_core.current_price})
+                    elif cmd == "CMD_SET_SMART_STOP":
+                        active = payload.get("active", False)
+                        offset_roe = payload.get("offset_roe", -6.0)
+                        ratio = payload.get("ratio", 100.0)
+                        set_roe = payload.get("set_roe", 0.0)
+                        if self.bot_core and self.bot_core.v35_engine:
+                            self.bot_core.v35_engine.custom_stop_active = active
+                            self.bot_core.v35_engine.custom_stop_offset_roe = offset_roe
+                            self.bot_core.v35_engine.custom_stop_close_ratio = ratio
+                            self.bot_core.v35_engine.custom_stop_set_roe = set_roe
+                        act_str = "설정 완료 (서버 감시 가동)" if active else "해제 완료"
+                        await self.broadcast_event("ui_update", {"msg": f"🛡 [스마트 스탑 WSS] {act_str} (오프셋: {offset_roe:+.2f}% ROE, 비율: {ratio:.0f}%)", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})
                         if config_data and self.bot_core:
