@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.31"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
+        self.CURRENT_VERSION = "V4.32"  # [Phase 3] 서버-클라이언트 분리 및 CCXT 이관 (RPA 제거)
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1162,22 +1162,25 @@ class ShinseonDashboard(QMainWindow):
 
     
     def request_csv_download(self):
-        if hasattr(self, 'ws') and self.ws:
+        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
             import json
             asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_CSV'})))
             self.add_log("[CSV] 💾 서버에 데이터 다운로드를 요청했습니다.")
+        else:
+            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
 
     async def connect_websocket(self):
         url = 'ws://13.192.187.244:8765'
         while True:
             try:
                 self.add_log(f"[Websocket] 일본 AWS 릴레이 서버 연결 시도: {url}")
-                async with websockets.connect(url) as ws:
+                async with websockets.connect(url, ping_interval=20, ping_timeout=20) as ws:
                     self.ws = ws
                     self.add_log("[Websocket] 서버 연결 성공!")
                     import json
                     await self.ws.send(json.dumps({'type': 'auth', 'secret': 'SECRET_TOKEN_HERE'}))
                     self.send_config_to_server()
+                    await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
                     
                     async for message in ws:
                         data = json.loads(message)
@@ -1282,6 +1285,8 @@ class ShinseonDashboard(QMainWindow):
                             self.add_log("[CSV] 데이터 다운로드 완료 및 저장 성공!")
             except Exception as e:
                 self.add_log(f"[Websocket] 연결 오류: {e}. 3초 후 재시도...")
+            finally:
+                self.ws = None
                 await asyncio.sleep(3)
 
     def add_log(self, text):
@@ -1334,7 +1339,7 @@ class ShinseonDashboard(QMainWindow):
 
 
     def send_config_to_server(self):
-        if hasattr(self, 'ws') and self.ws:
+        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
             try:
                 config_payload = {
                     "session_thresholds": getattr(self, "session_thresholds", {}),
@@ -1361,6 +1366,8 @@ class ShinseonDashboard(QMainWindow):
                 asyncio.create_task(self.ws.send(json.dumps(packet)))
             except Exception as e:
                 logger.error(f"서버 설정 전송 오류: {e}")
+        else:
+            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
 
     def save_shinseon_config(self):
         try:
@@ -1740,13 +1747,13 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_sync_balances(self):
         self.add_log("[뷰어 모드] 잔고 동기화 명령을 서버로 전송합니다.")
-        if hasattr(self, 'ws') and self.ws:
+        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
             try:
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
             except Exception as e:
                 self.add_log(f"❌ [웹소켓 에러] 잔고 동기화 전송 실패: {e}")
         else:
-            self.add_log("❌ [웹소켓 에러] 서버 연결이 끊어졌거나 연결 중입니다.")
+            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
         self.btn_sync_balance.setEnabled(True)
         self.btn_sync_balance.setText("🔄 실전 계좌 잔고 동기화")
     def toggle_manual_threshold_inputs(self):
@@ -1764,12 +1771,12 @@ class ShinseonDashboard(QMainWindow):
 
     async def do_position_sync(self):
         try:
-            if hasattr(self, 'ws') and self.ws:
+            if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
                 import json
                 await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
                 self.add_log("📡 [서버 명령] 포지션 동기화 명령을 서버로 전송했습니다.")
             else:
-                self.add_log("❌ [오류] 서버 웹소켓 연결이 없습니다.")
+                self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
         except Exception as e:
             self.add_log(f"❌ [동기화 실패] 명령 전송 중 오류 발생: {e}")
         finally:
@@ -1845,7 +1852,7 @@ class ShinseonDashboard(QMainWindow):
 
     def start_bot(self):
         try:
-            if hasattr(self, 'ws') and self.ws:
+            if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
                 import json
                 if self.btn_start.text() == "▶ 자동 봇 시작":
                     asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_START_BOT"})))
@@ -1885,7 +1892,7 @@ class ShinseonDashboard(QMainWindow):
                     """)
                     self.btn_manual_start.setEnabled(True)
             else:
-                self.add_log("❌ [오류] 서버 웹소켓 연결이 없습니다.")
+                self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
         except Exception as e:
             self.add_log(f"❌ [봇 제어 실패] {e}")
         self.save_shinseon_config()
@@ -2098,12 +2105,12 @@ class ShinseonDashboard(QMainWindow):
     def emergency_close(self):
         self.add_log("🚨 [긴급 탈출] 긴급 정지 및 청산 명령을 서버로 전송합니다!")
         
-        if hasattr(self, 'ws') and self.ws:
+        if hasattr(self, 'ws') and self.ws and getattr(self.ws, 'open', False):
             import json
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_STOP_BOT"})))
             self.add_log("📡 [서버 명령] 긴급 중지 명령 전송 완료")
         else:
-            self.add_log("❌ [오류] 서버 웹소켓 연결이 없습니다.")
+            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
         
         # 4. 버튼 2개 비주얼 및 상호 잠금 상태 완전 해금 원복
         self.btn_start.setEnabled(True)
