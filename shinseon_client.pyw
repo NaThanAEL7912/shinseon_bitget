@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.35"  # 비트겟 API 비동기 독자 태스크 분리 및 부팅 접속 성공률 100% 원천 복구
+        self.CURRENT_VERSION = "V4.36"  # Python 3.14 qasync 태스크 재진입 충돌 수술 및 부팅 접속 성공률 100% 원천 복구
         self.auto_start = False
         self.sound_enabled = True
         self.price_alerts = []
@@ -1194,6 +1194,7 @@ class ShinseonDashboard(QMainWindow):
                     self.send_config_to_server()
                     await asyncio.sleep(0.3)
                     await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
+                    asyncio.create_task(self.run_manual_latency_test())
                     
                     async for message in ws:
                         data = json.loads(message)
@@ -1828,11 +1829,11 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(self.run_telegram_listener_loop())
         self.add_log("🚀 [부팅 시퀀스] 자동 동기화 및 라이선스 검증 시퀀스를 개시합니다...")
         
-        # 1. 라이선스 비동기 검증 집행 (메인 UI 프리징 해결)
+        # 1. 라이선스 동기 검증 집행 (qasync 스레드풀 콜백 재진입 충돌 100% 원천 소멸)
         self.add_log("🔒 [라이선스 검증] GitHub 라이선스 온라인 인증을 수행하는 중...")
         try:
-            hw_id = await asyncio.to_thread(get_hardware_uuid)
-            is_licensed, reason = await asyncio.to_thread(check_license_online, hw_id)
+            hw_id = get_hardware_uuid()
+            is_licensed, reason = check_license_online(hw_id)
             if not is_licensed:
                 self.add_log(f"❌ [인증 실패] 라이선스 인증 실패: {reason}")
                 
