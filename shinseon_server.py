@@ -2102,14 +2102,18 @@ class WsServer:
                     payload = json.loads(message)
                     cmd = payload.get("cmd")
                     if cmd == "CMD_SYNC_POSITION":
+                        logger.info("📡 [CMD_SYNC_POSITION] 클라이언트 동기화 요청 수신")
                         try:
                             if self.bot_core.bitget_exchange:
                                 bal = await self.bot_core.bitget_exchange.fetch_balance({'type': 'swap'})
                                 usdt_total = bal.get('USDT', {}).get('total', 0.0)
+                                logger.info(f"💰 [CMD_SYNC_POSITION] 비트겟 API 잔고 조회 성공: usdt_total={usdt_total}")
                                 await self.broadcast_event('EVT_SYNC_BALANCE', {'usdt_total': usdt_total})
+                                logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_BALANCE 송신 완료 ({usdt_total} USDT)")
                                 
                                 positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
                                 active_pos = next((p for p in positions if float(p.get('contracts', 0) or p.get('size', 0) or 0) > 0), None)
+                                logger.info(f"📊 [CMD_SYNC_POSITION] 비트겟 API 포지션 조회 성공: active_pos={active_pos}")
                                 
                                 if active_pos:
                                     side = active_pos.get('side', 'long').upper()
@@ -2124,20 +2128,28 @@ class WsServer:
                                         self.bot_core.v35_engine.entry_price = entry_price
                                         self.bot_core.v35_engine.position_volume = contracts
                                         
-                                    await self.broadcast_event('EVT_SYNC_POSITION', {
+                                    payload = {
                                         'has_position': True,
                                         'side': side,
                                         'contracts': contracts,
                                         'entry_price': entry_price,
                                         'leverage': leverage
-                                    })
+                                    }
+                                    await self.broadcast_event('EVT_SYNC_POSITION', payload)
+                                    logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: {payload}")
                                 else:
                                     if self.bot_core.v35_engine:
                                         self.bot_core.v35_engine.is_position_active = False
                                         self.bot_core.v35_engine.position_volume = 0
                                     await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
+                                    logger.info("📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False)")
+                            else:
+                                err_msg = "bitget_exchange가 초기화되지 않았습니다. server_config.json 키 설정을 확인하세요."
+                                logger.warning(f"⚠️ [CMD_SYNC_POSITION] {err_msg}")
+                                await self.broadcast_event('EVT_SYNC_ERROR', {'error': err_msg})
                         except Exception as e:
-                            print(f"Position sync error: {e}")
+                            logger.error(f"❌ [CMD_SYNC_POSITION] 동기화 중 예외 발생: {e}")
+                            await self.broadcast_event('EVT_SYNC_ERROR', {'error': str(e)})
                     elif cmd == "CMD_START_BOT":
                         if self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "RUNNING"
@@ -2236,15 +2248,19 @@ class WsServer:
         except websockets.exceptions.ConnectionClosed:
             pass
         finally:
-            self.clients.remove(websocket)
+            self.clients.discard(websocket)
 
     async def broadcast_event(self, event_type, data):
         # 0s delay for events
         if not self.clients:
             return
         msg = json.dumps({"type": event_type, "data": data})
-        for client in self.clients:
-            asyncio.create_task(client.send(msg))
+        for client in list(self.clients):
+            try:
+                await client.send(msg)
+            except Exception as e:
+                logger.error(f"⚠️ [WS Broadcast] 전송 실패 폐기 소켓 제거: {e}")
+                self.clients.discard(client)
             
     async def broadcast_throttled(self, event_type, data):
         # 0.5s throttling
@@ -2255,8 +2271,12 @@ class WsServer:
         if not self.clients:
             return
         msg = json.dumps({"type": event_type, "data": data})
-        for client in self.clients:
-            asyncio.create_task(client.send(msg))
+        for client in list(self.clients):
+            try:
+                await client.send(msg)
+            except Exception as e:
+                logger.error(f"⚠️ [WS Broadcast Throttled] 전송 실패 폐기 소켓 제거: {e}")
+                self.clients.discard(client)
 
 ws_server = None
 
