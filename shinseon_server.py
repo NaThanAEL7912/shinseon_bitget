@@ -842,6 +842,26 @@ class BotCore:
             self.v35_engine.is_position_active = False
         await asyncio.sleep(0.1)
 
+    async def sync_bitget_real_position_status(self):
+        try:
+            if getattr(self, "bitget_exchange", None) and getattr(self, "v35_engine", None):
+                positions = await self.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
+                if not active_pos:
+                    if self.v35_engine.is_position_active:
+                        logger.info("⚡ [실시간 강제 동기화 v4.82] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
+                        self.v35_engine.is_position_active = False
+                        self.v35_engine.position_volume = 0
+                        self.v35_engine.entry_price = 0.0
+                        self.v35_engine.entry_direction = ""
+                else:
+                    self.v35_engine.is_position_active = True
+                    self.v35_engine.entry_direction = active_pos['side'].upper()
+                    self.v35_engine.entry_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
+                    self.v35_engine.position_volume = float(active_pos.get('contracts', 0.0) or 0.0)
+        except Exception as e:
+            pass
+
 
 # ==============================================================================
 # [新鮮 v3.5] 단방향 오더플로우 HFT 저격 및 3대 독약 방어벽 엔진
@@ -1053,26 +1073,6 @@ class ShinseonV35Engine:
                 except Exception:
                     pass
                 await asyncio.sleep(0.2)
-
-    async def sync_bitget_real_position_status(self):
-        try:
-            if getattr(self, "bitget_exchange", None) and getattr(self, "v35_engine", None):
-                positions = await self.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
-                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
-                if not active_pos:
-                    if self.v35_engine.is_position_active:
-                        logger.info("⚡ [실시간 강제 동기화 v4.82] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
-                        self.v35_engine.is_position_active = False
-                        self.v35_engine.position_volume = 0
-                        self.v35_engine.entry_price = 0.0
-                        self.v35_engine.entry_direction = ""
-                else:
-                    self.v35_engine.is_position_active = True
-                    self.v35_engine.entry_direction = active_pos['side'].upper()
-                    self.v35_engine.entry_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
-                    self.v35_engine.position_volume = float(active_pos.get('contracts', 0.0) or 0.0)
-        except Exception as e:
-            pass
 
     async def get_live_bitget_price_internal(self):
         # 1. 모의 훈련 모드 시: 기존 훈련용 무작위 난수 시세 피딩
