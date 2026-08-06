@@ -82,12 +82,12 @@
         "LONDON": {
             "trigger": 0.9,
             "guard": -0.15,
-            "enabled": false
+            "enabled": true
         },
         "NY": {
             "trigger": 0.9,
             "guard": -0.25,
-            "enabled": false
+            "enabled": true
         },
         "PACIFIC": {
             "trigger": 0.9,
@@ -102,12 +102,12 @@
         "WEEKEND_LONDON": {
             "trigger": 0.9,
             "guard": -0.15,
-            "enabled": false
+            "enabled": true
         },
         "WEEKEND_NY": {
             "trigger": 0.9,
             "guard": -0.25,
-            "enabled": false
+            "enabled": true
         },
         "WEEKEND_PACIFIC": {
             "trigger": 0.9,

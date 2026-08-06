@@ -91,13 +91,6 @@ def write_trade_history_log(message):
     except Exception as e:
         logger.error(f"로그 파일 기록 에러: {e}")
     logger.info(f"[HISTORY] {message}")
-    
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(send_telegram_notification_server(f"<b>[신선 봇]</b> {message}"))
-    except Exception:
-        pass
 
 async def run_telegram_command_poller(bot_core):
     last_update_id = 0
