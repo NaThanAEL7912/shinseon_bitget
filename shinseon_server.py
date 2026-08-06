@@ -32,11 +32,6 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-server_log_file = os.path.join(BASE_DIR, "server.log")
-file_handler = logging.FileHandler(server_log_file, encoding='utf-8')
-file_handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
-logger.addHandler(file_handler)
-
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR, exist_ok=True)
