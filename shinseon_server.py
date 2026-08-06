@@ -1765,18 +1765,18 @@ class ShinseonV35Engine:
         
         # [스마트 듀얼 샘플링 주기 스위칭]
         # 평시: 1분 주기 (60초)
-        # 임계치 50% 활성화 시 (liq_1m_total >= liq_threshold * 0.5 또는 abs(oi_1m_pct) >= oi_threshold * 0.5): 1초 주기 (1초마다)
+        # 듀얼 임계치 50% AND 활성화 시 (liq_1m_total >= liq_threshold * 0.5 AND abs(oi_1m_pct) >= oi_threshold * 0.5): 1초 주기 (1초마다)
         current_time = time.time()
         trigger_liq_limit = target_liq * 0.5
         trigger_oi_limit = target_oi * 0.5
         
-        is_triggered = (rolling_1m_liq_usd >= trigger_liq_limit) or (abs(oi_delta_1m) >= trigger_oi_limit)
+        is_triggered = (rolling_1m_liq_usd >= trigger_liq_limit) and (abs(oi_delta_1m) >= trigger_oi_limit)
         
         if is_triggered:
             if not self.record_mode_1s:
                 self.record_mode_1s = True
                 if getattr(self.bot, "dashboard", None):
-                    self.bot.dashboard.add_log(f"⚡ [레코더] 임계치 50% 돌파! 1초 고밀도 기록 기어 작동 (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)")
+                    self.bot.dashboard.add_log(f"⚡ [레코더] 듀얼 임계치 50% AND 돌파! 1초 고밀도 기록 기어 작동 (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)")
             self.below_trigger_since = None
         else:
             if self.record_mode_1s:
@@ -1820,14 +1820,14 @@ class ShinseonV35Engine:
                 csv_path = os.path.join(BASE_DIR, "docs", "historical_data", csv_filename)
                 time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # 10개 칼럼: timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,bot_state
+                # 10대 한글 칼럼: 날짜 시간 분 초,비트코인 실시간 시세,1분 누적 총 청산액($),1분 롱 청산액($),1분 숏 청산액($),청산액 설정 임계치($),1분 OI 속도(%),OI속도 설정 임계치(%),타점 시그널 (AND 충족 시),봇 구동 상태
                 clean_state = str(bot_state_val).replace(',', ' ')
                 line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{signal_val},{clean_state}\n"
                 
                 def _write_csv(path, content):
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
-                        header_line = "timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,bot_state\n"
+                        header_line = "날짜 시간 분 초,비트코인 실시간 시세,1분 누적 총 청산액($),1분 롱 청산액($),1분 숏 청산액($),청산액 설정 임계치($),1분 OI 속도(%),OI속도 설정 임계치(%),타점 시그널 (AND 충족 시),봇 구동 상태\n"
                         if not os.path.exists(path) or os.path.getsize(path) == 0:
                             with open(path, "w", encoding="utf-8-sig") as f:
                                 f.write(header_line)
@@ -1836,17 +1836,20 @@ class ShinseonV35Engine:
                             with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
                                 lines = f.readlines()
                             need_rewrite = False
-                            if lines and ("session" in lines[0] or "시간" in lines[0] or lines[0].count(',') != 9):
+                            if lines and (lines[0].strip() != header_line.strip()):
                                 need_rewrite = True
                             
                             if need_rewrite and lines:
                                 new_lines = [header_line]
                                 for l in lines:
-                                    if l.startswith('timestamp') or l.startswith('시간'):
+                                    if l.startswith('timestamp') or l.startswith('시간') or l.startswith('날짜'):
                                         continue
                                     parts = [p.strip() for p in l.strip().split(',')]
                                     if len(parts) == 11:
                                         new_l = f"{parts[0]},{parts[1]},{parts[2]},{parts[3]},{parts[4]},{parts[5]},{parts[6]},{parts[7]},{parts[8]},{parts[10]}\n"
+                                        new_lines.append(new_l)
+                                    elif len(parts) == 10:
+                                        new_l = f"{parts[0]},{parts[1]},{parts[2]},{parts[3]},{parts[4]},{parts[5]},{parts[6]},{parts[7]},{parts[8]},{parts[9]}\n"
                                         new_lines.append(new_l)
                                     elif len(parts) >= 6:
                                         new_l = f"{parts[0]},{parts[1]},{parts[2]},0,0,200000,{parts[3]},0.1200,NONE,RUNNING\n"
