@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.63"  # ShinSeon_Bitget 50% 수동 청산 더블 프로텍션 이중 격발 수식 완공 수술 개발 (V4.63)
+        self.CURRENT_VERSION = "V4.64"  # ShinSeon_Bitget 버튼 3단계 실시간 상세 보고 시스템 및 비주얼 전면 개편 수술 개발 (V4.64)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -912,26 +912,31 @@ class ShinseonDashboard(QMainWindow):
         self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 수동 신속 제어판</b>", right_widget)
         right_layout.addWidget(self.lbl_bitget_title)
         
-        # 1행: 🌓 50% 청산 버튼 (가로 100% 꽉 참)
+        # 1행: 🌓 50% 청산 버튼 (가로 100% 꽉 참 - 선명한 앰버/오렌지 액티브 스타일)
         self.btn_close_50 = QPushButton("🌓 50% 청산", right_widget)
+        self.btn_close_50.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
         self.btn_close_50.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
-                color: #DEBA9D;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #D97706, stop:1 #B45309);
+                color: #FFFFFF;
                 font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
+                font-size: 12px;
+                padding: 9px;
                 border-radius: 4px;
-                border: 1px solid #A88869;
+                border: 1.5px solid #F59E0B;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #F59E0B, stop:1 #D97706);
+            }
+            QPushButton:pressed {
+                background: #7C2D12;
             }
         """)
+        self.btn_close_50.pressed.connect(self.trigger_close_50)
         self.btn_close_50.clicked.connect(self.trigger_close_50)
         right_layout.addWidget(self.btn_close_50)
 
-        # 2행: 스탑 오프셋(%): 라벨 + [ 0.2 ]% 입력 박스 + 청산비율(%): 라벨 + [ 100 ]% 입력 박스
+        # 2행: 스탑 오프셋(%): 라벨 + [ 6.0 ]% 입력 박스 + 청산비율(%): 라벨 + [ 100 ]% 입력 박스
         offset_layout = QHBoxLayout()
         offset_layout.setContentsMargins(0, 0, 0, 0)
         offset_layout.setSpacing(4)
@@ -981,22 +986,27 @@ class ShinseonDashboard(QMainWindow):
         offset_layout.addWidget(self.edit_stoploss_ratio)
         right_layout.addLayout(offset_layout)
 
-        # 3행: 🛡️ 스마트 스탑 설정 버튼 (가로 100% 꽉 참)
+        # 3행: 🛡️ 스마트 스탑 설정 버튼 (가로 100% 꽉 참 - 생생한 에메랄드 그린 액티브 스타일)
         self.btn_stoploss = QPushButton("🛡️ 스마트 스탑 설정", right_widget)
+        self.btn_stoploss.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
         self.btn_stoploss.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
-                color: #DEBA9D;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #15803D, stop:1 #166534);
+                color: #FFFFFF;
                 font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
+                font-size: 12px;
+                padding: 9px;
                 border-radius: 4px;
-                border: 1px solid #A88869;
+                border: 1.5px solid #22C55E;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #15803D);
+            }
+            QPushButton:pressed {
+                background: #14532D;
             }
         """)
+        self.btn_stoploss.pressed.connect(self.trigger_stoploss_setting)
         self.btn_stoploss.clicked.connect(self.trigger_stoploss_setting)
         right_layout.addWidget(self.btn_stoploss)
         
@@ -2089,19 +2099,18 @@ class ShinseonDashboard(QMainWindow):
 
     def trigger_close_50(self):
         try:
-            self.add_log("🌓 [수동 50% 청산] BITGET 포지션 50% 시장가 청산 명령 발동...")
+            self.add_log("🚀 [수동 50% 청산 개시] 비트겟 포지션 50% 분할 시장가 청산 명령을 집행합니다.")
             if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
                 self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
-                # [더블 프로텍션] 백엔드 엔진 Direct Call 이중 격발 수식 반영
                 asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                self.add_log("🎯 [비트겟 v2 API 직송] 50% 청산 명령 패킷 발주 집행 완료")
+            
             if self.is_ws_active():
                 import json
                 asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
-                self.add_log("📡 [서버 명령] CMD_CLOSE_50 (50% 시장가 청산) 패킷 전송 완료")
-            else:
-                self.add_log("ℹ️ [알림] 웹소켓 미연결 상태이나 로컬 엔진으로 50% 청산을 직접 집행합니다.")
+                self.add_log("📡 [서버 릴레이] AWS 서버로 50% 청산 명령 패킷(CMD_CLOSE_50) 전송 완료")
         except Exception as e:
-            self.add_log(f"⚠️ [50% 청산 예외 발생]: {e}")
+            self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
 
     def reset_stoploss_ui(self):
         if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
@@ -2114,21 +2123,22 @@ class ShinseonDashboard(QMainWindow):
             self.btn_stoploss.setText("🛡️ 스마트 스탑 설정")
             self.btn_stoploss.setStyleSheet("""
                 QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
-                    color: #DEBA9D;
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #15803D, stop:1 #166534);
+                    color: #FFFFFF;
                     font-weight: bold;
-                    font-size: 11px;
-                    padding: 8px;
+                    font-size: 12px;
+                    padding: 9px;
                     border-radius: 4px;
-                    border: 1px solid #A88869;
+                    border: 1.5px solid #22C55E;
                 }
                 QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #15803D);
                 }
             """)
 
     def trigger_stoploss_setting(self):
         if not self.bot_core or not self.bot_core.v35_engine:
+            self.add_log("⚠️ [스마트 스탑] 엔진 초기화 중입니다. 잠시 후 다시 시도해 주십시오.")
             return
         
         # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
@@ -2141,22 +2151,58 @@ class ShinseonDashboard(QMainWindow):
                 asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
             return
 
-        # 2. 감시 미설정 상태이면 포지션 확인 후 감시 개시 (토글 ON)
-        if not getattr(self.bot_core.v35_engine, "is_position_active", False):
-            self.add_log("⚠️ [스마트 스탑 실패] 현재 열려있는 포지션이 없습니다.")
-            return
-
         try:
-            offset_val = float(self.edit_stoploss_offset.text().strip())
-        except Exception:
-            offset_val = 6.0
-            self.edit_stoploss_offset.setText("6.0")
+            try:
+                offset_val = float(self.edit_stoploss_offset.text().strip())
+            except Exception:
+                offset_val = 6.0
+                self.edit_stoploss_offset.setText("6.0")
 
-        try:
-            ratio_val = float(self.edit_stoploss_ratio.text().strip())
-        except Exception:
-            ratio_val = 100.0
-            self.edit_stoploss_ratio.setText("100")
+            try:
+                ratio_val = float(self.edit_stoploss_ratio.text().strip())
+            except Exception:
+                ratio_val = 100.0
+                self.edit_stoploss_ratio.setText("100")
+
+            self.add_log(f"🛡️ [스마트 스탑 설정 개시] ROE 오프셋: {offset_val:+.2f}%, 청산 비율: {ratio_val:.0f}% 감시 가드를 설정합니다.")
+            
+            self.bot_core.v35_engine.custom_stop_active = True
+            self.bot_core.v35_engine.custom_stop_offset_roe = offset_val
+            self.bot_core.v35_engine.custom_stop_close_ratio = ratio_val
+
+            # UI 업데이트
+            self.edit_stoploss_offset.setEnabled(False)
+            self.edit_stoploss_ratio.setEnabled(False)
+            self.btn_stoploss.setText("🧹 스마트 스탑 해제")
+            self.btn_stoploss.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C3838, stop:1 #5E2626);
+                    color: #FFFFFF;
+                    font-weight: bold;
+                    font-size: 12px;
+                    padding: 9px;
+                    border-radius: 4px;
+                    border: 1.5px solid #EF4444;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #EF4444, stop:1 #8C3838);
+                }
+            """)
+
+            if self.is_ws_active():
+                import json
+                packet = json.dumps({
+                    'cmd': 'CMD_SET_SMART_STOP',
+                    'active': True,
+                    'offset_roe': offset_val,
+                    'ratio': ratio_val
+                })
+                asyncio.create_task(self.ws.send(packet))
+                self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}% ROE) 동기화 전송 중...")
+
+            self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 실전 포지션에 {offset_val:+.2f}% ROE 손절/익절 감시 가드가 작동되었습니다!")
+        except Exception as e:
+            self.add_log(f"❌ [스마트 스탑 설정 오류] 사유: {e}")
 
         entry_price = getattr(self.bot_core.v35_engine, "entry_price", 0.0)
         entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
