@@ -2325,10 +2325,10 @@ class WsServer:
                     elif cmd == "CMD_CLOSE_50":
                         if self.bot_core and self.bot_core.v35_engine:
                             asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
-                        await self.broadcast_event("ui_update", {"msg": "🌓 [수동 50% 청산] 비트겟 50% 분할 시장가 청산 발주 완료.", "log_type": 1, "price": self.bot_core.current_price})
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": "📡 [서버 응답] 🌓 비트겟 50% 시장가 분할 청산 명령 패킷 수신 완료"})
                     elif cmd == "CMD_SET_SMART_STOP":
                         active = payload.get("active", False)
-                        offset_roe = payload.get("offset_roe", -6.0)
+                        offset_roe = payload.get("offset_roe", 6.0)
                         ratio = payload.get("ratio", 100.0)
                         set_roe = payload.get("set_roe", 0.0)
                         if self.bot_core and self.bot_core.v35_engine:
@@ -2336,8 +2336,8 @@ class WsServer:
                             self.bot_core.v35_engine.custom_stop_offset_roe = offset_roe
                             self.bot_core.v35_engine.custom_stop_close_ratio = ratio
                             self.bot_core.v35_engine.custom_stop_set_roe = set_roe
-                        act_str = "설정 완료 (서버 감시 가동)" if active else "해제 완료"
-                        await self.broadcast_event("ui_update", {"msg": f"🛡 [스마트 스탑 WSS] {act_str} (오프셋: {offset_roe:+.2f}% ROE, 비율: {ratio:.0f}%)", "log_type": 1, "price": self.bot_core.current_price})
+                        act_str = f"📡 [서버 응답] 🛡️ 스마트 스탑 오프셋({offset_roe:+.2f}% ROE, {ratio:.0f}%) 실시간 감시 가드가 수신 및 등록되었습니다." if active else "📡 [서버 응답] 🧹 스마트 스탑 실시간 감시 가드가 해제되었습니다."
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": act_str})
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})
                         if config_data and self.bot_core:
