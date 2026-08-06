@@ -1820,7 +1820,7 @@ class ShinseonV35Engine:
                 csv_path = os.path.join(BASE_DIR, "docs", "historical_data", csv_filename)
                 time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 
-                # 10개 칼럼 (J열 session 삭제): timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,bot_state
+                # 10개 칼럼: timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,bot_state
                 clean_state = str(bot_state_val).replace(',', ' ')
                 line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{signal_val},{clean_state}\n"
                 
@@ -1835,17 +1835,25 @@ class ShinseonV35Engine:
                         else:
                             with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
                                 lines = f.readlines()
-                            if not lines or "timestamp" not in lines[0] or "session" in lines[0]:
+                            need_rewrite = False
+                            if lines and ("session" in lines[0] or "시간" in lines[0] or lines[0].count(',') != 9):
+                                need_rewrite = True
+                            
+                            if need_rewrite and lines:
+                                new_lines = [header_line]
+                                for l in lines:
+                                    if l.startswith('timestamp') or l.startswith('시간'):
+                                        continue
+                                    parts = [p.strip() for p in l.strip().split(',')]
+                                    if len(parts) == 11:
+                                        new_l = f"{parts[0]},{parts[1]},{parts[2]},{parts[3]},{parts[4]},{parts[5]},{parts[6]},{parts[7]},{parts[8]},{parts[10]}\n"
+                                        new_lines.append(new_l)
+                                    elif len(parts) >= 6:
+                                        new_l = f"{parts[0]},{parts[1]},{parts[2]},0,0,200000,{parts[3]},0.1200,NONE,RUNNING\n"
+                                        new_lines.append(new_l)
                                 with open(path, "w", encoding="utf-8-sig") as f:
-                                    f.write(header_line)
-                                    for l in lines:
-                                        parts = l.strip().split(',')
-                                        if len(parts) >= 11:
-                                            # 옛 11칼럼 행 ➡️ J열(session, idx 9) 제거 후 10칼럼 변환
-                                            new_line = f"{parts[0]},{parts[1]},{parts[2]},{parts[3]},{parts[4]},{parts[5]},{parts[6]},{parts[7]},{parts[8]},{parts[10]}\n"
-                                            f.write(new_line)
-                                        elif len(parts) >= 10 and not l.startswith('timestamp'):
-                                            f.write(l.strip() + "\n")
+                                    f.writelines(new_lines)
+                            
                             with open(path, "a", encoding="utf-8-sig") as f:
                                 f.write(content)
                     except Exception as e:
