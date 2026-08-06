@@ -1169,9 +1169,18 @@ class ShinseonV35Engine:
                 
                 # 가상 상태 업데이트 (평단가 및 볼륨 업데이트)
                 current_price = getattr(self.bot, "current_price", 60000.0)
-                bitget_bal = getattr(self.bot, "bitget_balance", 0.0)
+                bitget_bal = float(getattr(self.bot, "bitget_balance", 0.0) or 0.0)
                 if bitget_bal <= 0.0:
-                    bitget_bal = self.bot.c_total
+                    try:
+                        if getattr(self.bot, "bitget_exchange", None):
+                            bal_data = await self.bot.bitget_exchange.fetch_balance({'productType': 'USDT-FUTURES'})
+                            bitget_bal = float(bal_data.get('USDT', {}).get('free', 0.0) or 0.0)
+                            if bitget_bal > 0.0:
+                                self.bot.bitget_balance = bitget_bal
+                    except Exception:
+                        pass
+                if bitget_bal <= 0.0:
+                    bitget_bal = 30.0  # 안전 가용 잔고 기본값 (33.85 USDT 기준 안전 커버 v4.83)
                     
                 dashboard = getattr(self.bot, "dashboard", None) or self.bot
                 
@@ -1418,6 +1427,18 @@ class ShinseonV35Engine:
                                 return False
                                 
                             lev = float(getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0))) or 30.0
+                            bitget_bal = float(getattr(self.bot, "bitget_balance", 0.0) or 0.0)
+                            if bitget_bal <= 0.0:
+                                try:
+                                    bal_data = await exchange.fetch_balance({'productType': 'USDT-FUTURES'})
+                                    bitget_bal = float(bal_data.get('USDT', {}).get('free', 0.0) or 0.0)
+                                    if bitget_bal > 0.0:
+                                        self.bot.bitget_balance = bitget_bal
+                                except Exception:
+                                    pass
+                            if bitget_bal <= 0.0:
+                                bitget_bal = 30.0  # 안전 가용 잔고 기본값 (33.85 USDT 기준 안전 커버 v4.83)
+                                
                             max_affordable_usd = bitget_bal * lev * 0.92
                             calculated_target = bitget_bal * (ratio / 100.0) * lev * 0.92
                             p_target = min(calculated_target, max_affordable_usd)
@@ -1891,7 +1912,8 @@ class ShinseonV35Engine:
             except Exception as e:
                 logger.error(f"가드레일 세션 판정 오류: {e}")
             
-            s_guardrails = getattr(self.bot.dashboard, "session_guardrails", {}).get(s_key, {"trigger": 0.9, "guard": -0.25, "enabled": True})
+            dash_obj = getattr(self.bot, "dashboard", None) or self.bot
+            s_guardrails = getattr(dash_obj, "session_guardrails", {}).get(s_key, {"trigger": 0.9, "guard": -0.25, "enabled": True})
             half_exit_trigger = s_guardrails["trigger"] / 100.0
             entry_sl_guard = s_guardrails["guard"]
             half_exit_enabled = s_guardrails.get("enabled", True)
