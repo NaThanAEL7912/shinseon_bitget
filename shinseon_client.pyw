@@ -488,6 +488,28 @@ class ShinseonDashboard(QMainWindow):
         header_layout.addWidget(header_label)
         header_layout.addStretch()
         
+        # 🌐 비트겟 거래소 바로가기 버튼 (QHBoxLayout 정격 장착)
+        self.btn_open_bitget = QPushButton("🌐 비트겟 거래소 ↗", right_widget)
+        self.btn_open_bitget.setToolTip("비트겟 공식 선물 거래소 웹사이트 바로가기")
+        self.btn_open_bitget.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
+        self.btn_open_bitget.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E3A4A, stop:1 #12242E);
+                color: #00FFCC;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 4px 8px;
+                border-radius: 4px;
+                border: 1px solid #00FFCC;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A5268, stop:1 #1E3A4A);
+                color: #FFFFFF;
+            }
+        """)
+        self.btn_open_bitget.clicked.connect(self.open_bitget_website)
+        header_layout.addWidget(self.btn_open_bitget)
+
         self.btn_session_config = QPushButton("⚙", right_widget)
         self.btn_session_config.setToolTip("세션 및 트레이딩 핵심 설정")
         self.btn_session_config.setCursor(Qt.PointingHandCursor)
@@ -2113,6 +2135,14 @@ class ShinseonDashboard(QMainWindow):
             QMessageBox.information(self, "비트겟 50% 청산", "🌓 비트겟 50% 시장가 분할 청산 명령이 집행되었습니다!\n(서버 및 대시보드 포지션 자동 동기화 연동)")
         except Exception as e:
             self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
+
+    def open_bitget_website(self):
+        import webbrowser
+        try:
+            webbrowser.open("https://www.bitget.com/mix/usdt/BTCUSDT")
+            self.add_log("🌐 [비트겟 거래소] 비트겟 공식 선물 거래소 웹사이트를 즉시 열었습니다.")
+        except Exception as e:
+            self.add_log(f"❌ [웹사이트 열기 실패] 사유: {e}")
 
     def reset_stoploss_ui(self):
         self.is_stoploss_active = False
