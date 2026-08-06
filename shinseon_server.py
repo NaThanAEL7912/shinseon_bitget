@@ -20,6 +20,15 @@ import base64
 import ccxt.async_support as ccxt
 import websockets
 
+def kst_time_converter(*args):
+    return time.gmtime(time.time() + 9 * 3600)
+
+logging.Formatter.converter = kst_time_converter
+
+def get_kst_now():
+    from datetime import datetime, timezone, timedelta
+    return datetime.now(timezone(timedelta(hours=9)))
+
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] [%(levelname)s] %(message)s',
@@ -40,7 +49,7 @@ class DailyTradeLogHandler(logging.Handler):
     def emit(self, record):
         try:
             msg = self.format(record)
-            today_str = datetime.now().strftime("%Y-%m-%d")
+            today_str = get_kst_now().strftime("%Y-%m-%d")
             daily_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
             with open(daily_file, "a", encoding="utf-8") as f:
                 f.write(msg + "\n")
@@ -95,9 +104,9 @@ async def send_telegram_notification_server(message):
         logger.error(f"Telegram server send error: {e}")
 
 def write_trade_history_log(message):
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_str = get_kst_now().strftime("%Y-%m-%d")
     log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
-    time_prefix = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    time_prefix = get_kst_now().strftime("[%Y-%m-%d %H:%M:%S]")
     full_msg = f"{time_prefix} {message}\n"
     try:
         with open(log_file, "a", encoding="utf-8") as f:
@@ -1780,7 +1789,7 @@ class ShinseonV35Engine:
                         self.bot.dashboard.add_log(f"🕊 [레코더] 진정 상태 60초 유지 완료. 1분 상시 기록 기어로 귀환")
         
         should_write = False
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        date_str = get_kst_now().strftime("%Y-%m-%d")
         if self.last_record_time == 0.0 or date_str != getattr(self, "last_record_date", ""):
             should_write = True
         elif self.record_mode_1s:
@@ -1809,7 +1818,7 @@ class ShinseonV35Engine:
                 if first_write and getattr(self.bot, "dashboard", None):
                     self.bot.dashboard.add_log(f"📊 [CSV 레코더] {csv_filename} 상시 기록 개시 (1분/1초 듀얼 스피드 기어 가동)")
                 csv_path = os.path.join(BASE_DIR, "docs", "historical_data", csv_filename)
-                time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 
                 # 11개 칼럼: timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,session,bot_state
                 clean_sess = str(session_val).replace(',', ' ')
