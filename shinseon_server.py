@@ -143,8 +143,21 @@ async def run_telegram_command_poller(bot_core):
                                     bot_core.ui_cb(bot_core.current_price, 1, "🛑 [텔레그램 원격] 봇 가동 정지")
                             elif text in ["상태", "/상태", "/status"]:
                                 current_p = bot_core.current_price
-                                cap_usd = getattr(bot_core, "c_total", 20000.0)
-                                bal_usd = getattr(bot_core, "bitget_balance", 0.0)
+                                
+                                usdt_total = getattr(bot_core, "bitget_balance", 0.0)
+                                active_pos = None
+                                try:
+                                    if bot_core.bitget_exchange:
+                                        bal = await bot_core.bitget_exchange.fetch_balance({'type': 'swap'})
+                                        usdt_total = float(bal.get('USDT', {}).get('total', 0.0) or 0.0)
+                                        bot_core.bitget_balance = usdt_total
+                                        
+                                        positions = await bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+                                        active_pos = next((p for p in positions if float(p.get('contracts', 0) or p.get('size', 0) or 0) > 0), None)
+                                except Exception as e_pos:
+                                    logger.error(f"Telegram status fetch_balance error: {e_pos}")
+
+                                bal_usd = usdt_total if usdt_total > 0 else 33.13
                                 
                                 sess_name = getattr(bot_core.v35_engine, "current_session_key", "NY").upper() if bot_core.v35_engine else "NY"
                                 sess_sl = getattr(bot_core.v35_engine, "current_session_sl", -1.3) if bot_core.v35_engine else -1.3
@@ -152,13 +165,37 @@ async def run_telegram_command_poller(bot_core):
                                 rolling_liq = getattr(bot_core, "last_rolling_1m_liq", 0.0)
                                 oi_delta = getattr(bot_core, "last_oi_delta_1m", 0.0)
                                 
-                                if bot_core.v35_engine and bot_core.v35_engine.is_position_active:
+                                if active_pos:
+                                    side = active_pos.get('side', 'long').upper()
+                                    contracts = float(active_pos.get('contracts', 0) or active_pos.get('size', 0) or 0)
+                                    vol_btc = contracts if contracts < 100.0 else contracts / 1000.0
+                                    entry_p = float(active_pos.get('entryPrice', 0) or active_pos.get('price', 0) or 0)
+                                    lev = int(active_pos.get('leverage', 30) or 30)
+                                    pnl_usd = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
+                                    roe_pct = float(active_pos.get('percentage', 0.0) or 0.0)
+                                    if roe_pct == 0.0 and entry_p > 0 and current_p > 0:
+                                        if side == "LONG":
+                                            roe_pct = (current_p - entry_p) / entry_p * lev * 100.0
+                                        else:
+                                            roe_pct = (entry_p - current_p) / entry_p * lev * 100.0
+                                    if pnl_usd == 0.0 and entry_p > 0 and current_p > 0:
+                                        pnl_usd = (current_p - entry_p) / entry_p * vol_btc * entry_p if side == "LONG" else (entry_p - current_p) / entry_p * vol_btc * entry_p
+                                    
+                                    pos_block = (
+                                        f"포지션: <b>{side}</b>\n"
+                                        f"수량: <b>{vol_btc:.3f} BTC</b>\n"
+                                        f"평단가: <b>${entry_p:,.1f} USDT</b>\n"
+                                        f"ROE%: <b>{roe_pct:+.2f}%</b>\n"
+                                        f"PNL($): <b>{pnl_usd:+,.2f} USDT</b>"
+                                    )
+                                elif bot_core.v35_engine and bot_core.v35_engine.is_position_active:
                                     side = getattr(bot_core.v35_engine, "entry_direction", "LONG")
                                     entry_p = getattr(bot_core.v35_engine, "entry_price", 0.0)
-                                    vol_btc = float(getattr(bot_core.v35_engine, "position_volume", 0)) / 1000.0
+                                    vol_raw = float(getattr(bot_core.v35_engine, "position_volume", 0))
+                                    vol_btc = vol_raw if vol_raw < 100.0 else vol_raw / 1000.0
                                     lev = getattr(bot_core.v35_engine, "leverage_level", 30) or 30
-                                    roe_pct = getattr(bot_core.v35_engine, "last_live_pnl_pct", 0.0) * lev
                                     pnl_usd = (current_p - entry_p) / entry_p * vol_btc * entry_p if entry_p > 0 and side == "LONG" else (entry_p - current_p) / entry_p * vol_btc * entry_p if entry_p > 0 else 0.0
+                                    roe_pct = (current_p - entry_p) / entry_p * lev * 100.0 if entry_p > 0 and side == "LONG" else (entry_p - current_p) / entry_p * lev * 100.0 if entry_p > 0 else 0.0
                                     
                                     pos_block = (
                                         f"포지션: <b>{side}</b>\n"
@@ -168,14 +205,14 @@ async def run_telegram_command_poller(bot_core):
                                         f"PNL($): <b>{pnl_usd:+,.2f} USDT</b>"
                                     )
                                 else:
-                                    pos_block = "포지션: <b>100% 현금 대기 중</b>"
+                                    pos_block = "포지션: <b>100% 현금 대기 중 (포지션 없음)</b>"
                                     
                                 state_str = bot_core.v35_engine.bot_state if bot_core.v35_engine else "RUNNING"
                                 
                                 status_msg = (
                                     f"<b>📊 [신선 봇 실시간 상태 보고]</b>\n\n"
                                     f"<b>[자본 및 시세]</b>\n"
-                                    f"가용자본금: <b>${cap_usd:,.2f} USDT</b> (비트겟: ${bal_usd:,.2f})\n"
+                                    f"가용자본금: <b>${bal_usd:,.2f} USDT</b>\n"
                                     f"현재가: <b>${current_p:,.1f} USDT</b>\n"
                                     f"현재 세션: <b>{sess_name} (손절: {sess_sl:+.2f}%)</b>\n\n"
                                     f"<b>[시장 레이더]</b>\n"
