@@ -1819,11 +1819,28 @@ class ShinseonV35Engine:
                 def _write_csv(path, content):
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
-                        file_exists = os.path.exists(path)
-                        with open(path, "a", encoding="utf-8") as f:
-                            if not file_exists:
-                                f.write("timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,session,bot_state\n")
-                            f.write(content)
+                        header_line = "timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,session,bot_state\n"
+                        if not os.path.exists(path) or os.path.getsize(path) == 0:
+                            with open(path, "w", encoding="utf-8-sig") as f:
+                                f.write(header_line)
+                                f.write(content)
+                        else:
+                            with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
+                                first_line = f.readline()
+                            if "timestamp" not in first_line:
+                                with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
+                                    lines = f.readlines()
+                                with open(path, "w", encoding="utf-8-sig") as f:
+                                    f.write(header_line)
+                                    for l in lines:
+                                        if l.count(',') >= 8:
+                                            f.write(l)
+                                        elif ',' in l and not l.startswith('시간'):
+                                            parts = l.strip().split(',')
+                                            if len(parts) >= 4:
+                                                f.write(f"{parts[0]},{parts[1]},{parts[2]},0,0,200000,{parts[3]},0.1200,NONE,ASIA,RUNNING\n")
+                            with open(path, "a", encoding="utf-8-sig") as f:
+                                f.write(content)
                     except Exception as e:
                         logger.error(f"CSV 레코더 쓰기 에러: {e}")
                         if getattr(self.bot, "dashboard", None):
