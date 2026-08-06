@@ -889,22 +889,6 @@ class ShinseonDashboard(QMainWindow):
         
         right_layout.addWidget(self.btn_emergency)
         
-        # [UI 개조] 🌐 비트겟 거래소 웹사이트 열기 버튼 (기존 RPA 복원 버튼 재활용)
-        self.btn_reload_browser = QPushButton("🌐 비트겟 거래소 열기", right_widget)
-        self.btn_reload_browser.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E6573, stop:1 #354752);
-                color: #DEBA9D;
-                font-weight: bold; 
-                font-size: 11px; 
-                padding: 6px; 
-                border-radius: 4px;
-                border: 1px solid #A88869;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C7787, stop:1 #4E6573);
-            }
-        """)
         # BITGET 수동 제어판 (50% 청산 전용)
         self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 신속 분할 청산 제어판</b>", right_widget)
         right_layout.addWidget(self.lbl_bitget_title)
