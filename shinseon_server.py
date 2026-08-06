@@ -438,6 +438,12 @@ class BotCore:
                         }
                         await self.v35_engine.check_radar_signal_dynamic(ws_frame, target_liq, target_oi)
                     
+                    # 3초마다 비트겟 거래소 실제 포지션 강제 동기화 (가짜 포지션 잠김 100% 박멸)
+                    now_t_sync = time.time()
+                    if now_t_sync - getattr(self, "last_bitget_pos_sync_time", 0.0) >= 3.0:
+                        self.last_bitget_pos_sync_time = now_t_sync
+                        asyncio.create_task(self.sync_bitget_real_position_status())
+                    
                     # 3. UI 갱신 송출 (동적 임계치 및 KST 세션 정보 탑재)
                     latency_show = float(getattr(self, "last_packet_latency_ms", 15.0))
                     status_msg = "100% 현금 대기 중 (저격 대기)"
@@ -2302,6 +2308,8 @@ class WsServer:
                     if self.bot_core.v35_engine:
                         self.bot_core.v35_engine.is_position_active = False
                         self.bot_core.v35_engine.position_volume = 0
+                        self.bot_core.v35_engine.entry_price = 0.0
+                        self.bot_core.v35_engine.entry_direction = ""
                     await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
                     logger.info("📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False)")
             else:
@@ -2311,6 +2319,26 @@ class WsServer:
         except Exception as e:
             logger.error(f"❌ [CMD_SYNC_POSITION] 동기화 중 예외 발생: {e}")
             await self.broadcast_event('EVT_SYNC_ERROR', {'error': str(e)})
+
+    async def sync_bitget_real_position_status(self):
+        try:
+            if getattr(self, "bitget_exchange", None) and self.bot_core and getattr(self.bot_core, "v35_engine", None):
+                positions = await self.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
+                if not active_pos:
+                    if self.bot_core.v35_engine.is_position_active:
+                        logger.info("⚡ [실시간 강제 동기화 v4.80] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
+                        self.bot_core.v35_engine.is_position_active = False
+                        self.bot_core.v35_engine.position_volume = 0
+                        self.bot_core.v35_engine.entry_price = 0.0
+                        self.bot_core.v35_engine.entry_direction = ""
+                else:
+                    self.bot_core.v35_engine.is_position_active = True
+                    self.bot_core.v35_engine.entry_direction = active_pos['side'].upper()
+                    self.bot_core.v35_engine.entry_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
+                    self.bot_core.v35_engine.position_volume = float(active_pos.get('contracts', 0.0) or 0.0)
+        except Exception as e:
+            pass
 
     async def register(self, websocket):
         self.clients.add(websocket)
