@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.64"  # ShinSeon_Bitget 버튼 3단계 실시간 상세 보고 시스템 및 비주얼 전면 개편 수술 개발 (V4.64)
+        self.CURRENT_VERSION = "V4.65"  # ShinSeon_Bitget 버튼 3단계 실시간 상세 보고 시스템 및 비주얼 전면 개편 수술 개발 (V4.64)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -912,27 +912,23 @@ class ShinseonDashboard(QMainWindow):
         self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 수동 신속 제어판</b>", right_widget)
         right_layout.addWidget(self.lbl_bitget_title)
         
-        # 1행: 🌓 50% 청산 버튼 (가로 100% 꽉 참 - 선명한 앰버/오렌지 액티브 스타일)
+        # 1행: 🌓 50% 청산 버튼 (가로 100% 꽉 참 - 클래식 다크 골드 스타일)
         self.btn_close_50 = QPushButton("🌓 50% 청산", right_widget)
         self.btn_close_50.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
         self.btn_close_50.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #D97706, stop:1 #B45309);
-                color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
+                color: #DEBA9D;
                 font-weight: bold;
-                font-size: 12px;
-                padding: 9px;
+                font-size: 11px;
+                padding: 8px;
                 border-radius: 4px;
-                border: 1.5px solid #F59E0B;
+                border: 1px solid #A88869;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #F59E0B, stop:1 #D97706);
-            }
-            QPushButton:pressed {
-                background: #7C2D12;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
             }
         """)
-        self.btn_close_50.pressed.connect(self.trigger_close_50)
         self.btn_close_50.clicked.connect(self.trigger_close_50)
         right_layout.addWidget(self.btn_close_50)
 
@@ -986,27 +982,23 @@ class ShinseonDashboard(QMainWindow):
         offset_layout.addWidget(self.edit_stoploss_ratio)
         right_layout.addLayout(offset_layout)
 
-        # 3행: 🛡️ 스마트 스탑 설정 버튼 (가로 100% 꽉 참 - 생생한 에메랄드 그린 액티브 스타일)
+        # 3행: 🛡️ 스마트 스탑 설정 버튼 (가로 100% 꽉 참 - 클래식 다크 골드 스타일)
         self.btn_stoploss = QPushButton("🛡️ 스마트 스탑 설정", right_widget)
         self.btn_stoploss.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
         self.btn_stoploss.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #15803D, stop:1 #166534);
-                color: #FFFFFF;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
+                color: #DEBA9D;
                 font-weight: bold;
-                font-size: 12px;
-                padding: 9px;
+                font-size: 11px;
+                padding: 8px;
                 border-radius: 4px;
-                border: 1.5px solid #22C55E;
+                border: 1px solid #A88869;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #15803D);
-            }
-            QPushButton:pressed {
-                background: #14532D;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
             }
         """)
-        self.btn_stoploss.pressed.connect(self.trigger_stoploss_setting)
         self.btn_stoploss.clicked.connect(self.trigger_stoploss_setting)
         right_layout.addWidget(self.btn_stoploss)
         
