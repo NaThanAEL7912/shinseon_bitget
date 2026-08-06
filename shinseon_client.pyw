@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.66"  # ShinSeon_Bitget 람다 바이패스 시그널 연결 및 시스템 비프음/3단계 로그 직송 완공 수술 개발 (V4.66)
+        self.CURRENT_VERSION = "V4.68"  # ShinSeon_Bitget asyncio.ensure_future 비동기 루프 및 QMessageBox 팝업 완공 수술 개발 (V4.68)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -929,7 +929,7 @@ class ShinseonDashboard(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
             }
         """)
-        self.btn_close_50.clicked.connect(lambda checked=False: self.trigger_close_50())
+        self.btn_close_50.clicked.connect(self.trigger_close_50)
         right_layout.addWidget(self.btn_close_50)
 
         # 2행: 스탑 오프셋(%): 라벨 + [ 6.0 ]% 입력 박스 + 청산비율(%): 라벨 + [ 100 ]% 입력 박스
@@ -999,7 +999,7 @@ class ShinseonDashboard(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
             }
         """)
-        self.btn_stoploss.clicked.connect(lambda checked=False: self.trigger_stoploss_setting())
+        self.btn_stoploss.clicked.connect(self.trigger_stoploss_setting)
         right_layout.addWidget(self.btn_stoploss)
         
         # ----------------------------------------------------------------------
@@ -1332,6 +1332,10 @@ class ShinseonDashboard(QMainWindow):
         
         log_msg = f"[{time.strftime('%H:%M:%S')}] {text}"
         self.txt_log.appendPlainText(log_msg)
+        try:
+            self.txt_log.verticalScrollBar().setValue(self.txt_log.verticalScrollBar().maximum())
+        except Exception:
+            pass
         
         # 비동기 로그 작성 큐에 넣기 (모든 실시간 거래/상태 로그 100% 영구 보존 - 기획서_23)
         try:
@@ -2091,21 +2095,33 @@ class ShinseonDashboard(QMainWindow):
 
     def trigger_close_50(self):
         try:
+            from PyQt6.QtWidgets import QMessageBox, QApplication
             try:
-                from PyQt6.QtWidgets import QApplication
                 QApplication.beep()
             except Exception:
                 pass
             self.add_log("🚀 [수동 50% 청산 개시] 비트겟 포지션 50% 분할 시장가 청산 명령을 집행합니다.")
             if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
                 self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
-                asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                try:
+                    asyncio.ensure_future(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                except Exception as ex:
+                    self.add_log(f"⚠️ 로컬 청산 코루틴 발주 예외: {ex}")
                 self.add_log("🎯 [비트겟 v2 API 직송] 50% 청산 명령 패킷 발주 집행 완료")
-            
+            else:
+                self.add_log("⚠️ [알림] 로컬 트레이딩 엔진이 연결 중이거나 비활성 상태입니다.")
+
             if self.is_ws_active():
                 import json
-                asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
+                try:
+                    asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
+                except Exception:
+                    pass
                 self.add_log("📡 [서버 릴레이] AWS 서버로 50% 청산 명령 패킷(CMD_CLOSE_50) 전송 완료")
+            else:
+                self.add_log("ℹ️ [서버 릴레이] 서버 웹소켓 미연결 상태 (로컬 엔진 청산만 진행)")
+
+            QMessageBox.information(self, "비트겟 50% 청산", "🌓 비트겟 50% 분할 청산 명령이 집행되었습니다!")
         except Exception as e:
             self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
 
@@ -2135,25 +2151,31 @@ class ShinseonDashboard(QMainWindow):
 
     def trigger_stoploss_setting(self):
         try:
-            from PyQt6.QtWidgets import QApplication
-            QApplication.beep()
-        except Exception:
-            pass
-        if not self.bot_core or not self.bot_core.v35_engine:
-            self.add_log("⚠️ [스마트 스탑] 엔진 초기화 중입니다. 잠시 후 다시 시도해 주십시오.")
-            return
-        
-        # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
-        if getattr(self.bot_core.v35_engine, "custom_stop_active", False):
-            self.bot_core.v35_engine.custom_stop_active = False
-            self.reset_stoploss_ui()
-            self.add_log("🧹 [스마트 스탑 해제] 스마트 스탑 감시가 해제되었습니다.")
-            if self.is_ws_active():
-                import json
-                asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
-            return
+            from PyQt6.QtWidgets import QMessageBox, QApplication
+            try:
+                QApplication.beep()
+            except Exception:
+                pass
 
-        try:
+            if not self.bot_core or not self.bot_core.v35_engine:
+                self.add_log("⚠️ [스마트 스탑] 엔진 초기화 중입니다. 잠시 후 다시 시도해 주십시오.")
+                QMessageBox.warning(self, "스마트 스탑", "⚠️ 엔진 초기화 중입니다. 잠시 후 다시 시도해 주십시오.")
+                return
+            
+            # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
+            if getattr(self.bot_core.v35_engine, "custom_stop_active", False):
+                self.bot_core.v35_engine.custom_stop_active = False
+                self.reset_stoploss_ui()
+                self.add_log("🧹 [스마트 스탑 해제] 스마트 스탑 감시가 해제되었습니다.")
+                if self.is_ws_active():
+                    import json
+                    try:
+                        asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
+                    except Exception:
+                        pass
+                QMessageBox.information(self, "스마트 스탑", "🧹 스마트 스탑 감시가 해제되었습니다.")
+                return
+
             try:
                 offset_val = float(self.edit_stoploss_offset.text().strip())
             except Exception:
@@ -2179,15 +2201,15 @@ class ShinseonDashboard(QMainWindow):
             self.btn_stoploss.setStyleSheet("""
                 QPushButton {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C3838, stop:1 #5E2626);
-                    color: #FFFFFF;
+                    color: #DEBA9D;
                     font-weight: bold;
-                    font-size: 12px;
-                    padding: 9px;
+                    font-size: 11px;
+                    padding: 8px;
                     border-radius: 4px;
-                    border: 1.5px solid #EF4444;
+                    border: 1px solid #A88869;
                 }
                 QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #EF4444, stop:1 #8C3838);
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A84444, stop:1 #8C3838);
                 }
             """)
 
@@ -2199,10 +2221,14 @@ class ShinseonDashboard(QMainWindow):
                     'offset_roe': offset_val,
                     'ratio': ratio_val
                 })
-                asyncio.create_task(self.ws.send(packet))
+                try:
+                    asyncio.ensure_future(self.ws.send(packet))
+                except Exception:
+                    pass
                 self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}% ROE) 동기화 전송 중...")
 
             self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 실전 포지션에 {offset_val:+.2f}% ROE 손절/익절 감시 가드가 작동되었습니다!")
+            QMessageBox.information(self, "스마트 스탑", f"🛡️ 비트겟 포지션에 {offset_val:+.2f}% ROE 스마트 스탑 감시가 설정되었습니다!")
         except Exception as e:
             self.add_log(f"❌ [스마트 스탑 설정 오류] 사유: {e}")
 
