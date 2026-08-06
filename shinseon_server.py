@@ -55,8 +55,8 @@ if not os.path.exists(LOGS_DIR):
 async def send_telegram_notification_server(message):
     try:
         config = load_server_config()
-        bot_token = str(config.get("TELEGRAM_BOT_TOKEN", "") or "").strip()
-        chat_id = str(config.get("TELEGRAM_CHAT_ID", "") or "").strip()
+        bot_token = str(config.get("telegram_token") or config.get("TELEGRAM_BOT_TOKEN") or config.get("TELEGRAM_TOKEN") or "").strip()
+        chat_id = str(config.get("telegram_chat_id") or config.get("TELEGRAM_CHAT_ID") or "").strip()
         if not bot_token or not chat_id:
             return
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
@@ -92,11 +92,12 @@ def write_trade_history_log(message):
 
 async def run_telegram_command_poller(bot_core):
     last_update_id = 0
+    logger.info("📱 [텔레그램 리스너] 24시간 원격 제어 가동 시작")
     while True:
         try:
             config = load_server_config()
-            bot_token = str(config.get("TELEGRAM_BOT_TOKEN", "") or "").strip()
-            chat_id = str(config.get("TELEGRAM_CHAT_ID", "") or "").strip()
+            bot_token = str(config.get("telegram_token") or config.get("TELEGRAM_BOT_TOKEN") or config.get("TELEGRAM_TOKEN") or "").strip()
+            chat_id = str(config.get("telegram_chat_id") or config.get("TELEGRAM_CHAT_ID") or "").strip()
             if not bot_token or not chat_id:
                 await asyncio.sleep(5)
                 continue
@@ -116,14 +117,17 @@ async def run_telegram_command_poller(bot_core):
                             if chat_id and from_chat_id != chat_id:
                                 continue
                                 
+                            logger.info(f"📱 [텔레그램 원격 어명 포착] '{text}'")
                             if text in ["시작", "/시작", "/start"]:
                                 if bot_core.v35_engine:
                                     bot_core.v35_engine.bot_state = "RUNNING"
+                                    bot_core.v35_engine.is_snipe_active = True
                                 await send_telegram_notification_server("✅ <b>[신선 봇]</b> 실전 자동 저격 감시가 시작되었습니다.")
                                 ui_callback(bot_core.current_price, 1, "✅ [텔레그램 원격] 봇 가동 감시 시작")
                             elif text in ["정지", "/정지", "/stop"]:
                                 if bot_core.v35_engine:
                                     bot_core.v35_engine.bot_state = "STOPPED"
+                                    bot_core.v35_engine.is_snipe_active = False
                                 await send_telegram_notification_server("🛑 <b>[신선 봇]</b> 자동 저격 감시가 일시 정지되었습니다.")
                                 ui_callback(bot_core.current_price, 1, "🛑 [텔레그램 원격] 봇 가동 정지")
                             elif text in ["상태", "/상태", "/status"]:
@@ -149,11 +153,12 @@ async def run_telegram_command_poller(bot_core):
                             elif text in ["청산", "/청산", "/close", "비상탈출"]:
                                 if bot_core.v35_engine:
                                     bot_core.v35_engine.bot_state = "STOPPED"
-                                await bot_core.execute_emergency()
+                                    bot_core.v35_engine.is_snipe_active = False
+                                    asyncio.create_task(bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
                                 await send_telegram_notification_server("🚨 <b>[신선 봇]</b> 비트겟 거래소 포지션 100% 시장가 즉시 전량 청산 완료!")
                                 ui_callback(bot_core.current_price, 1, "🚨 [텔레그램 원격] 비상 탈출 100% 시장가 전량 청산 완료")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Telegram poller error: {e}")
         await asyncio.sleep(2)
 
 def append_daily_csv_record(row_str):
