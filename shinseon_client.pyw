@@ -15,7 +15,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                              QHBoxLayout, QWidget, QLabel, QLineEdit, QTextEdit, QPlainTextEdit,
                              QGraphicsDropShadowEffect, QProgressBar, QCheckBox,
-                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox)
+                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox)
 from PySide6.QtCore import Qt, QPointF, QRectF, QUrl
 from PySide6.QtGui import QPainter, QPicture, QColor, QFont, QBrush, QPen, QLinearGradient
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -2019,41 +2019,8 @@ class ShinseonDashboard(QMainWindow):
 
         asyncio.create_task(run_manual_start_flow())
 
-    def trigger_close_50(self):
-        try:
-            from PyQt6.QtWidgets import QMessageBox, QApplication
-            try:
-                QApplication.beep()
-            except Exception:
-                pass
-            self.add_log("🚀 [수동 50% 청산 개시] 비트겟 포지션 50% 분할 시장가 청산 명령을 집행합니다.")
-            if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
-                self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
-                try:
-                    asyncio.ensure_future(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
-                except Exception as ex:
-                    self.add_log(f"⚠️ 로컬 청산 코루틴 발주 예외: {ex}")
-                self.add_log("🎯 [비트겟 v2 API 직송] 50% 청산 명령 패킷 발주 집행 완료")
-            else:
-                self.add_log("⚠️ [알림] 로컬 트레이딩 엔진이 연결 중이거나 비활성 상태입니다.")
-
-            if self.is_ws_active():
-                import json
-                try:
-                    asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
-                except Exception:
-                    pass
-                self.add_log("📡 [서버 릴레이] AWS 서버로 50% 청산 명령 패킷(CMD_CLOSE_50) 전송 완료")
-            else:
-                self.add_log("ℹ️ [서버 릴레이] 서버 웹소켓 미연결 상태 (로컬 엔진 청산만 진행)")
-
-            QMessageBox.information(self, "비트겟 50% 청산", "🌓 비트겟 50% 분할 청산 명령이 집행되었습니다!")
-        except Exception as e:
-            self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
-
     def execute_50_percent_close(self, *args):
         try:
-            from PyQt6.QtWidgets import QMessageBox, QApplication
             try:
                 QApplication.beep()
             except Exception:
@@ -2090,39 +2057,6 @@ class ShinseonDashboard(QMainWindow):
             QMessageBox.information(self, "비트겟 50% 청산", "🌓 비트겟 50% 시장가 분할 청산 명령이 집행되었습니다!\n(서버 및 대시보드 포지션 자동 동기화 연동)")
         except Exception as e:
             self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
-
-        if hasattr(self, "edit_stoploss_offset"):
-            self.edit_stoploss_offset.setEnabled(False)
-        if hasattr(self, "edit_stoploss_ratio"):
-            self.edit_stoploss_ratio.setEnabled(False)
-
-        if self.is_ws_active():
-            import json
-            asyncio.create_task(self.ws.send(json.dumps({
-                'cmd': 'CMD_SET_SMART_STOP',
-                'active': True,
-                'offset_roe': offset_val,
-                'ratio': ratio_val,
-                'set_roe': cur_roe
-            })))
-
-        self.btn_stoploss.setText("🟢 스마트 스탑 해제")
-        self.btn_stoploss.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E4D2B, stop:1 #11331B);
-                color: #00FFCC;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
-                border-radius: 4px;
-                border: 1px solid #00FFCC;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #29663A, stop:1 #1E4D2B);
-            }
-        """)
-
-        self.add_log(f"🛡️ [스마트 스탑 설정] 현재ROE: {cur_roe:+.2f}%, 설정오프셋: {offset_val:+.2f}% ROE, 청산비율: {ratio_val:.0f}% 감시 개시")
         
     def showEvent(self, event):
         super().showEvent(event)
