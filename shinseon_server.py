@@ -13,6 +13,9 @@ from datetime import datetime
 from collections import deque
 import aiohttp
 import ssl
+import hmac
+import hashlib
+import base64
 
 import ccxt.async_support as ccxt
 import websockets
