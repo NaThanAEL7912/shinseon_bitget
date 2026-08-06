@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.83"  # ShinSeon_Bitget 동기화 자산 변수 100% 정격 참조 및 40762 오류 박멸 완공 (V4.83)
+        self.CURRENT_VERSION = "V4.88"  # ShinSeon_Bitget 1차/2차/3차 분할 비중 합산 배팅 정격 연동 및 VOOX 공식 복원 완공 (V4.88)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None

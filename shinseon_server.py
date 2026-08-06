@@ -1200,9 +1200,7 @@ class ShinseonV35Engine:
                     if ratio <= 0.0:
                         return
                     lev = float(getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0))) or 30.0
-                    max_affordable_usd = bitget_bal * lev * 0.92
-                    calculated_target = bitget_bal * (ratio / 100.0) * lev * 0.92
-                    p_target = min(calculated_target, max_affordable_usd)
+                    p_target = bitget_bal * (ratio / 100.0)
                     btc_vol = max(0.001, round(p_target / current_price, 3))
                     volume = int(round(btc_vol * 1000))
                 
@@ -1439,12 +1437,10 @@ class ShinseonV35Engine:
                             if bitget_bal <= 0.0:
                                 bitget_bal = 30.0  # 안전 가용 잔고 기본값 (33.85 USDT 기준 안전 커버 v4.83)
                                 
-                            max_affordable_usd = bitget_bal * lev * 0.92
-                            calculated_target = bitget_bal * (ratio / 100.0) * lev * 0.92
-                            p_target = min(calculated_target, max_affordable_usd)
+                            p_target = bitget_bal * (ratio / 100.0)
                             amount = max(0.001, round(p_target / current_price, 3))
                             
-                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주 v4.79] {side} {amount} BTC (설정 레버리지: {int(lev)}배 | 가용증거금 버퍼 92%) 시장가 주문 시작...")
+                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주 v4.88] {side} {amount} BTC (설정 레버리지: {int(lev)}배 | 1차/2차/3차 분할 비중 정격 연동) 시장가 주문 시작...")
                         try:
                             try:
                                 await exchange.set_leverage(int(round(lev)), symbol)
