@@ -2741,28 +2741,36 @@ class WsServer:
                                 m = re.search(r'(\d{4}-\d{2}-\d{2})', fname)
                                 if m:
                                     dates_set.add(m.group(1))
-                        today_str = datetime.now().strftime("%Y-%m-%d")
+                        hist_dir = os.path.join(BASE_DIR, "docs", "historical_data")
+                        if os.path.exists(hist_dir):
+                            for fname in os.listdir(hist_dir):
+                                m = re.search(r'(\d{4}-\d{2}-\d{2})', fname)
+                                if m:
+                                    dates_set.add(m.group(1))
+                        today_str = get_kst_now().strftime("%Y-%m-%d")
                         dates_set.add(today_str)
                         sorted_dates = sorted(list(dates_set), reverse=True)
                         await self.broadcast_event("EVT_FILE_LIST", {"dates": sorted_dates})
                     elif cmd == "CMD_REQ_FILE_DOWNLOAD":
-                        req_date = payload.get("date", datetime.now().strftime("%Y-%m-%d"))
+                        req_date = payload.get("date", get_kst_now().strftime("%Y-%m-%d"))
                         log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{req_date}.log")
-                        csv_file = os.path.join(LOGS_DIR, f"shinseon_data_{req_date}.csv")
-                        if not os.path.exists(csv_file) and os.path.exists("shinseon_data.csv"):
-                            csv_file = "shinseon_data.csv"
+                        csv_file = os.path.join(BASE_DIR, "docs", "historical_data", f"orderflow_history_{req_date}.csv")
+                        
                         log_text = ""
                         csv_text = ""
                         if os.path.exists(log_file):
                             try:
-                                with open(log_file, "r", encoding="utf-8") as f:
+                                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
                                     log_text = f.read()
-                            except Exception: pass
+                            except Exception as e_log:
+                                logger.error(f"Read log_file error: {e_log}")
                         if os.path.exists(csv_file):
                             try:
-                                with open(csv_file, "r", encoding="utf-8") as f:
+                                with open(csv_file, "r", encoding="utf-8-sig", errors="ignore") as f:
                                     csv_text = f.read()
-                            except Exception: pass
+                            except Exception as e_csv:
+                                logger.error(f"Read csv_file error: {e_csv}")
+                        
                         await self.broadcast_event("EVT_FILE_DATA", {
                             "date": req_date,
                             "csv_text": csv_text,
