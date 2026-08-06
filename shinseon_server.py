@@ -1400,7 +1400,7 @@ class ShinseonV35Engine:
                                 await exchange.set_leverage(int(round(lev)), symbol)
                             except Exception as lev_err:
                                 pass
-                            order = await exchange.create_order(symbol, 'market', ccxt_side, amount)
+                            order = await exchange.create_order(symbol, 'market', ccxt_side, amount, params={'tradeSide': 'open'})
                             self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"❌ [진입 에러] 비트겟 API 예외 발생: {e}")
