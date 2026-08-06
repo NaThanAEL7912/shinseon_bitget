@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.68"  # ShinSeon_Bitget asyncio.ensure_future 비동기 루프 및 QMessageBox 팝업 완공 수술 개발 (V4.68)
+        self.CURRENT_VERSION = "V4.69"  # ShinSeon_Bitget 수동 제어판 50% 청산 & 스마트 스탑 버튼 2종 완전 삭제 및 UI 정화 수술 (V4.69)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -908,99 +908,7 @@ class ShinseonDashboard(QMainWindow):
         self.btn_reload_browser.clicked.connect(self.trigger_manual_reload_browser)
         right_layout.addWidget(self.btn_reload_browser)
         
-        # BITGET 수동 제어판 (50% 청산, 스탑로스) -> 부모 위젯을 right_widget으로 계층 일원화하여 임시 유령 컨테이너 보더 생성 방어!
-        self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 수동 신속 제어판</b>", right_widget)
-        right_layout.addWidget(self.lbl_bitget_title)
-        
-        # 1행: 🌓 50% 청산 버튼 (가로 100% 꽉 참 - 클래식 다크 골드 스타일)
-        self.btn_close_50 = QPushButton("🌓 50% 청산", right_widget)
-        self.btn_close_50.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
-        self.btn_close_50.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
-                color: #DEBA9D;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
-                border-radius: 4px;
-                border: 1px solid #A88869;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
-            }
-        """)
-        self.btn_close_50.clicked.connect(self.trigger_close_50)
-        right_layout.addWidget(self.btn_close_50)
 
-        # 2행: 스탑 오프셋(%): 라벨 + [ 6.0 ]% 입력 박스 + 청산비율(%): 라벨 + [ 100 ]% 입력 박스
-        offset_layout = QHBoxLayout()
-        offset_layout.setContentsMargins(0, 0, 0, 0)
-        offset_layout.setSpacing(4)
-
-        lbl_offset = QLabel("오프셋(%):", right_widget)
-        lbl_offset.setStyleSheet("color: #DEBA9D; font-size: 11px; font-weight: bold;")
-
-        self.edit_stoploss_offset = QLineEdit("6.0", right_widget)
-        self.edit_stoploss_offset.setMaximumWidth(45)
-        self.edit_stoploss_offset.setAlignment(Qt.AlignmentFlag.AlignCenter if hasattr(Qt, "AlignmentFlag") else Qt.AlignCenter)
-        self.edit_stoploss_offset.setStyleSheet("""
-            QLineEdit {
-                background-color: #1E1E1E;
-                color: #00FFCC;
-                font-family: Consolas;
-                font-weight: bold;
-                font-size: 11px;
-                border: 1px solid #A88869;
-                border-radius: 3px;
-                padding: 3px;
-            }
-        """)
-
-        lbl_ratio = QLabel("비율(%):", right_widget)
-        lbl_ratio.setStyleSheet("color: #DEBA9D; font-size: 11px; font-weight: bold;")
-
-        self.edit_stoploss_ratio = QLineEdit("100", right_widget)
-        self.edit_stoploss_ratio.setPlaceholderText("100")
-        self.edit_stoploss_ratio.setMaximumWidth(45)
-        self.edit_stoploss_ratio.setAlignment(Qt.AlignmentFlag.AlignCenter if hasattr(Qt, "AlignmentFlag") else Qt.AlignCenter)
-        self.edit_stoploss_ratio.setStyleSheet("""
-            QLineEdit {
-                background-color: #1E1E1E;
-                color: #00FFCC;
-                font-family: Consolas;
-                font-weight: bold;
-                font-size: 11px;
-                border: 1px solid #A88869;
-                border-radius: 3px;
-                padding: 3px;
-            }
-        """)
-
-        offset_layout.addWidget(lbl_offset)
-        offset_layout.addWidget(self.edit_stoploss_offset)
-        offset_layout.addWidget(lbl_ratio)
-        offset_layout.addWidget(self.edit_stoploss_ratio)
-        right_layout.addLayout(offset_layout)
-
-        # 3행: 🛡️ 스마트 스탑 설정 버튼 (가로 100% 꽉 참 - 클래식 다크 골드 스타일)
-        self.btn_stoploss = QPushButton("🛡️ 스마트 스탑 설정", right_widget)
-        self.btn_stoploss.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
-        self.btn_stoploss.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
-                color: #DEBA9D;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
-                border-radius: 4px;
-                border: 1px solid #A88869;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
-            }
-        """)
-        self.btn_stoploss.clicked.connect(self.trigger_stoploss_setting)
-        right_layout.addWidget(self.btn_stoploss)
         
         # ----------------------------------------------------------------------
         # ■ [BITGET] 실시간 목표가 가격 알림 제어판 (v3.65)
