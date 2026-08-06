@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.94"  # ShinSeon_Bitget AWS 서버 봇 가동 상태(RUNNING/STOPPED) 클라이언트 버튼 실시간 동기화 완공 (V4.94)
+        self.CURRENT_VERSION = "V4.95"  # ShinSeon_Bitget 클라이언트 텔레그램 이중 폴링 완전 제거 및 HTTP 409 Conflict 원천 박멸 완공 (V4.95)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1681,58 +1681,8 @@ class ShinseonDashboard(QMainWindow):
             self.add_log(f"❌ [텔레그램] 상태 명령 처리 중 에러 발생: {e}")
 
     async def run_telegram_listener_loop(self):
-        last_update_id = 0
-        is_first = True
-        while True:
-            await asyncio.sleep(2.0)
-            if not self.telegram_enabled or not self.telegram_token or not self.telegram_chat_id:
-                is_first = True
-                continue
-                
-            def get_updates():
-                try:
-                    import urllib.request
-                    import json
-                    url = f"https://api.telegram.org/bot{self.telegram_token}/getUpdates?timeout=5"
-                    if last_update_id > 0:
-                        url += f"&offset={last_update_id}"
-                    
-                    req = urllib.request.Request(url, method="GET")
-                    with urllib.request.urlopen(req, timeout=10) as r:
-                        return json.loads(r.read().decode("utf-8"))
-                except Exception as e:
-                    return e
-            
-            res = await asyncio.to_thread(get_updates)
-            if isinstance(res, Exception):
-                self.add_log(f"⚠️ [텔레그램] 수신 에러: {res}")
-                continue
-                
-            if res and res.get("ok"):
-                updates = res.get("result", [])
-                if updates:
-                    for update in updates:
-                        update_id = update.get("update_id")
-                        if update_id >= last_update_id:
-                            last_update_id = update_id + 1
-                            
-                        if is_first:
-                            continue
-                            
-                        message = update.get("message", {})
-                        chat = message.get("chat", {})
-                        chat_id = str(chat.get("id", ""))
-                        
-                        if chat_id != str(self.telegram_chat_id).strip():
-                            continue
-                            
-                        text = message.get("text", "")
-                        if text:
-                            self.add_log(f"📲 [텔레그램] 명령 수신: {text}")
-                            self.handle_telegram_command(text)
-                    is_first = False
-                else:
-                    is_first = False
+        # [V4.95] 텔레그램 수신 및 원격 제어는 AWS 웹서버가 100% 전담하므로 클라이언트 이중 폴링 비활성화 (HTTP 409 Conflict 박멸)
+        pass
 
     def show_session_config_dialog(self):
         try:
