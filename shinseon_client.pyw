@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.73"  # ShinSeon_Bitget 포지션 유무 동적 버튼 가드 & AWS 서버 정격 응답 로그 직송 완공 (V4.73)
+        self.CURRENT_VERSION = "V4.74"  # ShinSeon_Bitget 스마트 스탑 및 50% 청산 상시 즉각 반응 클릭 가드 해제 완공 (V4.74)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1264,21 +1264,9 @@ class ShinseonDashboard(QMainWindow):
                                 leverage = payload.get('leverage', 10)
                                 self.lbl_position_status.setText(f"진입/청산 상태:\n[{side} 진입 중: {contracts} BTC @ ${entry_price:,.1f} ({leverage}x)]")
                                 self.add_log(f"✅ [포지션 동기화] {side} 진입 중: {contracts} BTC @ ${entry_price:,.1f} ({leverage}x)")
-                                if hasattr(self, 'btn_close_50'):
-                                    self.btn_close_50.setEnabled(True)
-                                    self.btn_close_50.setToolTip("비트겟 포지션 50% 시장가 분할 청산")
-                                if hasattr(self, 'btn_stoploss'):
-                                    self.btn_stoploss.setEnabled(True)
-                                    self.btn_stoploss.setToolTip("스마트 스탑 손절/트레일링 익절 가드 설정")
                             else:
                                 self.lbl_position_status.setText("진입/청산 상태:\n[100% 현금 대기 중]")
                                 self.add_log("✅ [포지션 동기화] 활성 포지션 없음 (100% 현금 대기 중)")
-                                if hasattr(self, 'btn_close_50'):
-                                    self.btn_close_50.setEnabled(False)
-                                    self.btn_close_50.setToolTip("⚠️ 활성 포지션이 있을 때만 분할 청산이 가능합니다.")
-                                if hasattr(self, 'btn_stoploss') and not getattr(self, "is_stoploss_active", False):
-                                    self.btn_stoploss.setEnabled(False)
-                                    self.btn_stoploss.setToolTip("⚠️ 활성 포지션이 있을 때만 스마트 스탑 설정이 가능합니다.")
                         elif msg_type == 'EVT_SYNC_ERROR':
                             err_msg = payload.get('error', '알 수 없는 오류')
                             self.add_log(f"❌ [잔고 동기화 실패] 서버 오류: {err_msg}")
@@ -2143,10 +2131,6 @@ class ShinseonDashboard(QMainWindow):
             except Exception:
                 pass
 
-            if not getattr(self, "has_position", False):
-                self.add_log("⚠️ [청산 불가] 현재 비트겟에 활성화된 포지션이 없어 50% 분할 청산을 집행할 수 없습니다. (100% 현금 대기 중)")
-                return
-
             self.add_log("🚀 [수동 50% 청산 개시] 비트겟 실전 포지션 50% 시장가 청산 명령을 집행합니다.")
 
             # 1. AWS 릴레이 서버 WSS 패킷 전송
@@ -2226,10 +2210,6 @@ class ShinseonDashboard(QMainWindow):
                         asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
                     except Exception:
                         pass
-                return
-
-            if not getattr(self, "has_position", False):
-                self.add_log("⚠️ [스마트 스탑 불가] 현재 비트겟에 활성화된 포지션이 없어 스마트 스탑을 설정할 수 없습니다. (100% 현금 대기 중)")
                 return
 
             self.add_log("🛡️ [스마트 스탑] 버튼 클릭 이벤트를 수신하였습니다.")
