@@ -52,6 +52,25 @@ LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR, exist_ok=True)
 
+async def send_telegram_notification_server(message):
+    try:
+        config = load_server_config()
+        bot_token = str(config.get("TELEGRAM_BOT_TOKEN", "") or "").strip()
+        chat_id = str(config.get("TELEGRAM_CHAT_ID", "") or "").strip()
+        if not bot_token or not chat_id:
+            return
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, timeout=5.0) as resp:
+                pass
+    except Exception as e:
+        logger.error(f"Telegram server send error: {e}")
+
 def write_trade_history_log(message):
     today_str = datetime.now().strftime("%Y-%m-%d")
     log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
@@ -63,6 +82,79 @@ def write_trade_history_log(message):
     except Exception as e:
         logger.error(f"로그 파일 기록 에러: {e}")
     logger.info(f"[HISTORY] {message}")
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(send_telegram_notification_server(f"<b>[신선 봇]</b> {message}"))
+    except Exception:
+        pass
+
+async def run_telegram_command_poller(bot_core):
+    last_update_id = 0
+    while True:
+        try:
+            config = load_server_config()
+            bot_token = str(config.get("TELEGRAM_BOT_TOKEN", "") or "").strip()
+            chat_id = str(config.get("TELEGRAM_CHAT_ID", "") or "").strip()
+            if not bot_token or not chat_id:
+                await asyncio.sleep(5)
+                continue
+            
+            url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+            params = {"offset": last_update_id + 1, "timeout": 10}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=15) as resp:
+                    if resp.status == 200:
+                        res_json = await resp.json()
+                        for update in res_json.get("result", []):
+                            last_update_id = update["update_id"]
+                            message_obj = update.get("message", {})
+                            from_chat_id = str(message_obj.get("chat", {}).get("id", ""))
+                            text = message_obj.get("text", "").strip()
+                            
+                            if chat_id and from_chat_id != chat_id:
+                                continue
+                                
+                            if text in ["시작", "/시작", "/start"]:
+                                if bot_core.v35_engine:
+                                    bot_core.v35_engine.bot_state = "RUNNING"
+                                await send_telegram_notification_server("✅ <b>[신선 봇]</b> 실전 자동 저격 감시가 시작되었습니다.")
+                                ui_callback(bot_core.current_price, 1, "✅ [텔레그램 원격] 봇 가동 감시 시작")
+                            elif text in ["정지", "/정지", "/stop"]:
+                                if bot_core.v35_engine:
+                                    bot_core.v35_engine.bot_state = "STOPPED"
+                                await send_telegram_notification_server("🛑 <b>[신선 봇]</b> 자동 저격 감시가 일시 정지되었습니다.")
+                                ui_callback(bot_core.current_price, 1, "🛑 [텔레그램 원격] 봇 가동 정지")
+                            elif text in ["상태", "/상태", "/status"]:
+                                pos_str = "100% 현금 대기 중"
+                                pnl_info = ""
+                                if bot_core.v35_engine and bot_core.v35_engine.is_position_active:
+                                    side = getattr(bot_core.v35_engine, "entry_direction", "")
+                                    entry_price = getattr(bot_core.v35_engine, "entry_price", 0.0)
+                                    contracts = float(getattr(bot_core.v35_engine, "position_volume", 0)) / 1000.0
+                                    pos_str = f"{side} 진입 중 ({contracts:.3f} BTC @ ${entry_price:,.1f})"
+                                    pnl_info = f"\nROE: <b>{getattr(bot_core.v35_engine, 'last_live_roe_pct', 0.0):+.2f}%</b>"
+                                
+                                state_str = bot_core.v35_engine.bot_state if bot_core.v35_engine else "RUNNING"
+                                bal_str = f"${getattr(bot_core, 'bitget_balance', 0.0):,.2f} USDT"
+                                status_msg = (
+                                    f"<b>📊 [신선 봇 실시간 상태보고]</b>\n\n"
+                                    f"현재가: <b>${bot_core.current_price:,.1f} USDT</b>\n"
+                                    f"포지션: <b>{pos_str}</b>{pnl_info}\n"
+                                    f"비트겟 잔고: <b>{bal_str}</b>\n"
+                                    f"구동 상태: <b>{state_str}</b>"
+                                )
+                                await send_telegram_notification_server(status_msg)
+                            elif text in ["청산", "/청산", "/close", "비상탈출"]:
+                                if bot_core.v35_engine:
+                                    bot_core.v35_engine.bot_state = "STOPPED"
+                                await bot_core.execute_emergency()
+                                await send_telegram_notification_server("🚨 <b>[신선 봇]</b> 비트겟 거래소 포지션 100% 시장가 즉시 전량 청산 완료!")
+                                ui_callback(bot_core.current_price, 1, "🚨 [텔레그램 원격] 비상 탈출 100% 시장가 전량 청산 완료")
+        except Exception:
+            pass
+        await asyncio.sleep(2)
 
 def append_daily_csv_record(row_str):
     today_str = datetime.now().strftime("%Y-%m-%d")
@@ -219,6 +311,7 @@ class BotCore:
         self.ui_cb = ui_callback
         self.current_task = asyncio.current_task()
         self.token_sniffer_task = asyncio.create_task(self.run_token_sniffer())
+        self.telegram_poller_task = asyncio.create_task(run_telegram_command_poller(self))
         
         # v3.5 단방향 저격 엔진 기상
         self.v35_engine = ShinseonV35Engine(self)

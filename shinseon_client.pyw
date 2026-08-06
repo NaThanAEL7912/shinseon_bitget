@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.92"  # ShinSeon_Bitget 데이터 다운로드 버튼 개편 및 날짜별 CSV+LOG 통합 다운로드 센터 완공 (V4.92)
+        self.CURRENT_VERSION = "V4.93"  # ShinSeon_Bitget AWS 서버 텔레그램 100% 독점 전담 연동 및 원격제어(시작/정지/상태/청산) 완공 (V4.93)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1582,28 +1582,8 @@ class ShinseonDashboard(QMainWindow):
             self.start_bot()
 
     def send_telegram_notification(self, text):
-        if not self.telegram_enabled or not self.telegram_token or not self.telegram_chat_id:
-            return
-        
-        async def _async_send():
-            def run():
-                import urllib.parse
-                import urllib.request
-                url = f"https://api.telegram.org/bot{self.telegram_token}/sendMessage"
-                data = urllib.parse.urlencode({
-                    "chat_id": self.telegram_chat_id,
-                    "text": text,
-                    "parse_mode": "HTML"
-                }).encode("utf-8")
-                req = urllib.request.Request(url, data=data, method="POST")
-                with urllib.request.urlopen(req, timeout=10) as r:
-                    return r.read()
-            try:
-                await asyncio.to_thread(run)
-            except Exception as e:
-                self.add_log(f"❌ [텔레그램] 알림 발송 실패: {e}")
-                
-        asyncio.create_task(_async_send())
+        # [V4.93] 텔레그램 알림 및 원격 제어는 AWS 웹서버가 100% 전담하므로 클라이언트 이중 발송 비활성화
+        pass
 
     def handle_telegram_command(self, text):
         cmd = text.strip()
