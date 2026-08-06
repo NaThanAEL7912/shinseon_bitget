@@ -20,13 +20,22 @@ import base64
 import ccxt.async_support as ccxt
 import websockets
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger("ShinseonBot")
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+server_log_file = os.path.join(BASE_DIR, "server.log")
+file_handler = logging.FileHandler(server_log_file, encoding='utf-8')
+file_handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+logger.addHandler(file_handler)
 
 def load_server_config():
     config_path = os.path.join(BASE_DIR, "server_config.json")
@@ -74,7 +83,7 @@ async def send_telegram_notification_server(message):
 def write_trade_history_log(message):
     today_str = datetime.now().strftime("%Y-%m-%d")
     log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
-    time_prefix = datetime.now().strftime("[%Y-%m-%d %H:%M:%S.%f")[:-3] + "]"
+    time_prefix = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
     full_msg = f"{time_prefix} {message}\n"
     try:
         with open(log_file, "a", encoding="utf-8") as f:
@@ -558,9 +567,13 @@ class BotCore:
                         ws_frame = {
                             'timestamp_ms': binance_event_time,
                             'rolling_1m_liq_usd': display_liq,
+                            'long_liq_usd': long_liq,
+                            'short_liq_usd': short_liq,
                             'oi_delta_1m': display_oi,
                             'mid_price': self.current_price,
-                            'direction': direction
+                            'direction': direction,
+                            'session': current_session,
+                            'bot_state': getattr(self.v35_engine, 'bot_state', 'RUNNING') if self.v35_engine else 'RUNNING'
                         }
                         await self.v35_engine.check_radar_signal_dynamic(ws_frame, target_liq, target_oi)
                     
@@ -644,6 +657,11 @@ class BotCore:
                         
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
+
+                    # [초단위 전량 LOG 기록]: 1초마다 시세, 오더플로우, 포지션, 핑, 세션 등 행동 일체 기록
+                    c_status = status_msg.replace('\n', ' | ')
+                    b_state = getattr(self.v35_engine, 'bot_state', 'RUNNING') if self.v35_engine else 'RUNNING'
+                    logger.info(f"⚡ [1초 감시] BTC: ${self.current_price:,.1f} | Liq: ${display_liq:,.0f} (L:${long_liq:,.0f}/S:${short_liq:,.0f}) | OI: {display_oi:+.4f}% | Ping: {latency_show:.1f}ms | Session: {current_session} | State: {b_state} | Status: {c_status}")
 
                     ui_callback(
                         self.current_price,
@@ -1608,22 +1626,27 @@ class ShinseonV35Engine:
     async def check_radar_signal_dynamic(self, binance_ws_frame, target_liq, target_oi):
         t_signal = binance_ws_frame['timestamp_ms']
         rolling_1m_liq_usd = binance_ws_frame['rolling_1m_liq_usd']
+        long_liq_usd = binance_ws_frame.get('long_liq_usd', rolling_1m_liq_usd * 0.5)
+        short_liq_usd = binance_ws_frame.get('short_liq_usd', rolling_1m_liq_usd * 0.5)
         oi_delta_1m = binance_ws_frame['oi_delta_1m']
         binance_mid = binance_ws_frame['mid_price']
+        session_val = binance_ws_frame.get('session', 'MAIN')
+        bot_state_val = binance_ws_frame.get('bot_state', 'RUNNING')
         
-        # [1초 가변 CSV 레코더 연동 - 최상단 전진 배치]
-        # 기동선: target_liq * 0.5 및 target_oi * 0.5
+        # [스마트 듀얼 샘플링 주기 스위칭]
+        # 평시: 1분 주기 (60초)
+        # 임계치 50% 활성화 시 (liq_1m_total >= liq_threshold * 0.5 또는 abs(oi_1m_pct) >= oi_threshold * 0.5): 1초 주기 (1초마다)
         current_time = time.time()
         trigger_liq_limit = target_liq * 0.5
         trigger_oi_limit = target_oi * 0.5
         
-        is_triggered = (rolling_1m_liq_usd >= trigger_liq_limit) and (abs(oi_delta_1m) >= trigger_oi_limit)
+        is_triggered = (rolling_1m_liq_usd >= trigger_liq_limit) or (abs(oi_delta_1m) >= trigger_oi_limit)
         
         if is_triggered:
             if not self.record_mode_1s:
                 self.record_mode_1s = True
                 if getattr(self.bot, "dashboard", None):
-                    self.bot.dashboard.add_log(f"⚡ [레코더] 1번 장세선 돌파! 1초 고밀도 기록 기어 작동 (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)")
+                    self.bot.dashboard.add_log(f"⚡ [레코더] 임계치 50% 돌파! 1초 고밀도 기록 기어 작동 (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)")
             self.below_trigger_since = None
         else:
             if self.record_mode_1s:
@@ -1650,22 +1673,35 @@ class ShinseonV35Engine:
             first_write = (self.last_record_time == 0.0)
             self.last_record_date = date_str
             try:
+                # [타점 시그널 (signal) 100% AND 양대 임계치 동시 충족 판정]
+                # LONG: liq_1m_total >= liq_threshold AND oi_1m_pct >= oi_threshold
+                # SHORT: liq_1m_total >= liq_threshold AND oi_1m_pct <= -oi_threshold
+                # NONE: 미달 시
+                if (rolling_1m_liq_usd >= target_liq) and (oi_delta_1m >= target_oi):
+                    signal_val = "LONG"
+                elif (rolling_1m_liq_usd >= target_liq) and (oi_delta_1m <= -target_oi):
+                    signal_val = "SHORT"
+                else:
+                    signal_val = "NONE"
+
                 csv_filename = f"orderflow_history_{date_str}.csv"
                 if first_write and getattr(self.bot, "dashboard", None):
                     self.bot.dashboard.add_log(f"📊 [CSV 레코더] {csv_filename} 상시 기록 개시 (1분/1초 듀얼 스피드 기어 가동)")
                 csv_path = os.path.join(BASE_DIR, "docs", "historical_data", csv_filename)
                 time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cvd_10s_sum = sum(val for t, val in getattr(self, "cvd_history", []))
-                gear_str = "1초" if self.record_mode_1s else "1분"
-                line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{oi_delta_1m:+.4f},{cvd_10s_sum:+.1f},{gear_str}\n"
+                
+                # 11개 칼럼: timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,session,bot_state
+                clean_sess = str(session_val).replace(',', ' ')
+                clean_state = str(bot_state_val).replace(',', ' ')
+                line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{signal_val},{clean_sess},{clean_state}\n"
                 
                 def _write_csv(path, content):
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
                         file_exists = os.path.exists(path)
-                        with open(path, "a", encoding="utf-8-sig") as f:
+                        with open(path, "a", encoding="utf-8") as f:
                             if not file_exists:
-                                f.write("시간,가격,청산,OI속도,CVD,기어\n")
+                                f.write("timestamp,btc_price,liq_1m_total,liq_1m_long,liq_1m_short,liq_threshold,oi_1m_pct,oi_threshold,signal,session,bot_state\n")
                             f.write(content)
                     except Exception as e:
                         logger.error(f"CSV 레코더 쓰기 에러: {e}")

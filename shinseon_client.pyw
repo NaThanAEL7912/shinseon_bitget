@@ -15,7 +15,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                              QHBoxLayout, QWidget, QLabel, QLineEdit, QTextEdit, QPlainTextEdit,
                              QGraphicsDropShadowEffect, QProgressBar, QCheckBox,
-                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox, QComboBox)
+                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox, QComboBox, QListWidget)
 from PySide6.QtCore import Qt, QPointF, QRectF, QUrl
 from PySide6.QtGui import QPainter, QPicture, QColor, QFont, QBrush, QPen, QLinearGradient
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.95"  # ShinSeon_Bitget 클라이언트 텔레그램 이중 폴링 완전 제거 및 HTTP 409 Conflict 원천 박멸 완공 (V4.95)
+        self.CURRENT_VERSION = "V4.99"  # V4.99 신선 비트겟 트레이딩 로깅 엔진 총체적 개편 (11개 칼럼 CSV & 초단위 전량 로깅)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2781,6 +2781,146 @@ class ShinseonDashboard(QMainWindow):
         finally:
             self.btn_latency_test.setEnabled(True)
             self.btn_latency_test.setText("⚡ 레이턴시 실측")
+
+
+class DataDownloadCenterDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_ui = parent
+        self.setWindowTitle("📥 [神選] 서버 데이터 & 로그 다운로드 센터")
+        self.resize(550, 420)
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0F0E0E;
+                color: #F5EFEB;
+                font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+            }
+            QListWidget {
+                background-color: #1A1817;
+                border: 1px solid #3A3532;
+                color: #DEBA9D;
+                font-size: 13px;
+                border-radius: 4px;
+                padding: 6px;
+            }
+            QListWidget::item {
+                padding: 8px;
+                border-bottom: 1px solid #2A2522;
+            }
+            QListWidget::item:selected {
+                background-color: #C5A07A;
+                color: #0F0E0E;
+                font-weight: bold;
+            }
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #DEBA9D, stop:1 #C5A07A);
+                color: #0F0E0E;
+                font-weight: bold;
+                padding: 8px 16px;
+                border-radius: 4px;
+                border: 1px solid #A88869;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #E5C199, stop:1 #DEBA9D);
+            }
+            QLabel {
+                color: #DEBA9D;
+                font-size: 12px;
+            }
+        """)
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+        
+        lbl_title = QLabel("<b>📥 [神選] AWS 릴레이 서버 히스토리 데이터 & 로그 채집 센터</b>")
+        lbl_title.setStyleSheet("font-size: 14px; color: #DEBA9D; margin-bottom: 6px;")
+        layout.addWidget(lbl_title)
+        
+        lbl_desc = QLabel("서버에서 수집된 일별 오더플로우 11칼럼 CSV 및 트레이딩 로그 목록입니다.")
+        layout.addWidget(lbl_desc)
+        
+        self.list_dates = QListWidget()
+        layout.addWidget(self.list_dates)
+        
+        self.lbl_status = QLabel("요청 대기 중...")
+        self.lbl_status.setStyleSheet("color: #00FFCC; font-size: 11px;")
+        layout.addWidget(self.lbl_status)
+        
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("🔄 목록 새로고침")
+        self.btn_download = QPushButton("💾 선택 날짜 파일 다운로드")
+        self.btn_close = QPushButton("닫기")
+        
+        self.btn_refresh.clicked.connect(self.request_file_list)
+        self.btn_download.clicked.connect(self.request_file_download)
+        self.btn_close.clicked.connect(self.accept)
+        
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addWidget(self.btn_download)
+        btn_layout.addWidget(self.btn_close)
+        
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+        
+        self.request_file_list()
+
+    def request_file_list(self):
+        if self.parent_ui and hasattr(self.parent_ui, 'ws') and self.parent_ui.is_ws_active():
+            import json
+            asyncio.create_task(self.parent_ui.ws.send(json.dumps({'cmd': 'CMD_REQ_FILE_LIST'})))
+            self.lbl_status.setText("📡 서버로 파일 목록 요청 전송 완료...")
+        else:
+            self.lbl_status.setText("⚠️ 서버 웹소켓 미연결 상태입니다.")
+
+    def update_dates_list(self, dates_list):
+        self.list_dates.clear()
+        if not dates_list:
+            self.lbl_status.setText("⚠️ 서버에 이용 가능한 파일 날짜 목록이 없습니다.")
+            return
+        for date_str in dates_list:
+            self.list_dates.addItem(f"📅 {date_str} 히스토리 데이터 & 로그")
+        self.lbl_status.setText(f"✅ 총 {len(dates_list)}개 날짜 데이터 목록 수신 완료.")
+
+    def request_file_download(self):
+        selected = self.list_dates.currentItem()
+        if not selected:
+            QMessageBox.warning(self, "경고", "다운로드할 날짜 항목을 선택하십시오.")
+            return
+        text = selected.text()
+        import re
+        m = re.search(r'(\d{4}-\d{2}-\d{2})', text)
+        if not m:
+            QMessageBox.warning(self, "경고", "선택한 항목에서 날짜 정보를 찾을 수 없습니다.")
+            return
+        req_date = m.group(1)
+        if self.parent_ui and hasattr(self.parent_ui, 'ws') and self.parent_ui.is_ws_active():
+            import json
+            asyncio.create_task(self.parent_ui.ws.send(json.dumps({'cmd': 'CMD_REQ_FILE_DOWNLOAD', 'payload': {'date': req_date}})))
+            self.lbl_status.setText(f"📥 [{req_date}] 파일 다운로드 요청 송신 완료... 잠시만 기다려주십시오.")
+        else:
+            self.lbl_status.setText("⚠️ 서버 웹소켓 미연결 상태입니다.")
+
+    def handle_download_completed(self, req_date, csv_text, log_text):
+        try:
+            save_dir = os.path.join(BASE_DIR, "downloads", req_date)
+            os.makedirs(save_dir, exist_ok=True)
+            
+            csv_path = os.path.join(save_dir, f"orderflow_history_{req_date}.csv")
+            log_path = os.path.join(save_dir, f"shinseon_trade_{req_date}.log")
+            
+            with open(csv_path, 'w', encoding='utf-8') as f:
+                f.write(csv_text)
+            with open(log_path, 'w', encoding='utf-8') as f:
+                f.write(log_text)
+                
+            self.lbl_status.setText(f"🎉 [{req_date}] 데이터 및 로그 저장 완료!")
+            if self.parent_ui:
+                self.parent_ui.add_log(f"💾 [다운로드 성공] {req_date} CSV & LOG 저장 완료 -> {save_dir}")
+            QMessageBox.information(self, "다운로드 완료", f"[{req_date}] 파일 다운로드 및 저장 성공!\n\n저장 경로:\n{save_dir}")
+        except Exception as e:
+            self.lbl_status.setText(f"❌ 파일 저장 오류: {e}")
+            QMessageBox.critical(self, "오류", f"파일 저장 중 에러 발생: {e}")
 
 
 # ==============================================================================
