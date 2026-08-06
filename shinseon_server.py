@@ -37,6 +37,25 @@ file_handler = logging.FileHandler(server_log_file, encoding='utf-8')
 file_handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 logger.addHandler(file_handler)
 
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR, exist_ok=True)
+
+class DailyTradeLogHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            daily_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
+            with open(daily_file, "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
+
+daily_handler = DailyTradeLogHandler()
+daily_handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
+logger.addHandler(daily_handler)
+
 def load_server_config():
     config_path = os.path.join(BASE_DIR, "server_config.json")
     if os.path.exists(config_path):
