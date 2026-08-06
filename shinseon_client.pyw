@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.71"  # ShinSeon_Bitget 비트겟 v2 API 50% 청산 & 스마트 스탑 실시간 파수꾼 시스템 완공 (V4.71)
+        self.CURRENT_VERSION = "V4.72"  # ShinSeon_Bitget 대시보드 팝업창 전면 제거 및 AWS 서버 실시간 응답 로그 직송 이식 완공 (V4.72)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -911,6 +911,27 @@ class ShinseonDashboard(QMainWindow):
         
         right_layout.addWidget(self.btn_emergency)
         
+        # 🌐 비트겟 거래소 웹사이트 바로가기 버튼 (정격 위치: 비상 탈출 버튼 바로 아래)
+        self.btn_open_bitget = QPushButton("🌐 비트겟 거래소 열기 ↗", right_widget)
+        self.btn_open_bitget.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
+        self.btn_open_bitget.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2C4A5E, stop:1 #1C3240);
+                color: #00FFCC;
+                font-weight: bold; 
+                font-size: 11px; 
+                padding: 7px; 
+                border-radius: 4px;
+                border: 1px solid #00FFCC;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3A617B, stop:1 #2C4A5E);
+                color: #FFFFFF;
+            }
+        """)
+        self.btn_open_bitget.clicked.connect(self.open_bitget_website)
+        right_layout.addWidget(self.btn_open_bitget)
+        
         # BITGET 수동 제어판 (50% 청산 전용)
         self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 신속 분할 청산 제어판</b>", right_widget)
         right_layout.addWidget(self.lbl_bitget_title)
@@ -1247,6 +1268,10 @@ class ShinseonDashboard(QMainWindow):
                         elif msg_type == 'EVT_SYNC_ERROR':
                             err_msg = payload.get('error', '알 수 없는 오류')
                             self.add_log(f"❌ [잔고 동기화 실패] 서버 오류: {err_msg}")
+                        elif msg_type == 'EVT_RESPONSE_LOG':
+                            res_msg = payload.get('message', '')
+                            if res_msg:
+                                self.add_log(res_msg)
                         elif msg_type == 'ui_update':
                             if 'price' in payload:
                                 self.current_price = float(payload['price'])
@@ -2130,9 +2155,6 @@ class ShinseonDashboard(QMainWindow):
                 asyncio.ensure_future(self.do_position_sync())
             except Exception:
                 pass
-
-            # 4. 화면 중앙 팝업 알림창 직송
-            QMessageBox.information(self, "비트겟 50% 청산", "🌓 비트겟 50% 시장가 분할 청산 명령이 집행되었습니다!\n(서버 및 대시보드 포지션 자동 동기화 연동)")
         except Exception as e:
             self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
 
@@ -2188,7 +2210,6 @@ class ShinseonDashboard(QMainWindow):
                         asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
                     except Exception:
                         pass
-                QMessageBox.information(self, "스마트 스탑", "🧹 스마트 스탑 감시가 해제되었습니다.")
                 return
 
             try:
@@ -2245,7 +2266,6 @@ class ShinseonDashboard(QMainWindow):
                 self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}% ROE) 동기화 전송 완료")
 
             self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 포지션에 {offset_val:+.2f}% ROE 감시 가드가 작동되었습니다!")
-            QMessageBox.information(self, "스마트 스탑", f"🛡️ 비트겟 포지션에 {offset_val:+.2f}% ROE 스마트 스탑 감시가 설정되었습니다!\n(서버 실시간 감시 엔진 연동 완료)")
         except Exception as e:
             self.add_log(f"❌ [스마트 스탑 설정 오류] 사유: {e}")
 
