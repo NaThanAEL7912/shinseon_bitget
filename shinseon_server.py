@@ -485,14 +485,14 @@ class BotCore:
                         custom_stop_active = getattr(self.v35_engine, "custom_stop_active", False)
                         custom_stop_offset = getattr(self.v35_engine, "custom_stop_offset_roe", getattr(self.v35_engine, "custom_stop_offset_pct", -6.0))
                         
-                        pnl_hdr = f"[{direction_active} 진입 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str} (변동: {live_pnl:+.2f}%)"
+                        pnl_hdr = f"[{direction_active} 진입 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str} (PNL: {live_pnl:+.2f}%)"
                         
                         if has_smart_guarded:
                             status_msg = f"{pnl_hdr}\n(🛡 스마트 본전가드 작동 | 본전가드: {guard_limit:+.2f}%)"
                         elif is_half_exited:
                             status_msg = f"{pnl_hdr}\n(🛡 50% 분할익절 완료 | 본전가드: {guard_limit:+.2f}%)"
                         else:
-                            status_msg = f"{pnl_hdr}\n(가드레일 도약 대기: +{guard_trig:.2f}%)"
+                            status_msg = f"{pnl_hdr}\n(가드레일: +{guard_trig:.2f}%)"
                             
                         if live_pnl <= (target_sl + 0.2):
                             status_msg = f"⚠ [{direction_active} 위기 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str}\n(손절 데드라인 임박: {target_sl:+.2f}%)"
