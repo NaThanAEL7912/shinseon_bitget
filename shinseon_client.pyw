@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.60"  # ShinSeon_Bitget 스마트 스탑 ROE% 30배 기준 전격 전환 및 WSS 패킷 완공 수술 개발 (V4.60)
+        self.CURRENT_VERSION = "V4.61"  # ShinSeon_Bitget 비트겟 v2 API 청산 side 수식 정격 교정 및 50% 청산 원격 완공 수술 개발 (V4.61)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None

@@ -1259,35 +1259,78 @@ class ShinseonV35Engine:
                             self.exit_in_progress = False
                             return True
                         
-                        pos_side = active_pos['side']
-                        close_side = 'sell' if pos_side == 'long' else 'buy'
-                        
+                        pos_side = active_pos['side'].lower()
                         ratio_factor = custom_ratio if custom_ratio > 0.0 else 0.5
+
                         if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
+                            close_side = "buy" if pos_side == "long" else "sell"
                             amount = float(active_pos['contracts']) * ratio_factor
+                            amount = max(0.001, round(amount, 3))
                             pct_lbl = int(round(ratio_factor * 100))
-                            self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산] API 발주 시작...")
+                            self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 v2 API 직송] 수량: {amount} BTC (방향: {pos_side.upper()})")
+                            try:
+                                env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
+                                api_key = env_vars.get("BITGET_API_KEY", "")
+                                secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+                                passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+                                
+                                url_base = "https://api.bitget.com"
+                                path_order = "/api/v2/mix/order/place-order"
+                                body_dict = {
+                                    "symbol": "BTCUSDT",
+                                    "productType": "USDT-FUTURES",
+                                    "marginMode": active_pos.get('marginMode', 'isolated'),
+                                    "marginCoin": "USDT",
+                                    "size": str(amount),
+                                    "side": close_side,
+                                    "orderType": "market",
+                                    "tradeSide": "close",
+                                    "holdSide": pos_side
+                                }
+                                body_json = json.dumps(body_dict)
+                                timestamp = str(int(time.time() * 1000))
+                                message = timestamp + "POST" + path_order + body_json
+                                mac = hmac.new(secret_key.encode('utf-8'), message.encode('utf-8'), hashlib.sha256)
+                                sign = base64.b64encode(mac.digest()).decode('utf-8')
+                                
+                                headers = {
+                                    'ACCESS-KEY': api_key,
+                                    'ACCESS-SIGN': sign,
+                                    'ACCESS-TIMESTAMP': timestamp,
+                                    'ACCESS-PASSPHRASE': passphrase,
+                                    'Content-Type': 'application/json',
+                                    'locale': 'en-US'
+                                }
+                                async with aiohttp.ClientSession() as session:
+                                    async with session.post(url_base + path_order, headers=headers, data=body_json) as resp:
+                                        res = await resp.json()
+                                        if res.get("code") == "00000":
+                                            self.bot.ui_cb(0.0, 0, f"✅ [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료")
+                                            self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
+                                            self.is_half_exited = True
+                                            return True
+                                        else:
+                                            self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 실패] {res.get('msg', '알 수 없음')} (코드: {res.get('code')})")
+                                            return False
+                            except Exception as pe:
+                                self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 예외]: {pe}")
+                                return False
                         else:
+                            close_side = 'sell' if pos_side == 'long' else 'buy'
                             amount = float(active_pos['contracts'])
                             self.bot.ui_cb(0.0, 0, "🎯 [전량 청산] API 발주 시작...")
+                            amount = max(0.001, round(amount, 3))
+                            try:
+                                if active_pos.get('info', {}).get('posMode') == 'hedge_mode' or active_pos.get('hedged', True):
+                                    params = {'tradeSide': 'close', 'holdSide': pos_side.lower()}
+                                else:
+                                    params = {'reduceOnly': True}
+                                order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
+                                self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
+                            except Exception as e:
+                                self.bot.ui_cb(0.0, 0, f"❌ [청산 에러] 비트겟 API 예외 발생: {e}")
+                                return False
                             
-                        amount = max(0.001, round(amount, 3))
-                        
-                        try:
-                            if active_pos.get('info', {}).get('posMode') == 'hedge_mode' or active_pos.get('hedged', True):
-                                params = {'tradeSide': 'close', 'holdSide': pos_side.lower()}
-                            else:
-                                params = {'reduceOnly': True}
-                            order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
-                            self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
-                        except Exception as e:
-                            self.bot.ui_cb(0.0, 0, f"❌ [청산 에러] 비트겟 API 예외 발생: {e}")
-                            return False
-                        
-                        if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
-                            self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
-                            self.is_half_exited = True
-                        else:
                             self.is_position_active = False
                             self.position_volume = 0
                             self.entry_price = 0.0
