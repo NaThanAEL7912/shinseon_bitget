@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.62"  # ShinSeon_Bitget 대시보드 PNL 표기 및 가드레일 문구 수술 개발 (V4.62)
+        self.CURRENT_VERSION = "V4.63"  # ShinSeon_Bitget 50% 수동 청산 더블 프로텍션 이중 격발 수식 완공 수술 개발 (V4.63)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2088,15 +2088,20 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(run_manual_start_flow())
 
     def trigger_close_50(self):
-        self.add_log("🌓 [수동 50% 청산] BITGET 포지션 50% 시장가 청산 명령 발동...")
-        if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
-            self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
-        if self.is_ws_active():
-            import json
-            asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
-            self.add_log("📡 [서버 명령] CMD_CLOSE_50 (50% 시장가 청산) 패킷 전송 완료")
-        else:
-            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
+        try:
+            self.add_log("🌓 [수동 50% 청산] BITGET 포지션 50% 시장가 청산 명령 발동...")
+            if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
+                self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
+                # [더블 프로텍션] 백엔드 엔진 Direct Call 이중 격발 수식 반영
+                asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+            if self.is_ws_active():
+                import json
+                asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
+                self.add_log("📡 [서버 명령] CMD_CLOSE_50 (50% 시장가 청산) 패킷 전송 완료")
+            else:
+                self.add_log("ℹ️ [알림] 웹소켓 미연결 상태이나 로컬 엔진으로 50% 청산을 직접 집행합니다.")
+        except Exception as e:
+            self.add_log(f"⚠️ [50% 청산 예외 발생]: {e}")
 
     def reset_stoploss_ui(self):
         if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
