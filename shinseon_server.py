@@ -1161,8 +1161,11 @@ class ShinseonV35Engine:
                         
                     if ratio <= 0.0:
                         return
-                    p_target = max(1000.0, bitget_bal * (ratio / 100.0))
-                    btc_vol = p_target / current_price
+                    lev = float(getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0))) or 30.0
+                    max_affordable_usd = bitget_bal * lev * 0.92
+                    calculated_target = bitget_bal * (ratio / 100.0) * lev * 0.92
+                    p_target = min(calculated_target, max_affordable_usd)
+                    btc_vol = max(0.001, round(p_target / current_price, 3))
                     volume = int(round(btc_vol * 1000))
                 
                 if order_type in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
@@ -1384,15 +1387,21 @@ class ShinseonV35Engine:
                                 
                             if ratio <= 0.0:
                                 return False
-                            p_target = max(1000.0, bitget_bal * (ratio / 100.0))
-                            amount = p_target / current_price
+                                
+                            lev = float(getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0))) or 30.0
+                            max_affordable_usd = bitget_bal * lev * 0.92
+                            calculated_target = bitget_bal * (ratio / 100.0) * lev * 0.92
+                            p_target = min(calculated_target, max_affordable_usd)
+                            amount = max(0.001, round(p_target / current_price, 3))
                             
-                        amount = max(0.001, round(amount, 3))
-                        
-                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주] {side} {amount} BTC 시장가 주문 시작...")
+                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주 v4.79] {side} {amount} BTC (설정 레버리지: {int(lev)}배 | 가용증거금 버퍼 92%) 시장가 주문 시작...")
                         try:
+                            try:
+                                await exchange.set_leverage(int(round(lev)), symbol)
+                            except Exception as lev_err:
+                                pass
                             order = await exchange.create_order(symbol, 'market', ccxt_side, amount)
-                            self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료")
+                            self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"❌ [진입 에러] 비트겟 API 예외 발생: {e}")
                             return False
