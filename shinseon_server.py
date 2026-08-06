@@ -48,6 +48,34 @@ def safe_float(v, default=0.0):
     try: return float(v)
     except: return default
 
+LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR, exist_ok=True)
+
+def write_trade_history_log(message):
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
+    time_prefix = datetime.now().strftime("[%Y-%m-%d %H:%M:%S.%f")[:-3] + "]"
+    full_msg = f"{time_prefix} {message}\n"
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(full_msg)
+    except Exception as e:
+        logger.error(f"로그 파일 기록 에러: {e}")
+    logger.info(f"[HISTORY] {message}")
+
+def append_daily_csv_record(row_str):
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    csv_file = os.path.join(LOGS_DIR, f"shinseon_data_{today_str}.csv")
+    file_exists = os.path.exists(csv_file)
+    try:
+        with open(csv_file, "a", encoding="utf-8") as f:
+            if not file_exists:
+                f.write("timestamp,price,oi,liq_1m,cvd,log_type,msg\n")
+            f.write(row_str + "\n")
+    except Exception:
+        pass
+
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
@@ -2422,8 +2450,43 @@ class WsServer:
                             except Exception as e:
                                 logger.error(f"서버 설정 저장 실패: {e}")
 
+                            write_trade_history_log(f"⚙️ [파라미터 설정 변경 적용] 레버리지: {config_data.get('leverage_level', 30)}배 | 배팅비중: {config_data.get('deploy_ratio', 100)}% | 1차비중: {config_data.get('split_entry_1_ratio', 100)}% | 2차비중: {config_data.get('split_entry_2_ratio', 50)}% | 손절쿨타임: {config_data.get('cooldown_seconds', 300)}초 | 익절쿨타임: {config_data.get('profit_cooldown_seconds', 15)}초 | 추매제한: {config_data.get('add_cooldown_seconds', 900)}초")
                             logger.info("⚙️ [서버 Config 동기화 완료] 클라이언트 파라미터 수신 및 적용 성공")
                             await self.broadcast_event("ui_update", {"msg": "⚙ [서버 동기화] 클라이언트 트레이딩 파라미터가 AWS 서버에 즉시 반영되었습니다.", "log_type": 1, "price": self.bot_core.current_price})
+                    elif cmd == "CMD_REQ_FILE_LIST":
+                        dates_set = set()
+                        if os.path.exists(LOGS_DIR):
+                            for fname in os.listdir(LOGS_DIR):
+                                m = re.search(r'(\d{4}-\d{2}-\d{2})', fname)
+                                if m:
+                                    dates_set.add(m.group(1))
+                        today_str = datetime.now().strftime("%Y-%m-%d")
+                        dates_set.add(today_str)
+                        sorted_dates = sorted(list(dates_set), reverse=True)
+                        await self.broadcast_event("EVT_FILE_LIST", {"dates": sorted_dates})
+                    elif cmd == "CMD_REQ_FILE_DOWNLOAD":
+                        req_date = payload.get("date", datetime.now().strftime("%Y-%m-%d"))
+                        log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{req_date}.log")
+                        csv_file = os.path.join(LOGS_DIR, f"shinseon_data_{req_date}.csv")
+                        if not os.path.exists(csv_file) and os.path.exists("shinseon_data.csv"):
+                            csv_file = "shinseon_data.csv"
+                        log_text = ""
+                        csv_text = ""
+                        if os.path.exists(log_file):
+                            try:
+                                with open(log_file, "r", encoding="utf-8") as f:
+                                    log_text = f.read()
+                            except Exception: pass
+                        if os.path.exists(csv_file):
+                            try:
+                                with open(csv_file, "r", encoding="utf-8") as f:
+                                    csv_text = f.read()
+                            except Exception: pass
+                        await self.broadcast_event("EVT_FILE_DATA", {
+                            "date": req_date,
+                            "csv_text": csv_text,
+                            "log_text": log_text
+                        })
                     elif cmd == "CMD_REQ_CSV":
                         csv_path = "shinseon_data.csv"
                         if os.path.exists(csv_path):

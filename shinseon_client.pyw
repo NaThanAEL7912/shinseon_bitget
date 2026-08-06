@@ -15,7 +15,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                              QHBoxLayout, QWidget, QLabel, QLineEdit, QTextEdit, QPlainTextEdit,
                              QGraphicsDropShadowEffect, QProgressBar, QCheckBox,
-                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox)
+                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox, QComboBox)
 from PySide6.QtCore import Qt, QPointF, QRectF, QUrl
 from PySide6.QtGui import QPainter, QPicture, QColor, QFont, QBrush, QPen, QLinearGradient
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.88"  # ShinSeon_Bitget 1차/2차/3차 분할 비중 합산 배팅 정격 연동 및 VOOX 공식 복원 완공 (V4.88)
+        self.CURRENT_VERSION = "V4.92"  # ShinSeon_Bitget 데이터 다운로드 버튼 개편 및 날짜별 CSV+LOG 통합 다운로드 센터 완공 (V4.92)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1091,8 +1091,8 @@ class ShinseonDashboard(QMainWindow):
         right_layout.addWidget(self.lbl_active_price_alerts)
         
         
-        # CSV 다운로드 버튼 추가
-        self.btn_csv_download = QPushButton("📥 CSV 데이터 다운로드", right_widget)
+        # 통합 데이터 & 로그 다운로드 센터 버튼 개편
+        self.btn_csv_download = QPushButton("📥 데이터 다운로드", right_widget)
         self.btn_csv_download.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #DEBA9D, stop:1 #C5A07A);
@@ -1107,7 +1107,7 @@ class ShinseonDashboard(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #E5C199, stop:1 #DEBA9D);
             }
         """)
-        self.btn_csv_download.clicked.connect(self.request_csv_download)
+        self.btn_csv_download.clicked.connect(self.open_download_center)
         right_layout.addWidget(self.btn_csv_download)
 
         right_layout.addStretch()
@@ -1184,13 +1184,17 @@ class ShinseonDashboard(QMainWindow):
         except Exception:
             return False
 
-    def request_csv_download(self):
+    def open_download_center(self):
         if self.is_ws_active():
             import json
-            asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_CSV'})))
-            self.add_log("[CSV] 💾 서버에 데이터 다운로드를 요청했습니다.")
+            asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_FILE_LIST'})))
+            self.download_dialog = DataDownloadCenterDialog(self)
+            self.download_dialog.exec()
         else:
-            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
+            self.add_log("⚠️ [웹소켓] 서버 연결이 닫혀 있어 파일 목록을 불러올 수 없습니다.")
+
+    def request_csv_download(self):
+        self.open_download_center()
 
     async def connect_websocket(self):
         url = 'ws://13.192.187.244:8765'
@@ -1224,6 +1228,16 @@ class ShinseonDashboard(QMainWindow):
                                 self.bar_liq.setRange(0, int(target_liq_val))
                                 self.bar_liq.setValue(int(liq_val))
                                 self.bar_liq.setFormat(f"1분 누적 청산: ${int(liq_val):,} / ${target_liq_val:,.0f}")
+                        elif msg_type == 'EVT_FILE_LIST':
+                            dates_list = payload.get('dates', [])
+                            if hasattr(self, 'download_dialog') and self.download_dialog:
+                                self.download_dialog.update_dates_list(dates_list)
+                        elif msg_type == 'EVT_FILE_DATA':
+                            req_date = payload.get('date', '')
+                            csv_text = payload.get('csv_text', '')
+                            log_text = payload.get('log_text', '')
+                            if hasattr(self, 'download_dialog') and self.download_dialog:
+                                self.download_dialog.handle_download_completed(req_date, csv_text, log_text)
                         elif msg_type == 'EVT_CSV_DATA':
                             csv_content = payload.get('csv_text', '')
                             csv_path = os.path.join(BASE_DIR, "docs", "downloaded_shinseon_data.csv")
