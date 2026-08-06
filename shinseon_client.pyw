@@ -2131,6 +2131,7 @@ class ShinseonDashboard(QMainWindow):
             self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
 
     def reset_stoploss_ui(self):
+        self.is_stoploss_active = False
         if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
             self.bot_core.v35_engine.custom_stop_active = False
         if hasattr(self, "edit_stoploss_offset"):
@@ -2161,9 +2162,10 @@ class ShinseonDashboard(QMainWindow):
             except Exception:
                 pass
 
+            self.add_log("🛡️ [스마트 스탑] 버튼 클릭 이벤트를 즉시 수신하였습니다.")
+
             # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
-            if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and getattr(self.bot_core.v35_engine, "custom_stop_active", False):
-                self.bot_core.v35_engine.custom_stop_active = False
+            if getattr(self, "is_stoploss_active", False) or "해제" in self.btn_stoploss.text():
                 self.reset_stoploss_ui()
                 self.add_log("🧹 [스마트 스탑 해제] 스마트 스탑 감시가 해제되었습니다.")
                 if self.is_ws_active():
@@ -2187,6 +2189,7 @@ class ShinseonDashboard(QMainWindow):
                 ratio_val = 100.0
                 self.edit_stoploss_ratio.setText("100")
 
+            self.is_stoploss_active = True
             self.add_log(f"🛡️ [스마트 스탑 설정 개시] ROE 오프셋: {offset_val:+.2f}%, 청산 비율: {ratio_val:.0f}% 감시 가드를 가동합니다.")
 
             if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
