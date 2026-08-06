@@ -911,22 +911,23 @@ class ShinseonDashboard(QMainWindow):
         
         right_layout.addWidget(self.btn_emergency)
         
-        # 🌐 비트겟 거래소 웹사이트 바로가기 버튼 (정격 위치: 비상 탈출 버튼 바로 아래)
-        self.btn_open_bitget = QPushButton("🌐 비트겟 거래소 열기 ↗", right_widget)
+        # 🌐 비트겟 거래소 웹사이트 바로가기 버튼 (대시보드 세종 메탈릭 브론즈 톤 매칭)
+        self.btn_open_bitget = QPushButton("🌐 비트겟 선물 거래소 열기 ↗", right_widget)
         self.btn_open_bitget.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
         self.btn_open_bitget.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2C4A5E, stop:1 #1C3240);
-                color: #00FFCC;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #324452, stop:1 #1F2D38);
+                color: #DEBA9D;
                 font-weight: bold; 
-                font-size: 11px; 
-                padding: 7px; 
+                font-size: 12px; 
+                padding: 9px; 
                 border-radius: 4px;
-                border: 1px solid #00FFCC;
+                border: 1px solid #A88869;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #3A617B, stop:1 #2C4A5E);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #44596B, stop:1 #324452);
                 color: #FFFFFF;
+                border: 1px solid #DEBA9D;
             }
         """)
         self.btn_open_bitget.clicked.connect(self.open_bitget_website)
@@ -2161,8 +2162,8 @@ class ShinseonDashboard(QMainWindow):
     def open_bitget_website(self):
         import webbrowser
         try:
-            webbrowser.open("https://www.bitget.com/mix/usdt/BTCUSDT")
-            self.add_log("🌐 [비트겟 거래소] 비트겟 공식 선물 거래소 웹사이트를 즉시 열었습니다.")
+            webbrowser.open("https://www.bitget.com/asia/futures/usdt/BTCUSDT")
+            self.add_log("🌐 [비트겟 거래소] 비트겟 공식 선물 거래소(BTCUSDT) 웹사이트를 즉시 열었습니다.")
         except Exception as e:
             self.add_log(f"❌ [웹사이트 열기 실패] 사유: {e}")
 
