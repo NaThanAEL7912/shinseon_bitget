@@ -854,7 +854,8 @@ class ShinseonV35Engine:
         self.entry_direction = "LONG"
         self.position_side = "LONG"
         self.is_position_active = False
-        self.is_snipe_active = False      # 저격 감시 승인 상태 스위치
+        self.is_snipe_active = True       # 저격 감시 승인 상태 스위치 (기본 가동)
+        self.bot_state = "RUNNING"        # 기본 봇 가동 상태
         self.exit_in_progress = False     # 선제 청산 중복 방지 락 플래그 (개발계획서_171)
         self.entry_price = 0.0
         self.entry_price_1 = 0.0
@@ -2312,16 +2313,19 @@ class WsServer:
                     if cmd == "CMD_SYNC_POSITION":
                         asyncio.create_task(self.handle_sync_position(websocket))
                     elif cmd == "CMD_START_BOT":
-                        if self.bot_core.v35_engine:
+                        if self.bot_core and self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "RUNNING"
+                            self.bot_core.v35_engine.is_snipe_active = True
                             await self.broadcast_event("ui_update", {"msg": "✅ [봇 제어] 실전 저격 감시가 시작되었습니다.", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_STOP_BOT":
-                        if self.bot_core.v35_engine:
+                        if self.bot_core and self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
+                            self.bot_core.v35_engine.is_snipe_active = False
                         await self.broadcast_event("ui_update", {"msg": "⏸ [봇 제어] 자동 저격 감시가 정지되었습니다 (보유 포지션 안전 유지)", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_EMERGENCY":
                         if self.bot_core and self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "STOPPED"
+                            self.bot_core.v35_engine.is_snipe_active = False
                             asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
                         await self.broadcast_event("ui_update", {"msg": "🚨 [비상 탈출] 비상 탈출 로직 가동! 비트겟 100% 전량 시장가 청산 주문 발주 완료.", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_CLOSE_50":
