@@ -855,7 +855,7 @@ class ShinseonV35Engine:
         self.MAX_LATENCY_MS_PROD = 50.0   # AWS 도쿄 실전 레이턴시 컷오프 (50ms)
         self.is_local_mode = False        # 기본 기동 실전 라이브 모드 (False)
         
-        self.ENTRY_SLIPPAGE_CAP = 0.0003  # 진입 허용 슬리피지 (0.03%)
+        self.ENTRY_SLIPPAGE_CAP = 0.0030  # 진입 허용 슬리피지 (0.30% - 안전 확장 v4.82)
         
         self.entry_direction = "LONG"
         self.position_side = "LONG"
@@ -1635,154 +1635,82 @@ class ShinseonV35Engine:
                     self.bot.ui_cb(0.0, 0, f"⏳ [쿨타임 대기 중] 진입 보류 (남은 시간: {remain_sec:.1f}초)")
                 return
 
-            # [세션 거래 ON/OFF 체크박스 검증 (개발계획서_260)]: 최상단으로 이동됨 (v4.07)
-
-            t_step_start = time.time()
-            now_t_metric = time.time()
-            if getattr(self.bot, "dashboard", None) and now_t_metric - getattr(self, "last_radar_metric_log_time", 0.0) >= 1.0:
-                self.last_radar_metric_log_time = now_t_metric
-                self.bot.dashboard.add_log(f"⏱️ [1단계 임계치 돌파 메트릭] 사운드 0.000ms 최우선 직송 완료 ➡️ {direction} 저격 검증 진입...")
-            self.entry_reason = f"1분 청산 ${rolling_1m_liq_usd:,.0f} (임계치: ${target_liq:,.0f}) & OI속도 {oi_delta_1m:+.4f}% (임계치: {target_oi:+.4f}%) 동시 돌파"
-            self.last_signal_price = binance_mid
-
-            # 동일 방향 중복 신호가 발생했을 때 -> 2차 / 3차 추가 매수 조건 검증 및 기동
-            if self.is_position_active and not is_opposite:
-                dashboard = getattr(self.bot, "dashboard", None) or self.bot
-                split_cooldown = dashboard.split_cooldown_seconds
-                
-                # 2차 추가 매수가 아직 격발되지 않은 경우
-                if not getattr(self, "has_second_entry", False):
-                    if dashboard.split_entry_2_ratio <= 0.0:
-                        return
-                    split_trigger_val = dashboard.split_entry_2_trigger_pct
-                    split_trigger = split_trigger_val / 100.0
-                    
-                    if self.entry_direction == "LONG":
-                        pnl_from_entry_1 = (binance_mid - self.entry_price_1) / self.entry_price_1
-                    else:
-                        pnl_from_entry_1 = (self.entry_price_1 - binance_mid) / self.entry_price_1
-                        
-                    if pnl_from_entry_1 <= split_trigger:
-                        time_since_last_split = time.time() - getattr(self, "last_split_entry_time", 0.0)
-                        if time_since_last_split < split_cooldown:
-                            if getattr(self.bot, "dashboard", None):
-                                self.bot.dashboard.add_log(f"⏳ [2차 추가매수 보류] 1차 진입가 대비 하락폭 충족({pnl_from_entry_1*100.0:+.2f}%)되었으나, 쿨다운 대기 중 ({int(split_cooldown - time_since_last_split)}초 남음)")
-                            return
-                            
-                        self.has_second_entry = True
-                        self.last_split_entry_time = time.time()
-                        if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log(f"⚡ [2차 추가매수 발동] 동일방향 신호 컨펌! 1차 진입가 대비 {pnl_from_entry_1*100.0:+.2f}% 도달 (임계치: {split_trigger*100.0:.2f}%)")
-                        asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_100_PERCENT"))
-                        return
-                    else:
-                        return
-                        
-                # 2차 추가 매수는 격발되었으나 3차 추가 매수가 아직 격발되지 않은 경우
-                elif getattr(self, "has_second_entry", False) and not getattr(self, "has_third_entry", False):
-                    if dashboard.split_entry_3_ratio <= 0.0:
-                        return
-                    split_trigger_val = dashboard.split_entry_3_trigger_pct
-                    split_trigger = split_trigger_val / 100.0
-                    
-                    if self.entry_direction == "LONG":
-                        pnl_from_entry_1 = (binance_mid - self.entry_price_1) / self.entry_price_1
-                    else:
-                        pnl_from_entry_1 = (self.entry_price_1 - binance_mid) / self.entry_price_1
-                        
-                    if pnl_from_entry_1 <= split_trigger:
-                        time_since_last_split = time.time() - getattr(self, "last_split_entry_time", 0.0)
-                        if time_since_last_split < split_cooldown:
-                            if getattr(self.bot, "dashboard", None):
-                                self.bot.dashboard.add_log(f"⏳ [3차 추가매수 보류] 1차 진입가 대비 하락폭 충족({pnl_from_entry_1*100.0:+.2f}%)되었으나, 쿨다운 대기 중 ({int(split_cooldown - time_since_last_split)}초 남음)")
-                            return
-                            
-                        self.has_third_entry = True
-                        self.last_split_entry_time = time.time()
-                        if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log(f"⚡ [3차 추가매수 발동] 동일방향 신호 컨펌! 1차 진입가 대비 {pnl_from_entry_1*100.0:+.2f}% 도달 (임계치: {split_trigger*100.0:.2f}%)")
-                        asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_THIRD_ENTRY"))
-                        return
-                    else:
-                        return
-                else:
-                    return
-            # -------------------------------------------------------------------------------------
-            if self.exit_in_progress:
-                return
-                
-            if time.time() - getattr(self, "last_entry_time", 0.0) < 5.0:
-                remain_sec = 5.0 - (time.time() - getattr(self, "last_entry_time", 0.0))
-                if self.bot.ui_cb and now_t_chk - getattr(self, "last_cooldown_log_time", 0.0) >= 1.0:
-                    self.last_cooldown_log_time = now_t_chk
-                    self.bot.ui_cb(0.0, 0, f"⏳ [중복 진입 방지] 동일 스파이크 연속 진입 보류 (남은 시간: {remain_sec:.1f}초)")
-                return
-            
-            # 1.0초 정밀 디바운스로 🎯 [저격 격발] 로그 도배 100% 원천 박멸
-            if getattr(self.bot, "dashboard", None) and now_t_chk - getattr(self, "last_snipe_trigger_log_time", 0.0) >= 1.0:
+            # 1단계: 타점 포착 WSS 실시간 로그 송출
+            if now_t_chk - getattr(self, "last_snipe_trigger_log_time", 0.0) >= 0.5:
                 self.last_snipe_trigger_log_time = now_t_chk
-                self.bot.dashboard.add_log(f"🎯 [저격 격발] 시장청산(${rolling_1m_liq_usd:,.0f}) & OI속도({oi_delta_1m:+.4f}%) 임계치 동시 돌파! 진입 검증 시도...")
+                step1_msg = f"💥 [1단계 타점포착 v4.82] 바이낸스 청산(${rolling_1m_liq_usd:,.0f}) & OI속도({oi_delta_1m:+.4f}%) 돌파! (저격 방향: {direction})"
+                if self.bot and hasattr(self.bot, "broadcast_event"):
+                    asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step1_msg}))
             
-            # 방어벽 ①: 물리적 레이턴시 컷오프 (v2.88 차단 가드 전면 해제 - 레이턴시 상관없이 100% 즉각 발주)
-            t_order = time.time() * 1000
-            allowed_latency = self.MAX_LATENCY_MS_LOCAL if self.is_local_mode else self.MAX_LATENCY_MS_PROD
-            actual_latency = t_order - t_signal
-            
-            # v2.88 해제: 레이턴시 초과 시 진입 기각 return 블록을 해제하고 100% 즉각 발주 진행
-            if actual_latency > allowed_latency:
-                if getattr(self.bot, "dashboard", None):
-                    self.bot.dashboard.add_log(f"⚡ [v2.88 레이턴시 통과] 레이턴시 {actual_latency:.1f}ms (기존 허용 {allowed_latency:.1f}ms 초과하나 전면 해제 즉각 발주)")
-                
-            # 2단계: 비트겟 호가창 VWAP 역공학 스캔
+            # 2단계: 비트겟 호가창 VWAP 역공학 스캔 및 WSS 로그 송출
             bitget_book = await self.fetch_bitget_orderbook_internal()
             if not bitget_book or not bitget_book.get('asks') or not bitget_book.get('bids'):
-                if self.bot.ui_cb:
-                    self.bot.ui_cb(0.0, 0, f"❌ [진입 실패] BITGET 호가창 데이터를 조회할 수 없습니다.")
+                err_msg = "❌ [2단계 진입실패] BITGET 호가창 데이터를 조회할 수 없습니다."
+                if self.bot and hasattr(self.bot, "broadcast_event"):
+                    asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": err_msg}))
                 return
                 
             expected_fill = bitget_book['asks'][0][0] if direction == 'LONG' else bitget_book['bids'][0][0]
+            spread_pct = abs(expected_fill - binance_mid) / binance_mid * 100.0
             
-            # 방어벽 ②: 방향성 비대칭 슬리피지 캡 검증 (기획서_21)
+            step2_msg = f"🔍 [2단계 호가스캔 v4.82] 비트겟 최우선 호가 스캔 완료 (예상체결가: ${expected_fill:,.1f}, 스프레드: {spread_pct:.4f}%)"
+            if self.bot and hasattr(self.bot, "broadcast_event"):
+                asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step2_msg}))
+            
+            # 방어벽 ②: 방향성 비대칭 슬리피지 캡 검증 (0.30% 가드)
             if direction == 'LONG':
-                if expected_fill < binance_mid:
-                    favorable_pct = (binance_mid - expected_fill) / binance_mid
-                    if favorable_pct > 0.010: # 1.0% 초과 튀는 노이즈 차단
-                        if self.bot.ui_cb:
-                            self.bot.ui_cb(0.0, 0, f"⚠️ [진입 기각] 유리한 롱 슬리피지 노이즈 1.0% 초과 ({favorable_pct*100.0:.3f}%) (차이: ${binance_mid - expected_fill:,.1f})")
-                        return
-                    # 1.0% 이하 유리한 슬리피지는 100% 무조건 승인!
-                else:
+                if expected_fill >= binance_mid:
                     unfavorable_slippage = (expected_fill - binance_mid) / binance_mid
                     if unfavorable_slippage > self.ENTRY_SLIPPAGE_CAP:
-                        if self.bot.ui_cb:
-                            self.bot.ui_cb(0.0, 0, f"⚠️ [진입 기각] 불리한 롱 슬리피지 {unfavorable_slippage*100.0:.3f}% 초과 (허용: {self.ENTRY_SLIPPAGE_CAP*100.0:.3f}%) (차이: ${expected_fill - binance_mid:,.1f})")
+                        rej_msg = f"⚠️ [진입 기각] 불리한 롱 슬리피지 {unfavorable_slippage*100.0:.3f}% 초과 (허용: {self.ENTRY_SLIPPAGE_CAP*100.0:.3f}%) (차이: ${expected_fill - binance_mid:,.1f})"
+                        if self.bot and hasattr(self.bot, "broadcast_event"):
+                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": rej_msg}))
                         return
             else: # SHORT
-                if expected_fill > binance_mid:
-                    favorable_pct = (expected_fill - binance_mid) / binance_mid
-                    if favorable_pct > 0.010: # 1.0% 초과 튀는 노이즈 차단
-                        if self.bot.ui_cb:
-                            self.bot.ui_cb(0.0, 0, f"⚠️ [진입 기각] 유리한 숏 슬리피지 노이즈 1.0% 초과 ({favorable_pct*100.0:.3f}%) (차이: ${expected_fill - binance_mid:,.1f})")
-                        return
-                    # 1.0% 이하 유리한 슬리피지는 100% 무조건 승인!
-                else:
+                if expected_fill <= binance_mid:
                     unfavorable_slippage = (binance_mid - expected_fill) / binance_mid
                     if unfavorable_slippage > self.ENTRY_SLIPPAGE_CAP:
-                        if self.bot.ui_cb:
-                            self.bot.ui_cb(0.0, 0, f"⚠️ [진입 기각] 불리한 숏 슬리피지 {unfavorable_slippage*100.0:.3f}% 초과 (허용: {self.ENTRY_SLIPPAGE_CAP*100.0:.3f}%) (차이: ${binance_mid - expected_fill:,.1f})")
+                        rej_msg = f"⚠️ [진입 기각] 불리한 숏 슬리피지 {unfavorable_slippage*100.0:.3f}% 초과 (허용: {self.ENTRY_SLIPPAGE_CAP*100.0:.3f}%) (차이: ${binance_mid - expected_fill:,.1f})"
+                        if self.bot and hasattr(self.bot, "broadcast_event"):
+                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": rej_msg}))
                         return
                 
-            # 3단계: 최종 필터 패스 -> 저격 감시 승인(is_snipe_active) 및 Taker 0.012% 저격 진입
+            # 3단계 & 4단계: 발주 전송 및 체결 로그 송출
             if not self.is_position_active and self.is_snipe_active and not self.exit_in_progress:
-                # --- [2중 중복 진입 방지 선제 락 선언] ---
-                # 비동기 주문 전송 전 즉시 락을 걸어 후속 프레임 격발 원천 차단
                 self.is_position_active = True
-                
                 self.last_entry_time = time.time()
                 self.entry_direction = direction
                 self.entry_price = expected_fill
                 self.entry_price_1 = expected_fill
                 self.has_second_entry = False
+                self.peak_pnl_pct = 0.0
+                
+                step3_msg = f"🎯 [3단계 실전발주 v4.82] 비트겟 선물 BTCUSDT 시장가 {direction} 발주 패킷 전송 시작..."
+                if self.bot and hasattr(self.bot, "broadcast_event"):
+                    asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step3_msg}))
+                    
+                try:
+                    success = await self.execute_bitget_internal_packet(side=direction, order_type="IOC_MARKET")
+                    if success:
+                        self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + 60.0)
+                        if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
+                            self.cooldown_timer_task.cancel()
+                        self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(60.0, "신규 진입 60초 쿨타임"))
+                        
+                        step4_msg = f"✅ [4단계 체결완료 v4.82] 비트겟 선물 {direction} 시장가 체결 성공! (체결가: ${expected_fill:,.1f})"
+                        if self.bot and hasattr(self.bot, "broadcast_event"):
+                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step4_msg}))
+                        asyncio.create_task(self.manage_v35_exit_guardrail(direction))
+                    else:
+                        self.is_position_active = False
+                        fail_msg = f"⚠️ [실전 진입 실패] 1차 진입 발주 실패로 주문 기각 (방향: {direction})"
+                        if self.bot and hasattr(self.bot, "broadcast_event"):
+                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": fail_msg}))
+                except Exception as e:
+                    self.is_position_active = False
+                    ex_msg = f"❌ [발주 예외] 진입 주문 처리 중 오류: {e}"
+                    if self.bot and hasattr(self.bot, "broadcast_event"):
+                        asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": ex_msg}))
                 self.peak_pnl_pct = 0.0
                 self.peak_buying_delta = random.uniform(80000, 150000)
                 

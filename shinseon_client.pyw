@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.80"  # ShinSeon_Bitget 3초 주기 비트겟 포지션 강제 동기화 및 가짜 포지션 박멸 완공 (V4.80)
+        self.CURRENT_VERSION = "V4.82"  # ShinSeon_Bitget 4단계 실시간 WSS 발주 로그 직송 및 슬리피지 캡 0.30% 안전 확장 완공 (V4.82)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
