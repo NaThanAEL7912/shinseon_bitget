@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.69"  # ShinSeon_Bitget 수동 제어판 50% 청산 & 스마트 스탑 버튼 2종 완전 삭제 및 UI 정화 수술 (V4.69)
+        self.CURRENT_VERSION = "V4.70"  # ShinSeon_Bitget 비트겟 v2 API 50% 분할 청산 및 소액 수량 스마트 전량 청산 완공 (V4.70)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -905,10 +905,28 @@ class ShinseonDashboard(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C7787, stop:1 #4E6573);
             }
         """)
-        self.btn_reload_browser.clicked.connect(self.trigger_manual_reload_browser)
-        right_layout.addWidget(self.btn_reload_browser)
-        
+        # BITGET 수동 제어판 (50% 청산 전용)
+        self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 신속 분할 청산 제어판</b>", right_widget)
+        right_layout.addWidget(self.lbl_bitget_title)
 
+        self.btn_close_50 = QPushButton("🌓 50% 시장가 분할 청산", right_widget)
+        self.btn_close_50.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
+        self.btn_close_50.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C4D3E, stop:1 #3D3329);
+                color: #F5EFEB;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 9px;
+                border-radius: 4px;
+                border: 1.5px solid #A88869;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7D664D, stop:1 #5C4D3E);
+            }
+        """)
+        self.btn_close_50.clicked.connect(self.execute_50_percent_close)
+        right_layout.addWidget(self.btn_close_50)
         
         # ----------------------------------------------------------------------
         # ■ [BITGET] 실시간 목표가 가격 알림 제어판 (v3.65)
@@ -2055,7 +2073,45 @@ class ShinseonDashboard(QMainWindow):
                 QPushButton:hover {
                     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
                 }
-            """)
+    def execute_50_percent_close(self, *args):
+        try:
+            from PyQt6.QtWidgets import QMessageBox, QApplication
+            try:
+                QApplication.beep()
+            except Exception:
+                pass
+
+            self.add_log("🚀 [수동 50% 청산 개시] 비트겟 실전 포지션 50% 시장가 청산 명령을 집행합니다.")
+
+            # 1. AWS 릴레이 서버 WSS 패킷 전송
+            if self.is_ws_active():
+                import json
+                try:
+                    asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
+                except Exception:
+                    pass
+                self.add_log("📡 [서버 릴레이] AWS 릴레이 서버로 50% 청산 명령 패킷(CMD_CLOSE_50) 전송 완료")
+            else:
+                self.add_log("ℹ️ [서버 릴레이] 웹소켓 미연결 상태 (로컬 백엔드 직접 발주 전환)")
+
+            # 2. 로컬 백엔드 엔진 2중 방어 직송
+            if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
+                self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
+                try:
+                    asyncio.ensure_future(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                except Exception as ex:
+                    self.add_log(f"⚠️ 로컬 청산 코루틴 발주 예외: {ex}")
+
+            # 3. 체결 후 0.1초 포지션 자동 동기화 예속
+            try:
+                asyncio.ensure_future(self.do_position_sync())
+            except Exception:
+                pass
+
+            # 4. 화면 중앙 팝업 알림창 직송
+            QMessageBox.information(self, "비트겟 50% 청산", "🌓 비트겟 50% 시장가 분할 청산 명령이 집행되었습니다!\n(서버 및 대시보드 포지션 자동 동기화 연동)")
+        except Exception as e:
+            self.add_log(f"❌ [50% 청산 오류 발생] 사유: {e}")
 
     def trigger_stoploss_setting(self):
         try:

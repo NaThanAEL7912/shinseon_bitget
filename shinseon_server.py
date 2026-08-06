@@ -1264,8 +1264,14 @@ class ShinseonV35Engine:
 
                         if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
                             close_side = "buy" if pos_side == "long" else "sell"
-                            amount = float(active_pos['contracts']) * ratio_factor
-                            amount = max(0.001, round(amount, 3))
+                            total_contracts = float(active_pos['contracts'])
+                            if total_contracts <= 0.001:
+                                amount = total_contracts
+                                self.bot.ui_cb(0.0, 0, f"ℹ️ [스마트 수량 가드] 현재 포지션 수량({total_contracts} BTC)이 최소 발주 단위(0.001 BTC) 이하이므로 50% 분할 대신 잔여 포지션 전량({amount} BTC) 시장가 청산을 집행합니다.")
+                            else:
+                                amount = round(total_contracts * ratio_factor, 3)
+                                if amount < 0.001:
+                                    amount = 0.001
                             pct_lbl = int(round(ratio_factor * 100))
                             self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 v2 API 직송] 수량: {amount} BTC (방향: {pos_side.upper()})")
                             try:
