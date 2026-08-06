@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.99"  # V4.99 신선 비트겟 트레이딩 로깅 엔진 총체적 개편 (11개 칼럼 CSV & 초단위 전량 로깅)
+        self.CURRENT_VERSION = "V5.01"  # V5.01 전체 12대 텔레그램 알림 서식 완전 통합 장착
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None

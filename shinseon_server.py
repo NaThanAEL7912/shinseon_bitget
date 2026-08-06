@@ -131,31 +131,58 @@ async def run_telegram_command_poller(bot_core):
                                 if bot_core.v35_engine:
                                     bot_core.v35_engine.bot_state = "RUNNING"
                                     bot_core.v35_engine.is_snipe_active = True
-                                await send_telegram_notification_server("✅ <b>[신선 봇]</b> 실전 자동 저격 감시가 시작되었습니다.")
-                                ui_callback(bot_core.current_price, 1, "✅ [텔레그램 원격] 봇 가동 감시 시작")
+                                await send_telegram_notification_server("🟢 <b>[원격 제어]</b> 자동 봇 감시가 가동되었습니다. (실물 진입 허용)")
+                                if bot_core.ui_cb:
+                                    bot_core.ui_cb(bot_core.current_price, 1, "🟢 [텔레그램 원격] 봇 가동 감시 시작")
                             elif text in ["정지", "/정지", "/stop"]:
                                 if bot_core.v35_engine:
                                     bot_core.v35_engine.bot_state = "STOPPED"
                                     bot_core.v35_engine.is_snipe_active = False
-                                await send_telegram_notification_server("🛑 <b>[신선 봇]</b> 자동 저격 감시가 일시 정지되었습니다.")
-                                ui_callback(bot_core.current_price, 1, "🛑 [텔레그램 원격] 봇 가동 정지")
+                                await send_telegram_notification_server("🛑 <b>[원격 제어]</b> 자동 봇 감시를 대기 모드로 해제했습니다.")
+                                if bot_core.ui_cb:
+                                    bot_core.ui_cb(bot_core.current_price, 1, "🛑 [텔레그램 원격] 봇 가동 정지")
                             elif text in ["상태", "/상태", "/status"]:
-                                pos_str = "100% 현금 대기 중"
-                                pnl_info = ""
-                                if bot_core.v35_engine and bot_core.v35_engine.is_position_active:
-                                    side = getattr(bot_core.v35_engine, "entry_direction", "")
-                                    entry_price = getattr(bot_core.v35_engine, "entry_price", 0.0)
-                                    contracts = float(getattr(bot_core.v35_engine, "position_volume", 0)) / 1000.0
-                                    pos_str = f"{side} 진입 중 ({contracts:.3f} BTC @ ${entry_price:,.1f})"
-                                    pnl_info = f"\nROE: <b>{getattr(bot_core.v35_engine, 'last_live_roe_pct', 0.0):+.2f}%</b>"
+                                current_p = bot_core.current_price
+                                cap_usd = getattr(bot_core, "c_total", 20000.0)
+                                bal_usd = getattr(bot_core, "bitget_balance", 0.0)
                                 
+                                sess_name = getattr(bot_core.v35_engine, "current_session_key", "NY").upper() if bot_core.v35_engine else "NY"
+                                sess_sl = getattr(bot_core.v35_engine, "current_session_sl", -1.3) if bot_core.v35_engine else -1.3
+                                
+                                rolling_liq = getattr(bot_core, "last_rolling_1m_liq", 0.0)
+                                oi_delta = getattr(bot_core, "last_oi_delta_1m", 0.0)
+                                
+                                if bot_core.v35_engine and bot_core.v35_engine.is_position_active:
+                                    side = getattr(bot_core.v35_engine, "entry_direction", "LONG")
+                                    entry_p = getattr(bot_core.v35_engine, "entry_price", 0.0)
+                                    vol_btc = float(getattr(bot_core.v35_engine, "position_volume", 0)) / 1000.0
+                                    lev = getattr(bot_core.v35_engine, "leverage_level", 30) or 30
+                                    roe_pct = getattr(bot_core.v35_engine, "last_live_pnl_pct", 0.0) * lev
+                                    pnl_usd = (current_p - entry_p) / entry_p * vol_btc * entry_p if entry_p > 0 and side == "LONG" else (entry_p - current_p) / entry_p * vol_btc * entry_p if entry_p > 0 else 0.0
+                                    
+                                    pos_block = (
+                                        f"포지션: <b>{side}</b>\n"
+                                        f"수량: <b>{vol_btc:.3f} BTC</b>\n"
+                                        f"평단가: <b>${entry_p:,.1f} USDT</b>\n"
+                                        f"ROE%: <b>{roe_pct:+.2f}%</b>\n"
+                                        f"PNL($): <b>{pnl_usd:+,.2f} USDT</b>"
+                                    )
+                                else:
+                                    pos_block = "포지션: <b>100% 현금 대기 중</b>"
+                                    
                                 state_str = bot_core.v35_engine.bot_state if bot_core.v35_engine else "RUNNING"
-                                bal_str = f"${getattr(bot_core, 'bitget_balance', 0.0):,.2f} USDT"
+                                
                                 status_msg = (
-                                    f"<b>📊 [신선 봇 실시간 상태보고]</b>\n\n"
-                                    f"현재가: <b>${bot_core.current_price:,.1f} USDT</b>\n"
-                                    f"포지션: <b>{pos_str}</b>{pnl_info}\n"
-                                    f"비트겟 잔고: <b>{bal_str}</b>\n"
+                                    f"<b>📊 [신선 봇 실시간 상태 보고]</b>\n\n"
+                                    f"<b>[자본 및 시세]</b>\n"
+                                    f"가용자본금: <b>${cap_usd:,.2f} USDT</b> (비트겟: ${bal_usd:,.2f})\n"
+                                    f"현재가: <b>${current_p:,.1f} USDT</b>\n"
+                                    f"현재 세션: <b>{sess_name} (손절: {sess_sl:+.2f}%)</b>\n\n"
+                                    f"<b>[시장 레이더]</b>\n"
+                                    f"1분 청산: <b>${rolling_liq:,.0f} USDT</b>\n"
+                                    f"1분 OI 속도: <b>{oi_delta:+.4f}%</b>\n\n"
+                                    f"<b>[포지션 현황]</b>\n"
+                                    f"{pos_block}\n\n"
                                     f"구동 상태: <b>{state_str}</b>"
                                 )
                                 await send_telegram_notification_server(status_msg)
@@ -164,8 +191,9 @@ async def run_telegram_command_poller(bot_core):
                                     bot_core.v35_engine.bot_state = "STOPPED"
                                     bot_core.v35_engine.is_snipe_active = False
                                     asyncio.create_task(bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
-                                await send_telegram_notification_server("🚨 <b>[신선 봇]</b> 비트겟 거래소 포지션 100% 시장가 즉시 전량 청산 완료!")
-                                ui_callback(bot_core.current_price, 1, "🚨 [텔레그램 원격] 비상 탈출 100% 시장가 전량 청산 완료")
+                                await send_telegram_notification_server("<b>🚨 [원격 비상 청산]</b>\n텔레그램 어명 명령으로 비트겟 거래소 포지션을 100% 즉시 시장가 강제 전량 청산 집행 완료했습니다!")
+                                if bot_core.ui_cb:
+                                    bot_core.ui_cb(bot_core.current_price, 1, "🚨 [텔레그램 원격] 비상 탈출 100% 시장가 전량 청산 완료")
         except Exception as e:
             logger.error(f"Telegram poller error: {e}")
         await asyncio.sleep(2)
@@ -197,6 +225,10 @@ class BotCore:
         self.v35_engine = None
         self.ui_cb = None
         self.cdp_lock = asyncio.Lock()  # CDP 연결 동시 충돌 방지 락
+        
+        self.dashboard = self
+        self.last_rolling_1m_liq = 0.0
+        self.last_oi_delta_1m = 0.0
         
         # 비트겟 CCXT 초기화
         self.bitget_exchange = None
@@ -307,6 +339,23 @@ class BotCore:
         except Exception as e:
             print(f"⚠️ [Server BotCore] Config 로드 실패: {e}")
         
+    def send_telegram_notification(self, message):
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(send_telegram_notification_server(message))
+        except Exception as e:
+            logger.error(f"send_telegram_notification error: {e}")
+
+    def add_log(self, message):
+        logger.info(f"[LOG] {message}")
+
+    def play_entry_sound(self):
+        pass
+
+    def reset_stoploss_ui(self):
+        pass
+
     async def run_token_sniffer(self):
         pass
 
@@ -1603,6 +1652,29 @@ class ShinseonV35Engine:
                             if new_vol > 0:
                                 self.entry_price = (self.entry_price * old_vol + current_price * vol_int) / new_vol
                             self.position_volume = new_vol
+                            
+                            if order_type == "ADD_100_PERCENT":
+                                self.has_second_entry = True
+                                msg_tg = (
+                                    f"<b>🔥 [2차 추가 진입 알림]</b>\n"
+                                    f"방향: <b>{side}</b>\n"
+                                    f"사유: <b>추가 매수 조건(-0.30% 하락선/눌림목) 도달로 2차 비중 진입 완료</b>\n"
+                                    f"추가 수량: <b>{amount:.3f} BTC</b>\n"
+                                    f"최종 평단가: <b>{self.entry_price:,.1f} USDT</b>"
+                                )
+                                if self.bot and self.bot.dashboard:
+                                    self.bot.dashboard.send_telegram_notification(msg_tg)
+                            elif order_type == "ADD_THIRD_ENTRY":
+                                self.has_third_entry = True
+                                msg_tg = (
+                                    f"<b>🚀 [3차 추가 진입 알림]</b>\n"
+                                    f"방향: <b>{side}</b>\n"
+                                    f"사유: <b>3차 비중 진입 조건 도달로 최종 풀 매수 집행 완료</b>\n"
+                                    f"추가 수량: <b>{amount:.3f} BTC</b>\n"
+                                    f"최종 평단가: <b>{self.entry_price:,.1f} USDT</b>"
+                                )
+                                if self.bot and self.bot.dashboard:
+                                    self.bot.dashboard.send_telegram_notification(msg_tg)
                         else:
                             self.entry_price = current_price
                             self.entry_price_1 = current_price
@@ -1902,43 +1974,38 @@ class ShinseonV35Engine:
                         step4_msg = f"✅ [4단계 체결완료 v4.82] 비트겟 선물 {direction} 시장가 체결 성공! (체결가: ${expected_fill:,.1f})"
                         if self.bot and hasattr(self.bot, "broadcast_event"):
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step4_msg}))
+                        
+                        signal_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        qty_btc = float(getattr(self, "position_volume", 0)) / 1000.0
+                        if qty_btc <= 0.0:
+                            qty_btc = 0.007
+                        entry1_msg = (
+                            f"<b>🎯 [1차 진입 알림]</b>\n"
+                            f"방향: <b>{direction}</b>\n"
+                            f"사유: <b>1분 청산 ${rolling_1m_liq_usd:,.0f} & OI {oi_delta_1m:+.4f}% 동시 충족</b>\n\n"
+                            f"<b>[신호 발생 정보]</b>\n"
+                            f"신호 발생시간: <b>{signal_time_str}</b>\n"
+                            f"수량: <b>{qty_btc:.3f} BTC</b>\n"
+                            f"평단가: <b>{expected_fill:,.1f} USDT</b>"
+                        )
+                        if self.bot and self.bot.dashboard:
+                            self.bot.dashboard.send_telegram_notification(entry1_msg)
+                            self.bot.dashboard.play_entry_sound()
+                            
                         asyncio.create_task(self.manage_v35_exit_guardrail(direction))
                     else:
                         self.is_position_active = False
                         fail_msg = f"⚠️ [실전 진입 실패] 1차 진입 발주 실패로 주문 기각 (방향: {direction})"
                         if self.bot and hasattr(self.bot, "broadcast_event"):
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": fail_msg}))
+                        if self.bot and self.bot.dashboard:
+                            self.bot.dashboard.send_telegram_notification(f"⚠️ [실전 진입 실패 경보] 1차 진입 실패로 주문 최종 기각 (방향: {direction})")
                 except Exception as e:
                     self.is_position_active = False
-                    ex_msg = f"❌ [발주 예외] 진입 주문 처리 중 오류: {e}"
                     if self.bot and hasattr(self.bot, "broadcast_event"):
                         asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": ex_msg}))
                 self.peak_pnl_pct = 0.0
                 self.peak_buying_delta = random.uniform(80000, 150000)
-                
-                if self.bot.dashboard:
-                    self.bot.dashboard.play_entry_sound()
-                    
-                try:
-                    success = await self.execute_bitget_internal_packet(side=direction, order_type="IOC_MARKET")
-                    if success:
-                        # 신규 진입 성공 시 무조건 60초 쿨타임 가동!
-                        self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + 60.0)
-                        if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
-                            self.cooldown_timer_task.cancel()
-                        self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(60.0, "신규 진입 60초 쿨타임"))
-                        
-                        # 첫 진입 성공 시 감시 루프 띄우고 종료
-                        asyncio.create_task(self.manage_v35_exit_guardrail(direction))
-                    else:
-                        # [스마트 복구 영구 삭제] 재주문 로직을 전면 제거하여 1차 실패 시 즉시 종료
-                        self.is_position_active = False
-                        if self.bot.dashboard:
-                            self.bot.dashboard.send_telegram_notification(f"⚠️ [실전 진입 실패 경보] 1차 진입 실패로 주문 최종 기각 (방향: {direction})")
-                except Exception as e:
-                    # 예기치 않은 예외 발생 시 최종 무산 처리 및 락 해제
-                    logger.error(f"진입 주문 처리 중 예외 발생: {e}")
-                    self.is_position_active = False
             else:
                 if self.bot.ui_cb:
                     self.bot.ui_cb(0.0, 0, f"⚠️ [진입 기각] 이미 포지션이 가동 중이거나 자동 저격 감시가 비활성화 상태입니다. (is_active: {self.is_position_active}, is_snipe: {self.is_snipe_active})")
@@ -2191,7 +2258,7 @@ class ShinseonV35Engine:
                     if clear_ok:
                         self.is_position_active = False
                         if self.bot.dashboard:
-                            msg = f"<b>🎯 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price_1:,.1f} USDT</b>\n현재가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_from_entry_1 * 100:+.2f}%</b>"
+                            msg = f"<b>📉 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price_1:,.1f} USDT</b>\n현재가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_from_entry_1 * 100:+.2f}%</b>"
                             self.bot.dashboard.send_telegram_notification(msg)
                         self.exit_msg_sent = True
                         break
@@ -2219,7 +2286,7 @@ class ShinseonV35Engine:
                         if clear_ok:
                             self.is_position_active = False
                             if self.bot.dashboard:
-                                msg = f"<b>🎯 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
+                                msg = f"<b>📉 [손절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
                                 self.bot.dashboard.send_telegram_notification(msg)
                             self.exit_msg_sent = True
                             break
@@ -2249,7 +2316,7 @@ class ShinseonV35Engine:
                         if clear_ok:
                             self.is_position_active = False
                             if self.bot.dashboard:
-                                msg = f"<b>🎯 [추적익절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
+                                msg = f"<b>📈 [추적익절 청산 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>{self.exit_reason}</b>\n진입가: <b>{self.entry_price:,.1f} USDT</b>\n청산가: <b>{current_bitget_price:,.1f} USDT</b>\n수익률: <b>{pnl_pct * 100:+.2f}%</b>"
                                 self.bot.dashboard.send_telegram_notification(msg)
                             self.exit_msg_sent = True
                             break
@@ -2354,30 +2421,30 @@ class ShinseonV35Engine:
                     pnl_pct = (self.entry_price - actual_price) / self.entry_price if self.entry_price > 0 else 0.0
                     pnl_from_entry_1 = (self.entry_price_1 - actual_price) / self.entry_price_1 if self.entry_price_1 > 0 else pnl_pct
                     
-                if self.bot.dashboard:
-                    # 2차/3차 상태 확인
+                if self.bot and self.bot.dashboard:
+                    lev_val = getattr(self, "leverage_level", 30) or 30
+                    roe_val = pnl_pct * 100 * lev_val
                     if self.has_second_entry or getattr(self, "has_third_entry", False):
                         state_str = "3차 진입 상태" if getattr(self, "has_third_entry", False) else "2차 진입 상태"
                         dir_str = f"{direction} ({state_str})"
-                        pnl_str = f"평단 대비 수익률: <b>{pnl_pct * 100:+.2f}%</b>\n1차 대비 수익률: <b>{pnl_from_entry_1 * 100:+.2f}%</b>"
+                        pnl_str = f"평단 대비 수익률: <b>{pnl_pct * 100:+.2f}% (ROE: {roe_val:+.2f}%)</b>\n1차 대비 수익률: <b>{pnl_from_entry_1 * 100:+.2f}%</b>"
                     else:
                         dir_str = f"{direction}"
-                        pnl_str = f"최종 수익률: <b>{pnl_pct * 100:+.2f}%</b>"
+                        pnl_str = f"최종수익률: <b>{pnl_pct * 100:+.2f}% (ROE: {roe_val:+.2f}%)</b>"
 
-                    msg = f"<b>🎯 [청산 완료 알림]</b>\n" \
+                    if "손절" in reason or "Stop Loss" in reason or exit_slippage_pct < -0.3:
+                        header_title = "<b>📉 [손절 청산 알림]</b>"
+                    elif "추적" in reason or "Trailing" in reason or "고점" in reason:
+                        header_title = "<b>📈 [추적익절 청산 알림]</b>"
+                    else:
+                        header_title = "<b>🏆 [가드레일 익절 청산 알림]</b>"
+
+                    msg = f"{header_title}\n" \
                           f"방향: <b>{dir_str}</b>\n" \
-                          f"사유: <b>{reason}</b>\n\n" \
-                          f"<b>[신호 발생 정보]</b>\n" \
-                          f"신호 발생시간: <b>{signal_time}</b>\n" \
-                          f"수량: <b>{signal_qty:.3f} BTC</b>\n" \
-                          f"신호 발생 가격: <b>{signal_price:,.1f} USDT</b>\n\n" \
-                          f"<b>[실제 체결 정보]</b>\n" \
-                          f"실제 체결 시간: <b>{actual_time}</b>\n" \
-                          f"수량: <b>{actual_qty:.3f} BTC</b>\n" \
-                          f"합산 평단가: <b>{self.entry_price:,.1f} USDT</b>\n" \
-                          f"청산 가격: <b>{actual_price:,.1f} USDT</b>\n" \
-                          f"{pnl_str}\n" \
-                          f"출구 슬리피지: <b>{exit_slippage_usd:+,.1f} USDT ({exit_slippage_pct:+.3f}%)</b>"
+                          f"사유: <b>{reason}</b>\n" \
+                          f"진입가: <b>{self.entry_price:,.1f} USDT</b>\n" \
+                          f"청산가: <b>{actual_price:,.1f} USDT</b>\n" \
+                          f"{pnl_str}"
                     
                     self.bot.dashboard.send_telegram_notification(msg)
 
