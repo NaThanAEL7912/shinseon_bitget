@@ -2012,7 +2012,82 @@ class ShinseonDashboard(QMainWindow):
                             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C7355, stop:1 #594733);
                             color: #F5EFEB;
                             font-weight: bold; 
-               def trigger_close_50(self):
+                            font-size: 13px; 
+                            padding: 11px; 
+                            border-radius: 4px;
+                            border: 1px solid #735D43;
+                            border-top: 1.5px solid rgba(255, 255, 255, 0.25);
+                        }
+                        QPushButton:hover {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A18663, stop:1 #8C7355);
+                        }
+                    """)
+                    return
+
+                # 포지션이 정상 감지되었으면 가이드라인 가동 및 평단가 설정
+                actual_entry_price = self.bot_core.v35_engine.entry_price
+                if actual_entry_price <= 0.0:
+                    actual_entry_price = await self.bot_core.v35_engine.get_live_bitget_price_internal()
+                if actual_entry_price <= 0.0:
+                    actual_entry_price = float(self.bot_core.current_price)
+
+                self.bot_core.v35_engine.entry_price = actual_entry_price
+                self.bot_core.v35_engine.peak_pnl_pct = 0.0
+                self.bot_core.v35_engine.is_position_active = True
+
+                import time
+                self.bot_core.v35_engine.grace_period_until = time.time() + 3.0
+
+                # UI 업데이트 및 활성화
+                self.btn_manual_start.setEnabled(True)
+                self.btn_manual_start.setText("⏸ 수동 봇 정지")
+                self.btn_manual_start.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
+                        color: #DEBA9D;
+                        font-weight: bold; 
+                        font-size: 13px; 
+                        padding: 11px; 
+                        border-radius: 4px;
+                        border: 1px solid #423E3B;
+                        border-top: 1.5px solid rgba(255, 255, 255, 0.2);
+                    }
+                """)
+                self.btn_start.setEnabled(False)
+
+                self.add_log(f"⚡ [하이브리드 수동 감시] BITGET 진입 평단가 ${actual_entry_price:,.1f} 기준으로 진입 평단가를 캘리브레이션 완료하였습니다. (3초 오작동 유예 가동)")
+                self.add_log(f"⚡ [하이브리드 오토-청산] 수동 진입 포지션 가드레일 감시 자동 도킹 개시 (방향: {direction})")
+
+                asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(
+                    side="STOP_LOSS", 
+                    order_type=str(round(actual_entry_price * 1.013 if direction == "SHORT" else actual_entry_price * 0.987, 1))
+                ))
+
+                asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
+
+            except Exception as e:
+                self.add_log(f"❌ [가동 실패] 수동 가동 중 예외 발생: {e}")
+                self.btn_manual_start.setEnabled(True)
+                self.btn_manual_start.setText("⚡ 수동 봇 시작")
+                self.btn_manual_start.setStyleSheet("""
+                    QPushButton {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C7355, stop:1 #594733);
+                        color: #F5EFEB;
+                        font-weight: bold; 
+                        font-size: 13px; 
+                        padding: 11px; 
+                        border-radius: 4px;
+                        border: 1px solid #735D43;
+                        border-top: 1.5px solid rgba(255, 255, 255, 0.25);
+                    }
+                    QPushButton:hover {
+                        background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A18663, stop:1 #8C7355);
+                    }
+                """)
+
+        asyncio.create_task(run_manual_start_flow())
+
+    def trigger_close_50(self):
         if not self.bot_core.v35_engine:
             return
         self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
