@@ -1316,7 +1316,9 @@ class ShinseonV35Engine:
                                         if res.get("code") == "00000":
                                             self.bot.ui_cb(0.0, 0, f"✅ [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료")
                                             self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
-                                            self.is_half_exited = True
+                                            if order_type != "50_PERCENT_CLOSE":
+                                                self.is_half_exited = True
+                                            self.is_manual_half_exited = True
                                             return True
                                         else:
                                             self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 실패] {res.get('msg', '알 수 없음')} (코드: {res.get('code')})")

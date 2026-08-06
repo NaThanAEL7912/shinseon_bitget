@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.74"  # ShinSeon_Bitget 스마트 스탑 및 50% 청산 상시 즉각 반응 클릭 가드 해제 완공 (V4.74)
+        self.CURRENT_VERSION = "V4.76"  # ShinSeon_Bitget 수동 50% 청산과 자동 세션 본전가드 100% 독립 분리 & 상단 헤더 비트겟 버튼 단일화 완공 (V4.76)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -488,23 +488,24 @@ class ShinseonDashboard(QMainWindow):
         header_layout.addWidget(header_label)
         header_layout.addStretch()
         
-        # 🌐 비트겟 거래소 바로가기 버튼 (QHBoxLayout 정격 장착)
+        # 🌐 비트겟 거래소 바로가기 버튼 (대시보드 세종 메탈릭 브론즈 톤 매칭)
         self.btn_open_bitget = QPushButton("🌐 비트겟 거래소 ↗", right_widget)
         self.btn_open_bitget.setToolTip("비트겟 공식 선물 거래소 웹사이트 바로가기")
         self.btn_open_bitget.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
         self.btn_open_bitget.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E3A4A, stop:1 #12242E);
-                color: #00FFCC;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #324452, stop:1 #1F2D38);
+                color: #DEBA9D;
                 font-weight: bold;
                 font-size: 11px;
                 padding: 4px 8px;
                 border-radius: 4px;
-                border: 1px solid #00FFCC;
+                border: 1px solid #A88869;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A5268, stop:1 #1E3A4A);
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #44596B, stop:1 #324452);
                 color: #FFFFFF;
+                border: 1px solid #DEBA9D;
             }
         """)
         self.btn_open_bitget.clicked.connect(self.open_bitget_website)
@@ -911,27 +912,7 @@ class ShinseonDashboard(QMainWindow):
         
         right_layout.addWidget(self.btn_emergency)
         
-        # 🌐 비트겟 거래소 웹사이트 바로가기 버튼 (대시보드 세종 메탈릭 브론즈 톤 매칭)
-        self.btn_open_bitget = QPushButton("🌐 비트겟 선물 거래소 열기 ↗", right_widget)
-        self.btn_open_bitget.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
-        self.btn_open_bitget.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #324452, stop:1 #1F2D38);
-                color: #DEBA9D;
-                font-weight: bold; 
-                font-size: 12px; 
-                padding: 9px; 
-                border-radius: 4px;
-                border: 1px solid #A88869;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #44596B, stop:1 #324452);
-                color: #FFFFFF;
-                border: 1px solid #DEBA9D;
-            }
-        """)
-        self.btn_open_bitget.clicked.connect(self.open_bitget_website)
-        right_layout.addWidget(self.btn_open_bitget)
+
         
         # BITGET 수동 제어판 (50% 청산 전용)
         self.lbl_bitget_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 신속 분할 청산 제어판</b>", right_widget)
