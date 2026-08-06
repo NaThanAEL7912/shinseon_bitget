@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.93"  # ShinSeon_Bitget AWS 서버 텔레그램 100% 독점 전담 연동 및 원격제어(시작/정지/상태/청산) 완공 (V4.93)
+        self.CURRENT_VERSION = "V4.94"  # ShinSeon_Bitget AWS 서버 봇 가동 상태(RUNNING/STOPPED) 클라이언트 버튼 실시간 동기화 완공 (V4.94)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1251,6 +1251,8 @@ class ShinseonDashboard(QMainWindow):
                             self.add_log(f"✅ [잔고 동기화] 실전 계좌 잔고가 업데이트되었습니다: ${usdt_total:,.2f}")
                         elif msg_type == 'EVT_SYNC_POSITION':
                             has_pos = payload.get('has_position', False)
+                            bot_state_val = payload.get('bot_state', 'RUNNING')
+                            self.update_bot_running_ui(bot_state_val == 'RUNNING')
                             self.has_position = has_pos
                             if has_pos:
                                 side = payload.get('side', 'LONG')
@@ -1911,6 +1913,43 @@ class ShinseonDashboard(QMainWindow):
 
 
 
+    def update_bot_running_ui(self, is_running):
+        if is_running:
+            self.btn_start.setText("⏸ 자동 봇 정지")
+            self.btn_start.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2E6B4E, stop:1 #1B4530);
+                    color: #F5EFEB;
+                    font-weight: bold; 
+                    font-size: 13px; 
+                    padding: 11px; 
+                    border-radius: 4px;
+                    border: 1px solid #1E5037;
+                    border-top: 1.5px solid rgba(255, 255, 255, 0.35);
+                }
+            """)
+            if hasattr(self, "btn_manual_start"):
+                self.btn_manual_start.setEnabled(False)
+        else:
+            self.btn_start.setText("▶ 자동 봇 시작")
+            self.btn_start.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #DEBA9D, stop:1 #C5A07A);
+                    color: #0F0E0E;
+                    font-weight: bold; 
+                    font-size: 13px; 
+                    padding: 11px; 
+                    border-radius: 4px;
+                    border: 1px solid #A88869;
+                    border-top: 1.5px solid rgba(255, 255, 255, 0.35);
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #E5C199, stop:1 #DEBA9D);
+                }
+            """)
+            if hasattr(self, "btn_manual_start"):
+                self.btn_manual_start.setEnabled(True)
+
     def start_bot(self):
         try:
             if self.is_ws_active():
@@ -1918,40 +1957,11 @@ class ShinseonDashboard(QMainWindow):
                 if self.btn_start.text() == "▶ 자동 봇 시작":
                     asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_START_BOT"})))
                     self.add_log("📡 [서버 명령] 자동 저격 감시 시작 명령을 서버로 전송했습니다.")
-                    self.btn_start.setText("⏸ 자동 봇 정지")
-                    self.btn_start.setStyleSheet("""
-                        QPushButton {
-                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2E6B4E, stop:1 #1B4530);
-                            color: #F5EFEB;
-                            font-weight: bold; 
-                            font-size: 13px; 
-                            padding: 11px; 
-                            border-radius: 4px;
-                            border: 1px solid #1E5037;
-                            border-top: 1.5px solid rgba(255, 255, 255, 0.35);
-                        }
-                    """)
-                    self.btn_manual_start.setEnabled(False)
+                    self.update_bot_running_ui(True)
                 else:
                     asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_STOP_BOT"})))
                     self.add_log("📡 [서버 명령] 자동 저격 감시 중지 명령을 서버로 전송했습니다.")
-                    self.btn_start.setText("▶ 자동 봇 시작")
-                    self.btn_start.setStyleSheet("""
-                        QPushButton {
-                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #DEBA9D, stop:1 #C5A07A);
-                            color: #0F0E0E;
-                            font-weight: bold; 
-                            font-size: 13px; 
-                            padding: 11px; 
-                            border-radius: 4px;
-                            border: 1px solid #A88869;
-                            border-top: 1.5px solid rgba(255, 255, 255, 0.35);
-                        }
-                        QPushButton:hover {
-                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #E5C199, stop:1 #DEBA9D);
-                        }
-                    """)
-                    self.btn_manual_start.setEnabled(True)
+                    self.update_bot_running_ui(False)
             else:
                 self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
         except Exception as e:

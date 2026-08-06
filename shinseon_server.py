@@ -2385,12 +2385,14 @@ class WsServer:
                         self.bot_core.v35_engine.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
                         self.bot_core.v35_engine.bitget_mark_price = float(active_pos.get('markPrice', 0.0) or 0.0)
                         
+                    bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
                     payload = {
                         'has_position': True,
                         'side': side,
                         'contracts': contracts,
                         'entry_price': entry_price,
-                        'leverage': leverage
+                        'leverage': leverage,
+                        'bot_state': bot_state_val
                     }
                     await self.broadcast_event('EVT_SYNC_POSITION', payload)
                     logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: {payload}")
@@ -2400,8 +2402,9 @@ class WsServer:
                         self.bot_core.v35_engine.position_volume = 0
                         self.bot_core.v35_engine.entry_price = 0.0
                         self.bot_core.v35_engine.entry_direction = ""
-                    await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False})
-                    logger.info("📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False)")
+                    bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
+                    await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False, 'bot_state': bot_state_val})
+                    logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False, bot_state={bot_state_val})")
             else:
                 err_msg = "bitget_exchange가 초기화되지 않았습니다. server_config.json 키 설정을 확인하세요."
                 logger.warning(f"⚠️ [CMD_SYNC_POSITION] {err_msg}")
