@@ -2088,13 +2088,15 @@ class ShinseonDashboard(QMainWindow):
         asyncio.create_task(run_manual_start_flow())
 
     def trigger_close_50(self):
-        if not self.bot_core.v35_engine:
-            return
-        self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
-        self.add_log("🌓 [수동 신속 제어] BITGET 포지션 50% 시장가 청산 명령 발동...")
-        asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
-        if hasattr(self, "ws") and self.ws:
+        self.add_log("🌓 [수동 50% 청산] BITGET 포지션 50% 시장가 청산 명령 발동...")
+        if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
+            self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
+        if self.is_ws_active():
+            import json
             asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_CLOSE_50'})))
+            self.add_log("📡 [서버 명령] CMD_CLOSE_50 (50% 시장가 청산) 패킷 전송 완료")
+        else:
+            self.add_log("⚠️ [웹소켓] 웹소켓 연결이 닫혔거나 재연결 중입니다.")
 
     def reset_stoploss_ui(self):
         if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
@@ -2121,7 +2123,7 @@ class ShinseonDashboard(QMainWindow):
             """)
 
     def trigger_stoploss_setting(self):
-        if not self.bot_core.v35_engine:
+        if not self.bot_core or not self.bot_core.v35_engine:
             return
         
         # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
@@ -2129,12 +2131,13 @@ class ShinseonDashboard(QMainWindow):
             self.bot_core.v35_engine.custom_stop_active = False
             self.reset_stoploss_ui()
             self.add_log("🧹 [스마트 스탑 해제] 스마트 스탑 감시가 해제되었습니다.")
-            if hasattr(self, "ws") and self.ws:
+            if self.is_ws_active():
+                import json
                 asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
             return
 
         # 2. 감시 미설정 상태이면 포지션 확인 후 감시 개시 (토글 ON)
-        if not self.bot_core.v35_engine.is_position_active:
+        if not getattr(self.bot_core.v35_engine, "is_position_active", False):
             self.add_log("⚠️ [스마트 스탑 실패] 현재 열려있는 포지션이 없습니다.")
             return
 
@@ -2177,11 +2180,8 @@ class ShinseonDashboard(QMainWindow):
         if hasattr(self, "edit_stoploss_ratio"):
             self.edit_stoploss_ratio.setEnabled(False)
 
-        if not getattr(self.bot_core.v35_engine, "is_guardrail_running", False):
-            entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
-            asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(entry_dir))
-
-        if hasattr(self, "ws") and self.ws:
+        if self.is_ws_active():
+            import json
             asyncio.create_task(self.ws.send(json.dumps({
                 'cmd': 'CMD_SET_SMART_STOP',
                 'active': True,
