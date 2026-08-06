@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.77"  # ShinSeon_Bitget CMD_START_BOT과 is_snipe_active 변수 동기화 및 자동 가동 이식 완공 (V4.77)
+        self.CURRENT_VERSION = "V4.78"  # ShinSeon_Bitget 임의 자동가동 전면 삭제 및 [▶ 자동 봇 시작] 클릭 시 정격 동기화 완공 (V4.78)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1205,20 +1205,6 @@ class ShinseonDashboard(QMainWindow):
                     self.send_config_to_server()
                     await asyncio.sleep(0.3)
                     await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
-                    await self.ws.send(json.dumps({"cmd": "CMD_START_BOT"}))
-                    self.btn_start.setText("⏸ 자동 봇 정지")
-                    self.btn_start.setStyleSheet("""
-                        QPushButton {
-                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2E6B4E, stop:1 #1B4530);
-                            color: #F5EFEB;
-                            font-weight: bold; 
-                            font-size: 13px; 
-                            padding: 11px; 
-                            border-radius: 4px;
-                            border: 1px solid #1E5037;
-                            border-top: 1.5px solid rgba(255, 255, 255, 0.35);
-                        }
-                    """)
                     asyncio.create_task(self.run_manual_latency_test())
                     
                     async for message in ws:
