@@ -215,7 +215,7 @@ async def run_telegram_command_poller(bot_core):
                                     f"가용자본금: <b>${bal_usd:,.2f} USDT</b>\n"
                                     f"현재가: <b>${current_p:,.1f} USDT</b>\n"
                                     f"현재 세션: <b>{sess_name} (손절: {sess_sl:+.2f}%)</b>\n\n"
-                                    f"<b>[시장 레이더]</b>\n"
+                                    f"<b>[오더플로우 레이더]</b>\n"
                                     f"1분 청산: <b>${rolling_liq:,.0f} USDT</b>\n"
                                     f"1분 OI 속도: <b>{oi_delta:+.4f}%</b>\n\n"
                                     f"<b>[포지션 현황]</b>\n"
@@ -615,6 +615,11 @@ class BotCore:
                         
                         display_liq = long_liq + short_liq
                         display_oi = self.real_oi_speed_1m
+                        
+                        self.last_rolling_1m_liq = display_liq
+                        self.last_oi_delta_1m = display_oi
+                        self.last_long_liq = long_liq
+                        self.last_short_liq = short_liq
                         
                         total_raw = long_liq + short_liq
                         if total_raw > 0:
