@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V4.65"  # ShinSeon_Bitget 버튼 3단계 실시간 상세 보고 시스템 및 비주얼 전면 개편 수술 개발 (V4.64)
+        self.CURRENT_VERSION = "V4.66"  # ShinSeon_Bitget 람다 바이패스 시그널 연결 및 시스템 비프음/3단계 로그 직송 완공 수술 개발 (V4.66)
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -929,7 +929,7 @@ class ShinseonDashboard(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
             }
         """)
-        self.btn_close_50.clicked.connect(self.trigger_close_50)
+        self.btn_close_50.clicked.connect(lambda checked=False: self.trigger_close_50())
         right_layout.addWidget(self.btn_close_50)
 
         # 2행: 스탑 오프셋(%): 라벨 + [ 6.0 ]% 입력 박스 + 청산비율(%): 라벨 + [ 100 ]% 입력 박스
@@ -999,7 +999,7 @@ class ShinseonDashboard(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
             }
         """)
-        self.btn_stoploss.clicked.connect(self.trigger_stoploss_setting)
+        self.btn_stoploss.clicked.connect(lambda checked=False: self.trigger_stoploss_setting())
         right_layout.addWidget(self.btn_stoploss)
         
         # ----------------------------------------------------------------------
@@ -2091,6 +2091,11 @@ class ShinseonDashboard(QMainWindow):
 
     def trigger_close_50(self):
         try:
+            try:
+                from PyQt6.QtWidgets import QApplication
+                QApplication.beep()
+            except Exception:
+                pass
             self.add_log("🚀 [수동 50% 청산 개시] 비트겟 포지션 50% 분할 시장가 청산 명령을 집행합니다.")
             if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
                 self.bot_core.v35_engine.exit_reason = "수동 50% 분할 청산 명령 발동"
@@ -2115,20 +2120,25 @@ class ShinseonDashboard(QMainWindow):
             self.btn_stoploss.setText("🛡️ 스마트 스탑 설정")
             self.btn_stoploss.setStyleSheet("""
                 QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #15803D, stop:1 #166534);
-                    color: #FFFFFF;
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
+                    color: #DEBA9D;
                     font-weight: bold;
-                    font-size: 12px;
-                    padding: 9px;
+                    font-size: 11px;
+                    padding: 8px;
                     border-radius: 4px;
-                    border: 1.5px solid #22C55E;
+                    border: 1px solid #A88869;
                 }
                 QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #22C55E, stop:1 #15803D);
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
                 }
             """)
 
     def trigger_stoploss_setting(self):
+        try:
+            from PyQt6.QtWidgets import QApplication
+            QApplication.beep()
+        except Exception:
+            pass
         if not self.bot_core or not self.bot_core.v35_engine:
             self.add_log("⚠️ [스마트 스탑] 엔진 초기화 중입니다. 잠시 후 다시 시도해 주십시오.")
             return
