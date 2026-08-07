@@ -1075,15 +1075,7 @@ class BotCore:
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
 
-                    # [초단위 전량 LOG 기록]: 동일 로그는 1번만 기록
-                    c_status = status_msg.replace('\n', ' | ')
-                    b_state = getattr(self.v35_engine, 'bot_state', 'RUNNING') if self.v35_engine else 'RUNNING'
-                    # 세션 문자열에서 시간 부분 제거
-                    session_clean = current_session.split('(')[0].strip()
-                    log_msg = f"⚡ [1초 감시] BTC: ${self.current_price:,.1f} | Liq: ${display_liq:,.0f} (L:${long_liq:,.0f}/S:${short_liq:,.0f}) | OI: {display_oi:+.4f}% | Session: {session_clean} | State: {b_state} | Status: {c_status}"
-                    if log_msg != getattr(self, "last_1s_log_msg", None):
-                        logger.info(log_msg)
-                        self.last_1s_log_msg = log_msg
+                    # [V5.33 수술] '1초 감시' 중복 로깅 구문 100% 삭제 (파일 용량 비대화 차단)
 
                     ui_callback(
                         self.current_price,
