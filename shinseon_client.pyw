@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.27"
+        self.CURRENT_VERSION = "V5.29"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1691,6 +1691,9 @@ class ShinseonDashboard(QMainWindow):
         if self.is_ws_active():
             try:
                 config_payload = {
+                    "bitget_api_key": getattr(self, "bitget_api_key", getattr(getattr(self, "v35_engine", None), "api_key", "")),
+                    "bitget_secret_key": getattr(self, "bitget_secret_key", getattr(getattr(self, "v35_engine", None), "secret_key", "")),
+                    "bitget_passphrase": getattr(self, "bitget_passphrase", getattr(getattr(self, "v35_engine", None), "passphrase", "")),
                     "session_thresholds": getattr(self, "session_thresholds", {}),
                     "session_guardrails": getattr(self, "session_guardrails", {}),
                     "leverage_level": getattr(self, "leverage_level", 30),

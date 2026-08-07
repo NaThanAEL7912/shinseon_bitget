@@ -3120,6 +3120,20 @@ class WsServer:
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})
                         if config_data and self.bot_core:
+                            ak = config_data.get("bitget_api_key") or config_data.get("api_key")
+                            sk = config_data.get("bitget_secret_key") or config_data.get("secret_key")
+                            pp = config_data.get("bitget_passphrase") or config_data.get("passphrase")
+                            if ak and sk and pp:
+                                try:
+                                    self.bot_core.bitget_exchange = ccxt.bitget({
+                                        'apiKey': str(ak).strip(),
+                                        'secret': str(sk).strip(),
+                                        'password': str(pp).strip(),
+                                        'options': {'defaultType': 'swap'},
+                                        'enableRateLimit': True
+                                    })
+                                except Exception as e_ex:
+                                    logger.error(f"bitget_exchange init error: {e_ex}")
                             if "session_thresholds" in config_data:
                                 self.bot_core.session_thresholds = config_data["session_thresholds"]
                             if "session_guardrails" in config_data:
