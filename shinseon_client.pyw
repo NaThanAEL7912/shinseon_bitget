@@ -361,10 +361,29 @@ class CumulativeReportDialog(QDialog):
         # 테이블 스플리터
         splitter = QSplitter(Qt.Orientation.Vertical)
         
+        gb_qss = """
+            QGroupBox {
+                border: 1px solid rgba(222, 186, 157, 0.3);
+                border-radius: 6px;
+                margin-top: 14px;
+                color: #DEBA9D;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                left: 12px;
+                padding: 0 6px;
+                background-color: #1A1716;
+            }
+        """
+        
         # 1. 일별 실적 표
         daily_group = QGroupBox("📅 [날짜별 매매 실적 요약]")
-        daily_group.setStyleSheet("QGroupBox { border: 1px solid rgba(222, 186, 157, 0.3); border-radius: 6px; margin-top: 10px; color: #F5EFEB; font-weight: bold; }")
+        daily_group.setStyleSheet(gb_qss)
         daily_layout = QVBoxLayout(daily_group)
+        daily_layout.setContentsMargins(12, 22, 12, 12)
         
         self.daily_table = QTableWidget()
         self.daily_table.setColumnCount(9)
@@ -381,8 +400,9 @@ class CumulativeReportDialog(QDialog):
         
         # 2. 개별 거래 상세 표
         detail_group = QGroupBox("🔍 [선택 날짜 개별 거래 상세 세부 리스트]")
-        detail_group.setStyleSheet("QGroupBox { border: 1px solid rgba(222, 186, 157, 0.3); border-radius: 6px; margin-top: 10px; color: #F5EFEB; font-weight: bold; }")
+        detail_group.setStyleSheet(gb_qss)
         detail_layout = QVBoxLayout(detail_group)
+        detail_layout.setContentsMargins(12, 22, 12, 12)
         
         self.detail_table = QTableWidget()
         self.detail_table.setColumnCount(8)
@@ -486,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.17"
+        self.CURRENT_VERSION = "V5.18"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -684,10 +704,9 @@ class ShinseonDashboard(QMainWindow):
         title_layout.addWidget(self.lbl_brand)
         title_layout.addStretch()
         title_layout.addWidget(self.btn_open_cum_report)
-        title_layout.addSpacing(6)
+        title_layout.addSpacing(8)
         title_layout.addWidget(self.lbl_cum_stats)
-        # 좌측 메인 패널 우측 수직 경계선(붉은선)에 우측 끝을 자석 칼정렬하기 위한 145px Spacing
-        title_layout.addSpacing(145)
+        title_layout.addSpacing(8)
         title_layout.addWidget(self.lbl_today_stats)
         main_layout.addLayout(title_layout)
         
@@ -726,28 +745,7 @@ class ShinseonDashboard(QMainWindow):
         header_layout.addWidget(header_label)
         header_layout.addStretch()
         
-        # 🌐 비트겟 거래소 바로가기 버튼 (대시보드 세종 메탈릭 브론즈 톤 매칭)
-        self.btn_open_bitget = QPushButton("🌐 비트겟 거래소 ↗", right_widget)
-        self.btn_open_bitget.setToolTip("비트겟 공식 선물 거래소 웹사이트 바로가기")
-        self.btn_open_bitget.setCursor(Qt.CursorShape.PointingHandCursor if hasattr(Qt, "CursorShape") else Qt.PointingHandCursor)
-        self.btn_open_bitget.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #324452, stop:1 #1F2D38);
-                color: #DEBA9D;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 4px 8px;
-                border-radius: 4px;
-                border: 1px solid #A88869;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #44596B, stop:1 #324452);
-                color: #FFFFFF;
-                border: 1px solid #DEBA9D;
-            }
-        """)
-        self.btn_open_bitget.clicked.connect(self.open_bitget_website)
-        header_layout.addWidget(self.btn_open_bitget)
+
 
         self.btn_session_config = QPushButton("⚙", right_widget)
         self.btn_session_config.setToolTip("세션 및 트레이딩 핵심 설정")
