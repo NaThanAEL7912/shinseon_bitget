@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.18"
+        self.CURRENT_VERSION = "V5.20"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1546,8 +1546,9 @@ class ShinseonDashboard(QMainWindow):
                             res_msg = payload.get('message', '')
                             if res_msg:
                                 self.add_log(res_msg)
-                        elif msg_type == 'EVT_SYNC_STATS':
-                            self.update_stats_ui(payload)
+                        elif msg_type == 'EVT_SYNC_STATS' or data.get('evt') == 'EVT_SYNC_STATS':
+                            stats_payload = payload if payload else data.get('data', {})
+                            self.update_stats_ui(stats_payload)
                         elif msg_type == 'ui_update':
                             if 'price' in payload:
                                 self.current_price = float(payload['price'])

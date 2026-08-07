@@ -175,94 +175,135 @@ def build_telegram_trade_msg(title, direction, reason, signal_time="", signal_qt
         )
     return msg
 
-STATS_FILE = os.path.join(LOGS_DIR, "trade_stats_history.json")
+STATS_DIR = LOGS_DIR
 
-def load_trade_stats_data():
-    if os.path.exists(STATS_FILE):
+def get_daily_stats_filepath(date_str):
+    return os.path.join(STATS_DIR, f"trade_stats_{date_str}.json")
+
+SUMMARY_FILE = os.path.join(STATS_DIR, "trade_stats_summary.json")
+
+def load_trade_stats_summary():
+    if os.path.exists(SUMMARY_FILE):
         try:
-            with open(STATS_FILE, "r", encoding="utf-8") as f:
+            with open(SUMMARY_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            logger.error(f"통계 파일 로드 실패: {e}")
-    return {"daily_records": [], "trades_history": []}
+            logger.error(f"통계 요약 로드 실패: {e}")
+    return {"total_pnl": 0.0, "total_trades": 0, "total_wins": 0, "total_losses": 0, "daily_index": []}
 
-def save_trade_stats_data(data):
+def save_trade_stats_summary(summary):
     try:
-        with open(STATS_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        with open(SUMMARY_FILE, "w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        logger.error(f"통계 파일 저장 실패: {e}")
+        logger.error(f"통계 요약 저장 실패: {e}")
+
+def load_daily_stats(date_str):
+    fp = get_daily_stats_filepath(date_str)
+    if os.path.exists(fp):
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"일별 통계 로드 실패 ({date_str}): {e}")
+    return {
+        "date": date_str,
+        "trades": 0,
+        "wins": 0,
+        "losses": 0,
+        "win_rate": 0.0,
+        "profit_tot": 0.0,
+        "loss_tot": 0.0,
+        "pnl": 0.0,
+        "avg_roe": 0.0,
+        "trades_detail": []
+    }
+
+def save_daily_stats(date_str, daily_rec):
+    fp = get_daily_stats_filepath(date_str)
+    try:
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(daily_rec, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"일별 통계 저장 실패 ({date_str}): {e}")
 
 def record_trade_history_event(side, qty, entry_price, exit_price, pnl_usd, roe_pct, reason):
-    data = load_trade_stats_data()
-    now_dt = get_kst_now()
-    today_str = now_dt.strftime("%Y-%m-%d")
-    time_str = now_dt.strftime("%H:%M:%S")
-    
-    trade_item = {
-        "date": today_str,
-        "time": time_str,
-        "side": side,
-        "qty": qty,
-        "entry_p": entry_price,
-        "exit_p": exit_price,
-        "pnl": pnl_usd,
-        "roe": roe_pct,
-        "reason": reason
-    }
-    
-    data.setdefault("trades_history", []).append(trade_item)
-    
-    # 일별 기록 갱신
-    daily_records = data.setdefault("daily_records", [])
-    daily_rec = next((r for r in daily_records if r.get("date") == today_str), None)
-    
-    if not daily_rec:
-        daily_rec = {
+    try:
+        now_dt = get_kst_now()
+        today_str = now_dt.strftime("%Y-%m-%d")
+        time_str = now_dt.strftime("%H:%M:%S")
+        
+        trade_item = {
             "date": today_str,
-            "trades": 0,
-            "wins": 0,
-            "losses": 0,
-            "win_rate": 0.0,
-            "profit_tot": 0.0,
-            "loss_tot": 0.0,
-            "pnl": 0.0,
-            "avg_roe": 0.0,
-            "trades_detail": []
+            "time": time_str,
+            "side": side,
+            "qty": qty,
+            "entry_p": entry_price,
+            "exit_p": exit_price,
+            "pnl": pnl_usd,
+            "roe": roe_pct,
+            "reason": reason
         }
-        daily_records.insert(0, daily_rec)
         
-    daily_rec["trades"] += 1
-    if pnl_usd >= 0:
-        daily_rec["wins"] += 1
-        daily_rec["profit_tot"] += pnl_usd
-    else:
-        daily_rec["losses"] += 1
-        daily_rec["loss_tot"] += abs(pnl_usd)
+        # 1. 일별 파일 갱신 (trade_stats_YYYY-MM-DD.json)
+        daily_rec = load_daily_stats(today_str)
+        daily_rec["trades"] += 1
+        if pnl_usd >= 0:
+            daily_rec["wins"] += 1
+            daily_rec["profit_tot"] += pnl_usd
+        else:
+            daily_rec["losses"] += 1
+            daily_rec["loss_tot"] += abs(pnl_usd)
+            
+        daily_rec["pnl"] += pnl_usd
+        daily_rec["win_rate"] = (daily_rec["wins"] / daily_rec["trades"]) * 100.0 if daily_rec["trades"] > 0 else 0.0
+        daily_rec.setdefault("trades_detail", []).insert(0, trade_item)
         
-    daily_rec["pnl"] += pnl_usd
-    daily_rec["win_rate"] = (daily_rec["wins"] / daily_rec["trades"]) * 100.0 if daily_rec["trades"] > 0 else 0.0
-    daily_rec.setdefault("trades_detail", []).insert(0, trade_item)
-    
-    roes = [t.get("roe", 0.0) for t in daily_rec["trades_detail"]]
-    daily_rec["avg_roe"] = (sum(roes) / len(roes)) if roes else 0.0
-    
-    save_trade_stats_data(data)
+        roes = [t.get("roe", 0.0) for t in daily_rec["trades_detail"]]
+        daily_rec["avg_roe"] = (sum(roes) / len(roes)) if roes else 0.0
+        save_daily_stats(today_str, daily_rec)
+        
+        # 2. 통합 요약 index 갱신 (trade_stats_summary.json)
+        summary = load_trade_stats_summary()
+        summary["total_pnl"] += pnl_usd
+        summary["total_trades"] += 1
+        if pnl_usd >= 0:
+            summary["total_wins"] += 1
+        else:
+            summary["total_losses"] += 1
+            
+        daily_index = summary.setdefault("daily_index", [])
+        if today_str not in daily_index:
+            daily_index.insert(0, today_str)
+        save_trade_stats_summary(summary)
+        
+        logger.info(f"📊 [실적 기록 완료] {today_str} {time_str} | {side} PnL:${pnl_usd:+.2f} ({roe_pct:+.2f}%) | 사유:{reason}")
+        
+        # 3. 모든 클라이언트에 실시간 브로드캐스트
+        broadcast_stats_update()
+    except Exception as e:
+        logger.error(f"record_trade_history_event 수술 예외: {e}")
 
-def get_calculated_stats_payload():
-    data = load_trade_stats_data()
+def get_calculated_stats_payload(last_downloaded_date=None):
+    summary = load_trade_stats_summary()
     now_dt = get_kst_now()
     today_str = now_dt.strftime("%Y-%m-%d")
     
-    trades_all = data.get("trades_history", [])
-    tot_trades = len(trades_all)
-    tot_wins = sum(1 for t in trades_all if t.get("pnl", 0.0) >= 0)
-    tot_losses = tot_trades - tot_wins
+    tot_trades = summary.get("total_trades", 0)
+    tot_wins = summary.get("total_wins", 0)
+    tot_losses = summary.get("total_losses", 0)
     tot_win_rate = (tot_wins / tot_trades * 100.0) if tot_trades > 0 else 0.0
-    tot_pnl = sum(t.get("pnl", 0.0) for t in trades_all)
+    tot_pnl = summary.get("total_pnl", 0.0)
     
-    daily_records = data.get("daily_records", [])
-    today_rec = next((r for r in daily_records if r.get("date") == today_str), {})
+    daily_index = summary.get("daily_index", [])
+    if last_downloaded_date:
+        # 마지막 동기화 날짜 이후(포함)의 증분 날짜만 필터링!
+        target_dates = [d for d in daily_index if d >= last_downloaded_date]
+    else:
+        target_dates = daily_index
+        
+    daily_records = [load_daily_stats(d) for d in target_dates]
+    today_rec = load_daily_stats(today_str)
     
     payload = {
         "total_pnl": tot_pnl,
@@ -2902,6 +2943,15 @@ class WsServer:
         self.clients.add(websocket)
         client_addr = getattr(websocket, "remote_address", "Unknown")
         logger.info(f"🌐 [WEB_ACCESS] 신선 클라이언트 웹소켓 접속 완료 (Client IP: {client_addr})")
+        
+        # 0.001초 자동 초기 실적 및 포지션 동기화 전송
+        try:
+            asyncio.create_task(self.handle_sync_position(websocket))
+            init_stats_payload = get_calculated_stats_payload()
+            await websocket.send(json.dumps({"evt": "EVT_SYNC_STATS", "data": init_stats_payload}, ensure_ascii=False))
+        except Exception as init_err:
+            logger.error(f"초기 동기화 패킷 전송 예외: {init_err}")
+            
         try:
             async for message in websocket:
                 try:
@@ -2911,7 +2961,8 @@ class WsServer:
                     if cmd == "CMD_SYNC_POSITION":
                         asyncio.create_task(self.handle_sync_position(websocket))
                     elif cmd == "CMD_REQ_STATS_DETAIL":
-                        stats_payload = get_calculated_stats_payload()
+                        last_date = payload.get("last_downloaded_date")
+                        stats_payload = get_calculated_stats_payload(last_downloaded_date=last_date)
                         await self.broadcast_event("EVT_SYNC_STATS", stats_payload)
                     elif cmd == "CMD_START_BOT":
                         if self.bot_core and self.bot_core.v35_engine:
