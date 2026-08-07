@@ -2856,8 +2856,8 @@ async def main():
     ws_server = WsServer(core)
     
     # Websocket server setup
-    async with websockets.serve(ws_server.register, "0.0.0.0", 8765):
-        logger.info("Websocket server running on port 8765")
+    async with websockets.serve(ws_server.register, "0.0.0.0", 8765, max_size=100*1024*1024):
+        logger.info("Websocket server running on port 8765 (100MB Max Payload)")
         await core.run_engine(ui_callback, chart_callback)
 
 if __name__ == "__main__":

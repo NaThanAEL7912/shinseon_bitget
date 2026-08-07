@@ -1201,7 +1201,7 @@ class ShinseonDashboard(QMainWindow):
         while True:
             try:
                 self.add_log(f"[Websocket] 일본 AWS 릴레이 서버 연결 시도: {url}")
-                async with websockets.connect(url, open_timeout=5.0, ping_interval=20, ping_timeout=20) as ws:
+                async with websockets.connect(url, open_timeout=5.0, ping_interval=20, ping_timeout=20, max_size=100*1024*1024) as ws:
                     self.ws = ws
                     self.add_log("[Websocket] 서버 연결 성공!")
                     import json
