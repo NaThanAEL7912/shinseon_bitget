@@ -105,6 +105,76 @@ async def send_telegram_notification_server(message):
     except Exception as e:
         logger.error(f"Telegram server send error: {e}")
 
+def build_telegram_trade_msg(title, direction, reason, signal_time="", signal_qty=0.0, signal_price=0.0, actual_time="", actual_qty=0.0, actual_price=0.0, entry_price=0.0, leverage=30, is_entry=False):
+    """
+    폐하의 어명에 따른 텔레그램 진입/청산 표준 규격 포맷 빌더
+    """
+    now_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+    sig_time_str = signal_time if signal_time else now_str
+    act_time_str = actual_time if actual_time else now_str
+    
+    sig_qty_val = signal_qty if signal_qty > 0 else actual_qty
+    sig_qty_str = f"{sig_qty_val:.3f} BTC" if sig_qty_val > 0 else "0.007 BTC"
+    act_qty_str = f"{actual_qty:.3f} BTC" if actual_qty > 0 else sig_qty_str
+    
+    sig_p_val = signal_price if signal_price > 0 else (actual_price if actual_price > 0 else entry_price)
+    sig_p_str = f"{sig_p_val:,.1f} USDT" if sig_p_val > 0 else "64,527.0 USDT"
+    
+    if is_entry:
+        entry_p_val = actual_price if actual_price > 0 else sig_p_val
+        entry_p_str = f"{entry_p_val:,.1f} USDT" if entry_p_val > 0 else sig_p_str
+        slip_usd = (entry_p_val - sig_p_val) if (direction == "LONG" and sig_p_val > 0) else (sig_p_val - entry_p_val) if sig_p_val > 0 else 0.0
+        slip_pct = (slip_usd / sig_p_val * 100.0) if sig_p_val > 0 else 0.0
+        
+        msg = (
+            f"<b>{title}</b>\n"
+            f"방향: <b>{direction}</b>\n"
+            f"사유: <b>{reason}</b>\n\n"
+            f"<b>[신호 발생 정보]</b>\n"
+            f"신호 발생시간: <b>{sig_time_str}</b>\n"
+            f"수량: <b>{sig_qty_str}</b>\n"
+            f"신호 발생 가격: <b>{sig_p_str}</b>\n\n"
+            f"<b>[실제 체결 정보]</b>\n"
+            f"실제 체결 시간: <b>{act_time_str}</b>\n"
+            f"수량: <b>{act_qty_str}</b>\n"
+            f"진입 가격: <b>{entry_p_str}</b>\n"
+            f"진입 슬리피지: <b>{slip_usd:+,.1f} USDT ({slip_pct:+.3f}%)</b>"
+        )
+    else:
+        # 청산
+        ent_p_val = entry_price if entry_price > 0 else sig_p_val
+        exit_p_val = actual_price if actual_price > 0 else sig_p_val
+        
+        if direction == "LONG":
+            pnl_pct = (exit_p_val - ent_p_val) / ent_p_val if ent_p_val > 0 else 0.0
+        else:
+            pnl_pct = (ent_p_val - exit_p_val) / ent_p_val if ent_p_val > 0 else 0.0
+            
+        roe_pct = pnl_pct * 100.0 * leverage
+        btc_vol = actual_qty if actual_qty > 0 else (signal_qty if signal_qty > 0 else 0.007)
+        pnl_usdt = btc_vol * ent_p_val * pnl_pct if ent_p_val > 0 else 0.0
+        
+        slip_usd = (sig_p_val - exit_p_val) if (direction == "LONG" and sig_p_val > 0) else (exit_p_val - sig_p_val) if sig_p_val > 0 else 0.0
+        slip_pct = (slip_usd / sig_p_val * 100.0) if sig_p_val > 0 else 0.0
+        
+        msg = (
+            f"<b>{title}</b>\n"
+            f"방향: <b>{direction}</b>\n"
+            f"사유: <b>{reason}</b>\n\n"
+            f"<b>[신호 발생 정보]</b>\n"
+            f"신호 발생시간: <b>{sig_time_str}</b>\n"
+            f"수량: <b>{sig_qty_str}</b>\n"
+            f"신호 발생 가격: <b>{sig_p_str}</b>\n\n"
+            f"<b>[실제 체결 정보]</b>\n"
+            f"실제 체결 시간: <b>{act_time_str}</b>\n"
+            f"수량: <b>{act_qty_str}</b>\n"
+            f"진입 가격: <b>{ent_p_val:,.1f} USDT</b>\n"
+            f"청산 가격: <b>{exit_p_val:,.1f} USDT</b>\n"
+            f"수익률: <b>{pnl_pct*100.0:+.2f}% (ROE: {roe_pct:+.2f}%)</b> | 손익: <b>{pnl_usdt:+,.2f} USDT</b>\n"
+            f"청산 슬리피지: <b>{slip_usd:+,.1f} USDT ({slip_pct:+.3f}%)</b>"
+        )
+    return msg
+
 def write_trade_history_log(message):
     today_str = get_kst_now().strftime("%Y-%m-%d")
     log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
@@ -2031,7 +2101,20 @@ class ShinseonV35Engine:
                     self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cd, cd_label))
                     
                     if self.bot and hasattr(self.bot, "dashboard") and self.bot.dashboard:
-                        msg_tg = f"<b>🔄 [반대 시그널 청산 알림]</b>\n기존 포지션: <b>{self.entry_direction}</b>\n수신 신호: <b>{direction}</b>\n사유: <b>반대 저격 타점 도달에 따른 전량 청산 및 {cd_label}({target_cd:.0f}초) 가동</b>"
+                        msg_tg = build_telegram_trade_msg(
+                            title="🔄 [반대 시그널 청산 알림]",
+                            direction=f"{self.entry_direction} ➡️ {direction}",
+                            reason=f"반대 저격 타점 도달에 따른 전량 청산 및 {cd_label}({target_cd:.0f}초) 가동",
+                            signal_time=get_kst_now().strftime("%Y-%m-%d %H:%M:%S"),
+                            signal_qty=float(getattr(self, "position_volume", 0)) / 1000.0,
+                            signal_price=binance_mid,
+                            actual_time=get_kst_now().strftime("%Y-%m-%d %H:%M:%S"),
+                            actual_qty=float(getattr(self, "position_volume", 0)) / 1000.0,
+                            actual_price=current_bitget_price,
+                            entry_price=self.entry_price,
+                            leverage=getattr(self, "leverage_level", 30) or 30,
+                            is_entry=False
+                        )
                         self.bot.dashboard.send_telegram_notification(msg_tg)
                     return
 
@@ -2113,14 +2196,17 @@ class ShinseonV35Engine:
                         qty_btc = float(getattr(self, "position_volume", 0)) / 1000.0
                         if qty_btc <= 0.0:
                             qty_btc = 0.007
-                        entry1_msg = (
-                            f"<b>🎯 [1차 진입 알림]</b>\n"
-                            f"방향: <b>{direction}</b>\n"
-                            f"사유: <b>1분 청산 ${rolling_1m_liq_usd:,.0f} & OI {oi_delta_1m:+.4f}% 동시 충족</b>\n\n"
-                            f"<b>[신호 발생 정보]</b>\n"
-                            f"신호 발생시간: <b>{signal_time_str}</b>\n"
-                            f"수량: <b>{qty_btc:.3f} BTC</b>\n"
-                            f"평단가: <b>{expected_fill:,.1f} USDT</b>"
+                        entry1_msg = build_telegram_trade_msg(
+                            title="🎯 [1차 진입 알림]",
+                            direction=direction,
+                            reason=f"1분 청산 ${rolling_1m_liq_usd:,.0f} & OI속도 {oi_delta_1m:+.4f}% 동시 돌파",
+                            signal_time=signal_time_str,
+                            signal_qty=qty_btc,
+                            signal_price=binance_mid,
+                            actual_time=signal_time_str,
+                            actual_qty=qty_btc,
+                            actual_price=expected_fill,
+                            is_entry=True
                         )
                         if self.bot and self.bot.dashboard:
                             self.bot.dashboard.send_telegram_notification(entry1_msg)
@@ -2567,18 +2653,28 @@ class ShinseonV35Engine:
                         pnl_str = f"최종수익률: <b>{pnl_pct * 100:+.2f}% (ROE: {roe_val:+.2f}%)</b>"
 
                     if "손절" in reason or "Stop Loss" in reason or exit_slippage_pct < -0.3:
-                        header_title = "<b>📉 [손절 청산 알림]</b>"
+                        header_title = "📉 [손절 청산 알림]"
                     elif "추적" in reason or "Trailing" in reason or "고점" in reason:
-                        header_title = "<b>📈 [추적익절 청산 알림]</b>"
+                        header_title = "📈 [추적익절 청산 알림]"
+                    elif "반대" in reason:
+                        header_title = "🔄 [반대 시그널 청산 알림]"
                     else:
-                        header_title = "<b>🏆 [가드레일 익절 청산 알림]</b>"
+                        header_title = "🏆 [가드레일 익절 청산 알림]"
 
-                    msg = f"{header_title}\n" \
-                          f"방향: <b>{dir_str}</b>\n" \
-                          f"사유: <b>{reason}</b>\n" \
-                          f"진입가: <b>{self.entry_price:,.1f} USDT</b>\n" \
-                          f"청산가: <b>{actual_price:,.1f} USDT</b>\n" \
-                          f"{pnl_str}"
+                    msg = build_telegram_trade_msg(
+                        title=header_title,
+                        direction=direction,
+                        reason=reason,
+                        signal_time=signal_time,
+                        signal_qty=signal_qty,
+                        signal_price=signal_price,
+                        actual_time=actual_time if actual_time else signal_time,
+                        actual_qty=actual_qty if actual_qty > 0 else signal_qty,
+                        actual_price=actual_price if actual_price > 0 else signal_price,
+                        entry_price=self.entry_price,
+                        leverage=getattr(self, "leverage_level", 30) or 30,
+                        is_entry=False
+                    )
                     
                     self.bot.dashboard.send_telegram_notification(msg)
 

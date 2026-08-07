@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.06",
+    "CURRENT_VERSION": "V5.07",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -56,9 +56,9 @@
         }
     },
     "leverage_level": 30,
-    "betting_ratio": 750.0,
-    "split_entry_1_ratio": 500.0,
-    "split_entry_2_ratio": 250.0,
+    "betting_ratio": 300.0,
+    "split_entry_1_ratio": 200.0,
+    "split_entry_2_ratio": 100.0,
     "split_entry_2_trigger_pct": -0.3,
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,
