@@ -2513,6 +2513,38 @@ class ShinseonV35Engine:
             half_exit_trigger = s_guardrails["trigger"] / 100.0
             entry_sl_guard = s_guardrails["guard"]
             half_exit_enabled = s_guardrails.get("enabled", True)
+
+            # [인메모리 스마트 스탑(Smart Stop) 오프셋 감시 엔진 (SHINSEON 원본 규격)]
+            if getattr(self, "custom_stop_active", False):
+                offset_val = float(getattr(self, "custom_stop_offset_pct", -0.2))
+                pnl_at_set = float(getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0))
+                live_pnl = pnl_pct * 100.0
+
+                if offset_val < pnl_at_set:
+                    is_triggered = (live_pnl <= offset_val)
+                    cond_str = "이하"
+                    stop_label = "손절/보존"
+                else:
+                    is_triggered = (live_pnl >= offset_val)
+                    cond_str = "이상"
+                    stop_label = "상승/반등익절"
+
+                if is_triggered:
+                    self.custom_stop_active = False
+                    ratio = float(getattr(self, "custom_stop_close_ratio", 100.0))
+                    order_type = "50_PERCENT_CLOSE" if ratio < 100.0 else "FORCE_MARKET_UNCAPPED"
+                    
+                    self.exit_reason = f"스마트 스탑 발동 (PnL: {live_pnl:+.2f}%, 설정: {offset_val:+.2f}%)"
+                    self.exit_in_progress = True
+                    clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type=order_type)
+                    if clear_ok:
+                        log_msg = f"🛡️ [스마트 스탑 발동] 실시간 PnL({live_pnl:+.2f}%)이 설정값({offset_val:+.2f}%) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산 완료)"
+                        logger.info(log_msg)
+                        if self.bot and hasattr(self.bot, "broadcast_event"):
+                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
+                        if order_type == "FORCE_MARKET_UNCAPPED":
+                            self.is_position_active = False
+                            break
             
             if half_exit_enabled:
                 if not getattr(self, "is_half_exited", False) and pnl_pct >= half_exit_trigger:
@@ -2995,15 +3027,22 @@ class WsServer:
                         await self.broadcast_event("EVT_RESPONSE_LOG", {"message": "📡 [서버 응답] 🌓 비트겟 50% 시장가 분할 청산 명령 패킷 수신 완료"})
                     elif cmd == "CMD_SET_SMART_STOP":
                         active = payload.get("active", False)
-                        offset_roe = payload.get("offset_roe", 6.0)
-                        ratio = payload.get("ratio", 100.0)
-                        set_roe = payload.get("set_roe", 0.0)
+                        offset_val = float(payload.get("offset_val", payload.get("offset_roe", -0.2)))
+                        ratio = float(payload.get("ratio", 100.0))
                         if self.bot_core and self.bot_core.v35_engine:
                             self.bot_core.v35_engine.custom_stop_active = active
-                            self.bot_core.v35_engine.custom_stop_offset_roe = offset_roe
+                            self.bot_core.v35_engine.custom_stop_offset_pct = offset_val
                             self.bot_core.v35_engine.custom_stop_close_ratio = ratio
-                            self.bot_core.v35_engine.custom_stop_set_roe = set_roe
-                        act_str = f"📡 [서버 응답] 🛡️ 스마트 스탑 오프셋({offset_roe:+.2f}% ROE, {ratio:.0f}%) 실시간 감시 가드가 수신 및 등록되었습니다." if active else "📡 [서버 응답] 🧹 스마트 스탑 실시간 감시 가드가 해제되었습니다."
+                            cur_price = self.bot_core.current_price
+                            ent_price = getattr(self.bot_core.v35_engine, "entry_price", cur_price)
+                            entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
+                            lev_val = getattr(self.bot_core.v35_engine, "leverage_level", 30) or 30
+                            if ent_price > 0 and cur_price > 0:
+                                pnl_pct = (cur_price - ent_price) / ent_price * lev_val * 100.0 if entry_dir == "LONG" else (ent_price - cur_price) / ent_price * lev_val * 100.0
+                            else:
+                                pnl_pct = 0.0
+                            self.bot_core.v35_engine.custom_stop_set_pnl = pnl_pct
+                        act_str = f"📡 [서버 응답] 🛡️ 스마트 스탑 오프셋({offset_val:+.2f}%, {ratio:.0f}%) 서버 감시가 가동되었습니다." if active else "📡 [서버 응답] 🧹 스마트 스탑 서버 감시가 해제되었습니다."
                         await self.broadcast_event("EVT_RESPONSE_LOG", {"message": act_str})
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})

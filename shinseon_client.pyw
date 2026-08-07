@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.22"
+        self.CURRENT_VERSION = "V5.23"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2440,12 +2440,14 @@ class ShinseonDashboard(QMainWindow):
                 self.edit_stoploss_ratio.setText("100")
 
             self.is_stoploss_active = True
-            self.add_log(f"🛡️ [스마트 스탑 설정 개시] ROE 오프셋: {offset_val:+.2f}%, 청산 비율: {ratio_val:.0f}% 감시 가드를 가동합니다.")
+            self.add_log(f"🛡️ [스마트 스탑 설정 개시] PnL 오프셋: {offset_val:+.2f}%, 청산 비율: {ratio_val:.0f}% 서버 감시 가드를 가동합니다.")
 
-            if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
-                self.bot_core.v35_engine.custom_stop_active = True
-                self.bot_core.v35_engine.custom_stop_offset_roe = offset_val
-                self.bot_core.v35_engine.custom_stop_close_ratio = ratio_val
+            if self.is_ws_active():
+                import json
+                try:
+                    asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': True, 'offset_val': offset_val, 'ratio': ratio_val})))
+                except Exception:
+                    pass
 
             # UI 가동 상태(ON) 업데이트
             self.edit_stoploss_offset.setEnabled(False)
