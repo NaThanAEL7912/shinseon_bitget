@@ -175,6 +175,109 @@ def build_telegram_trade_msg(title, direction, reason, signal_time="", signal_qt
         )
     return msg
 
+STATS_FILE = os.path.join(LOGS_DIR, "trade_stats_history.json")
+
+def load_trade_stats_data():
+    if os.path.exists(STATS_FILE):
+        try:
+            with open(STATS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"통계 파일 로드 실패: {e}")
+    return {"daily_records": [], "trades_history": []}
+
+def save_trade_stats_data(data):
+    try:
+        with open(STATS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"통계 파일 저장 실패: {e}")
+
+def record_trade_history_event(side, qty, entry_price, exit_price, pnl_usd, roe_pct, reason):
+    data = load_trade_stats_data()
+    now_dt = get_kst_now()
+    today_str = now_dt.strftime("%Y-%m-%d")
+    time_str = now_dt.strftime("%H:%M:%S")
+    
+    trade_item = {
+        "date": today_str,
+        "time": time_str,
+        "side": side,
+        "qty": qty,
+        "entry_p": entry_price,
+        "exit_p": exit_price,
+        "pnl": pnl_usd,
+        "roe": roe_pct,
+        "reason": reason
+    }
+    
+    data.setdefault("trades_history", []).append(trade_item)
+    
+    # 일별 기록 갱신
+    daily_records = data.setdefault("daily_records", [])
+    daily_rec = next((r for r in daily_records if r.get("date") == today_str), None)
+    
+    if not daily_rec:
+        daily_rec = {
+            "date": today_str,
+            "trades": 0,
+            "wins": 0,
+            "losses": 0,
+            "win_rate": 0.0,
+            "profit_tot": 0.0,
+            "loss_tot": 0.0,
+            "pnl": 0.0,
+            "avg_roe": 0.0,
+            "trades_detail": []
+        }
+        daily_records.insert(0, daily_rec)
+        
+    daily_rec["trades"] += 1
+    if pnl_usd >= 0:
+        daily_rec["wins"] += 1
+        daily_rec["profit_tot"] += pnl_usd
+    else:
+        daily_rec["losses"] += 1
+        daily_rec["loss_tot"] += abs(pnl_usd)
+        
+    daily_rec["pnl"] += pnl_usd
+    daily_rec["win_rate"] = (daily_rec["wins"] / daily_rec["trades"]) * 100.0 if daily_rec["trades"] > 0 else 0.0
+    daily_rec.setdefault("trades_detail", []).insert(0, trade_item)
+    
+    roes = [t.get("roe", 0.0) for t in daily_rec["trades_detail"]]
+    daily_rec["avg_roe"] = (sum(roes) / len(roes)) if roes else 0.0
+    
+    save_trade_stats_data(data)
+
+def get_calculated_stats_payload():
+    data = load_trade_stats_data()
+    now_dt = get_kst_now()
+    today_str = now_dt.strftime("%Y-%m-%d")
+    
+    trades_all = data.get("trades_history", [])
+    tot_trades = len(trades_all)
+    tot_wins = sum(1 for t in trades_all if t.get("pnl", 0.0) >= 0)
+    tot_losses = tot_trades - tot_wins
+    tot_win_rate = (tot_wins / tot_trades * 100.0) if tot_trades > 0 else 0.0
+    tot_pnl = sum(t.get("pnl", 0.0) for t in trades_all)
+    
+    daily_records = data.get("daily_records", [])
+    today_rec = next((r for r in daily_records if r.get("date") == today_str), {})
+    
+    payload = {
+        "total_pnl": tot_pnl,
+        "total_win_rate": tot_win_rate,
+        "total_trades": tot_trades,
+        "total_wins": tot_wins,
+        "total_losses": tot_losses,
+        "today_pnl": today_rec.get("pnl", 0.0),
+        "today_win_rate": today_rec.get("win_rate", 0.0),
+        "today_wins": today_rec.get("wins", 0),
+        "today_losses": today_rec.get("losses", 0),
+        "daily_records": daily_records
+    }
+    return payload
+
 def write_trade_history_log(message):
     today_str = get_kst_now().strftime("%Y-%m-%d")
     log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{today_str}.log")
@@ -2677,6 +2780,30 @@ class ShinseonV35Engine:
                     )
                     
                     self.bot.dashboard.send_telegram_notification(msg)
+                    
+                    # 통계 DB 기록 및 클라이언트 전광판 갱신
+                    try:
+                        btc_qty = actual_qty if actual_qty > 0 else signal_qty
+                        if btc_qty <= 0.0:
+                            btc_qty = 0.007
+                        ent_p = self.entry_price if self.entry_price > 0 else signal_price
+                        ext_p = actual_price if actual_price > 0 else signal_price
+                        pnl_val = (ext_p - ent_p) * btc_qty if direction == "LONG" else (ent_p - ext_p) * btc_qty
+                        roe_val = (pnl_val / (ent_p * btc_qty)) * 100.0 * (getattr(self, "leverage_level", 30) or 30) if ent_p > 0 and btc_qty > 0 else 0.0
+                        
+                        record_trade_history_event(
+                            side=direction,
+                            qty=btc_qty,
+                            entry_price=ent_p,
+                            exit_price=ext_p,
+                            pnl_usd=pnl_val,
+                            roe_pct=roe_val,
+                            reason=reason
+                        )
+                        if hasattr(self.bot, "ws_server") and self.bot.ws_server:
+                            asyncio.create_task(self.bot.ws_server.broadcast_event("EVT_SYNC_STATS", get_calculated_stats_payload()))
+                    except Exception as st_err:
+                        logger.error(f"통계 기록 업데이트 에러: {st_err}")
 
 
 # ==============================================================================
@@ -2783,6 +2910,9 @@ class WsServer:
                     logger.info(f"🌐 [WEB_COMMAND] 클라이언트 패킷 수신: {cmd}")
                     if cmd == "CMD_SYNC_POSITION":
                         asyncio.create_task(self.handle_sync_position(websocket))
+                    elif cmd == "CMD_REQ_STATS_DETAIL":
+                        stats_payload = get_calculated_stats_payload()
+                        await self.broadcast_event("EVT_SYNC_STATS", stats_payload)
                     elif cmd == "CMD_START_BOT":
                         if self.bot_core and self.bot_core.v35_engine:
                             self.bot_core.v35_engine.bot_state = "RUNNING"

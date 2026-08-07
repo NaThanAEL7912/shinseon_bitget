@@ -15,7 +15,7 @@ from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayout, 
                              QHBoxLayout, QWidget, QLabel, QLineEdit, QTextEdit, QPlainTextEdit,
                              QGraphicsDropShadowEffect, QProgressBar, QCheckBox,
-                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox, QComboBox, QListWidget)
+                             QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox, QComboBox, QListWidget, QTableWidget, QTableWidgetItem, QHeaderView, QSplitter)
 from PySide6.QtCore import Qt, QPointF, QRectF, QUrl
 from PySide6.QtGui import QPainter, QPicture, QColor, QFont, QBrush, QPen, QLinearGradient
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -287,7 +287,202 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.07"  # V5.02 CSV 10대 한글 헤더 장착 및 듀얼 50% AND 1초 기어 개편
+class CumulativeReportDialog(QDialog):
+    def __init__(self, parent=None, stats_data=None):
+        super().__init__(parent)
+        self.setWindowTitle("📊 [신선] 누적 트레이딩 상세 보고서 센터")
+        self.setMinimumSize(980, 680)
+        self.resize(1050, 720)
+        self.stats_data = stats_data or {}
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #0A0909;
+                color: #F5EFEB;
+                font-family: 'Malgun Gothic Semilight', 'Segoe UI', sans-serif;
+            }
+            QLabel {
+                color: #D3C4BA;
+            }
+            QTableWidget {
+                background-color: #121010;
+                color: #F5EFEB;
+                gridline-color: rgba(222, 186, 157, 0.15);
+                border: 1px solid rgba(222, 186, 157, 0.2);
+                border-radius: 6px;
+                font-size: 11px;
+            }
+            QHeaderView::section {
+                background-color: #1C1918;
+                color: #DEBA9D;
+                font-weight: bold;
+                border: 1px solid rgba(222, 186, 157, 0.2);
+                padding: 5px;
+            }
+            QPushButton {
+                background-color: #2D2520;
+                color: #DEBA9D;
+                border: 1px solid #DEBA9D;
+                border-radius: 4px;
+                padding: 6px 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #DEBA9D;
+                color: #000000;
+            }
+        """)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # 헤더 카드
+        header_box = QGroupBox("🏆 [전체 누적 종합 실적 요약]")
+        header_box.setStyleSheet("QGroupBox { border: 1px solid #DEBA9D; border-radius: 6px; margin-top: 10px; font-weight: bold; color: #DEBA9D; font-size: 13px; } QGroupBox::title { subcontrol-origin: margin; left: 10px; padding: 0 5px; }")
+        h_layout = QHBoxLayout(header_box)
+        
+        tot_pnl = self.stats_data.get("total_pnl", 0.0)
+        win_rate = self.stats_data.get("total_win_rate", 0.0)
+        tot_trades = self.stats_data.get("total_trades", 0)
+        tot_wins = self.stats_data.get("total_wins", 0)
+        tot_losses = self.stats_data.get("total_losses", 0)
+        
+        color_pnl = "#00E676" if tot_pnl >= 0 else "#FF5252"
+        pnl_str = f"${tot_pnl:+,.2f}"
+        
+        self.lbl_summary = QLabel(
+            f"누적 순손익: <b style='color:{color_pnl}; font-size:16px;'>{pnl_str}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"전체 승률: <b style='color:#DEBA9D; font-size:15px;'>{win_rate:.1f}%</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+            f"총 거래: <b>{tot_trades}전 {tot_wins}승 {tot_losses}패</b>"
+        )
+        self.lbl_summary.setStyleSheet("font-size: 13px;")
+        h_layout.addWidget(self.lbl_summary)
+        layout.addWidget(header_box)
+        
+        # 테이블 스플리터
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        
+        # 1. 일별 실적 표
+        daily_group = QGroupBox("📅 [날짜별 매매 실적 요약]")
+        daily_group.setStyleSheet("QGroupBox { border: 1px solid rgba(222, 186, 157, 0.3); border-radius: 6px; margin-top: 10px; color: #F5EFEB; font-weight: bold; }")
+        daily_layout = QVBoxLayout(daily_group)
+        
+        self.daily_table = QTableWidget()
+        self.daily_table.setColumnCount(9)
+        self.daily_table.setHorizontalHeaderLabels([
+            "날짜(KST)", "총 거래", "승", "패", "승률(%)", "익절 총액($)", "손절 총액($)", "당일 순손익($)", "평균 ROE(%)"
+        ])
+        self.daily_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.daily_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.daily_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.daily_table.itemSelectionChanged.connect(self.on_daily_selected)
+        
+        daily_layout.addWidget(self.daily_table)
+        splitter.addWidget(daily_group)
+        
+        # 2. 개별 거래 상세 표
+        detail_group = QGroupBox("🔍 [선택 날짜 개별 거래 상세 세부 리스트]")
+        detail_group.setStyleSheet("QGroupBox { border: 1px solid rgba(222, 186, 157, 0.3); border-radius: 6px; margin-top: 10px; color: #F5EFEB; font-weight: bold; }")
+        detail_layout = QVBoxLayout(detail_group)
+        
+        self.detail_table = QTableWidget()
+        self.detail_table.setColumnCount(8)
+        self.detail_table.setHorizontalHeaderLabels([
+            "체결 시각", "방향", "수량(BTC)", "진입가($)", "청산가($)", "수익률(%)", "손익금($)", "청산 사유"
+        ])
+        self.detail_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.detail_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        
+        detail_layout.addWidget(self.detail_table)
+        splitter.addWidget(detail_group)
+        
+        layout.addWidget(splitter)
+        
+        # 하단 버튼 바
+        btn_layout = QHBoxLayout()
+        self.btn_refresh = QPushButton("🔄 실시간 새로고침")
+        self.btn_refresh.clicked.connect(self.request_refresh)
+        
+        self.btn_close = QPushButton("닫기")
+        self.btn_close.clicked.connect(self.accept)
+        
+        btn_layout.addWidget(self.btn_refresh)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_close)
+        
+        layout.addLayout(btn_layout)
+        self.populate_data()
+
+    def populate_data(self):
+        daily_records = self.stats_data.get("daily_records", [])
+        self.daily_table.setRowCount(len(daily_records))
+        
+        for r_idx, rec in enumerate(daily_records):
+            pnl = rec.get("pnl", 0.0)
+            col_pnl = QColor("#00E676") if pnl >= 0 else QColor("#FF5252")
+            
+            items = [
+                QTableWidgetItem(str(rec.get("date", ""))),
+                QTableWidgetItem(str(rec.get("trades", 0))),
+                QTableWidgetItem(str(rec.get("wins", 0))),
+                QTableWidgetItem(str(rec.get("losses", 0))),
+                QTableWidgetItem(f"{rec.get('win_rate', 0.0):.1f}%"),
+                QTableWidgetItem(f"${rec.get('profit_tot', 0.0):,.2f}"),
+                QTableWidgetItem(f"${rec.get('loss_tot', 0.0):,.2f}"),
+                QTableWidgetItem(f"${pnl:+,.2f}"),
+                QTableWidgetItem(f"{rec.get('avg_roe', 0.0):+.2f}%"),
+            ]
+            items[7].setForeground(col_pnl)
+            items[7].setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            
+            for c_idx, item in enumerate(items):
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.daily_table.setItem(r_idx, c_idx, item)
+                
+        if daily_records:
+            self.daily_table.selectRow(0)
+
+    def on_daily_selected(self):
+        selected_rows = self.daily_table.selectedItems()
+        if not selected_rows:
+            return
+        row = selected_rows[0].row()
+        date_str = self.daily_table.item(row, 0).text()
+        
+        daily_records = self.stats_data.get("daily_records", [])
+        selected_rec = next((r for r in daily_records if r.get("date") == date_str), None)
+        
+        if selected_rec:
+            trades = selected_rec.get("trades_detail", [])
+            self.detail_table.setRowCount(len(trades))
+            for r_idx, t in enumerate(trades):
+                pnl = t.get("pnl", 0.0)
+                col_pnl = QColor("#00E676") if pnl >= 0 else QColor("#FF5252")
+                
+                items = [
+                    QTableWidgetItem(str(t.get("time", ""))),
+                    QTableWidgetItem(str(t.get("side", ""))),
+                    QTableWidgetItem(f"{t.get('qty', 0.0):.3f}"),
+                    QTableWidgetItem(f"${t.get('entry_p', 0.0):,.1f}"),
+                    QTableWidgetItem(f"${t.get('exit_p', 0.0):,.1f}"),
+                    QTableWidgetItem(f"{t.get('roe', 0.0):+.2f}%"),
+                    QTableWidgetItem(f"${pnl:+,.2f}"),
+                    QTableWidgetItem(str(t.get("reason", ""))),
+                ]
+                items[6].setForeground(col_pnl)
+                items[6].setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                
+                for c_idx, item in enumerate(items):
+                    item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                    self.detail_table.setItem(r_idx, c_idx, item)
+
+    def request_refresh(self):
+        if self.parent() and hasattr(self.parent(), "request_stats_update"):
+            self.parent().request_stats_update()
+
+        self.CURRENT_VERSION = "V5.08"  # V5.02 CSV 10대 한글 헤더 장착 및 듀얼 50% AND 1초 기어 개편
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -436,21 +631,50 @@ class ShinseonDashboard(QMainWindow):
         main_layout.setSpacing(16)
         
         # ----------------------------------------------------------------------
-        # 최상단: 타이틀바 및 한자 현판 영역
+        # 최상단: 타이틀바, 누적/금일 듀얼 전광판 & 상세 보고서 센터 팝업 버튼
         # ----------------------------------------------------------------------
         title_layout = QHBoxLayout()
         
-        # 기계식 세리프 서체의 느낌을 주기 위해 Georgia / Times New Roman 바인딩
+        # 1. 브랜드 타이틀
         self.lbl_brand = QLabel(
             "<span style='color: #DEBA9D; font-weight: bold; font-size: 20px; font-family: \"Georgia\", serif;'>神選 [SHINSEON]</span> "
             "<span style='font-size: 16px; font-weight: bold; color: #F5EFEB; font-family: \"Segoe UI\";'>- 신의 선택 마스터 터미널</span> "
             f"<span style='font-size: 11px; font-weight: bold; color: #C5A07A; border: 1px solid rgba(222, 186, 157, 0.35); border-radius: 3px; padding: 2px 6px; margin-left: 8px; vertical-align: middle;'>{self.CURRENT_VERSION}</span>"
         )
-        lbl_status = QLabel("구동 상태: <span style='color: #DEBA9D; font-weight: bold;'>● 바이낸스 API 활성화</span>")
-        lbl_status.setStyleSheet("font-size: 12px; font-weight: bold;")
+        
+        # 2. [전체 누적 매매 결과 전광판] (좌측 빨간 상자 영역)
+        self.lbl_cum_stats = QLabel("🏆 [누적 실적] <b>손익: +$0.00 | 승률: 0.0% (0승 0패)</b>")
+        self.lbl_cum_stats.setStyleSheet("background: rgba(222, 186, 157, 0.08); border: 1px solid rgba(222, 186, 157, 0.25); border-radius: 4px; padding: 4px 10px; color: #DEBA9D; font-size: 11px;")
+        
+        self.btn_open_cum_report = QPushButton("📊 누적 상세 보고서")
+        self.btn_open_cum_report.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_open_cum_report.setStyleSheet("""
+            QPushButton {
+                background-color: #2D2520;
+                color: #DEBA9D;
+                border: 1px solid #DEBA9D;
+                border-radius: 4px;
+                padding: 4px 10px;
+                font-weight: bold;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #DEBA9D;
+                color: #000000;
+            }
+        """)
+        self.btn_open_cum_report.clicked.connect(self.open_cumulative_report_dialog)
+
+        # 3. [오늘의 매매 결과 전광판] (우측 파란 상자 영역 - 구동상태 대체!)
+        self.lbl_today_stats = QLabel("📅 [금일 실적] <b>손익: $0.00 | 승률: 0.0% (0승 0패)</b>")
+        self.lbl_today_stats.setStyleSheet("background: rgba(0, 230, 118, 0.08); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 4px; padding: 4px 10px; color: #00E676; font-size: 11px;")
+        
         title_layout.addWidget(self.lbl_brand)
+        title_layout.addSpacing(15)
+        title_layout.addWidget(self.lbl_cum_stats)
+        title_layout.addWidget(self.btn_open_cum_report)
         title_layout.addStretch()
-        title_layout.addWidget(lbl_status)
+        title_layout.addWidget(self.lbl_today_stats)
         main_layout.addLayout(title_layout)
         
         # 3분할 패널 배치
@@ -1184,6 +1408,44 @@ class ShinseonDashboard(QMainWindow):
         except Exception:
             return False
 
+    def request_stats_update(self):
+        if self.is_ws_active():
+            import json
+            asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_STATS_DETAIL'})))
+
+    def open_cumulative_report_dialog(self):
+        self.request_stats_update()
+        stats_data = getattr(self, "latest_stats_data", {})
+        self.cum_dialog = CumulativeReportDialog(self, stats_data)
+        self.cum_dialog.exec()
+
+    def update_stats_ui(self, stats_data):
+        self.latest_stats_data = stats_data
+        
+        cum_pnl = stats_data.get("total_pnl", 0.0)
+        cum_win_rate = stats_data.get("total_win_rate", 0.0)
+        cum_wins = stats_data.get("total_wins", 0)
+        cum_losses = stats_data.get("total_losses", 0)
+        
+        today_pnl = stats_data.get("today_pnl", 0.0)
+        today_win_rate = stats_data.get("today_win_rate", 0.0)
+        today_wins = stats_data.get("today_wins", 0)
+        today_losses = stats_data.get("today_losses", 0)
+        
+        c_cum_pnl = "#00E676" if cum_pnl >= 0 else "#FF5252"
+        c_today_pnl = "#00E676" if today_pnl >= 0 else "#FF5252"
+        
+        self.lbl_cum_stats.setText(
+            f"🏆 [누적 실적] <b>손익: <span style='color:{c_cum_pnl};'>${cum_pnl:+,.2f}</span> | 승률: {cum_win_rate:.1f}% ({cum_wins}승 {cum_losses}패)</b>"
+        )
+        self.lbl_today_stats.setText(
+            f"📅 [금일 실적] <b>손익: <span style='color:{c_today_pnl};'>${today_pnl:+,.2f}</span> | 승률: {today_win_rate:.1f}% ({today_wins}승 {today_losses}패)</b>"
+        )
+        
+        if getattr(self, "cum_dialog", None) and self.cum_dialog.isVisible():
+            self.cum_dialog.stats_data = stats_data
+            self.cum_dialog.populate_data()
+
     def open_download_center(self):
         if self.is_ws_active():
             import json
@@ -1209,6 +1471,7 @@ class ShinseonDashboard(QMainWindow):
                     self.send_config_to_server()
                     await asyncio.sleep(0.3)
                     await self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"}))
+                    await self.ws.send(json.dumps({"cmd": "CMD_REQ_STATS_DETAIL"}))
                     asyncio.create_task(self.run_manual_latency_test())
                     
                     async for message in ws:
@@ -1271,6 +1534,8 @@ class ShinseonDashboard(QMainWindow):
                             res_msg = payload.get('message', '')
                             if res_msg:
                                 self.add_log(res_msg)
+                        elif msg_type == 'EVT_SYNC_STATS':
+                            self.update_stats_ui(payload)
                         elif msg_type == 'ui_update':
                             if 'price' in payload:
                                 self.current_price = float(payload['price'])
