@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.39"
+        self.CURRENT_VERSION = "V5.40"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1709,6 +1709,8 @@ class ShinseonDashboard(QMainWindow):
                     "half_exit_close_ratio": getattr(self, "half_exit_close_ratio", 50.0),
                     "pyramiding_enabled": getattr(self, "pyramiding_enabled", True),
                     "pyramiding_ratio": getattr(self, "pyramiding_ratio", 30.0),
+                    "mid_guard_trigger": getattr(self, "mid_guard_trigger", 0.60),
+                    "mid_guard_offset": getattr(self, "mid_guard_offset", -0.10),
                     "manual_threshold": self.chk_manual_threshold.isChecked(),
                     "target_liq": self.edit_target_liq.text(),
                     "target_oi": self.edit_target_oi.text(),
@@ -3629,8 +3631,23 @@ class ShinseonConfigDialog(QDialog):
         self.edit_pyramiding_ratio = QLineEdit()
         self.edit_pyramiding_ratio.setPlaceholderText("비중% (예: 30.0)")
         guardrail_layout.addWidget(self.edit_pyramiding_ratio, 12, 2)
+
+        # [V5.40 신설] 중간 수익 보존 가드레일 설정 (최소값 / 가드값)
+        lbl_mid_trig = QLabel("🛡️ 보존가드 발동 최소값 (%):")
+        lbl_mid_trig.setStyleSheet("color: #00FFCC; font-weight: bold;")
+        guardrail_layout.addWidget(lbl_mid_trig, 13, 0)
+        self.edit_mid_guard_trigger = QLineEdit()
+        self.edit_mid_guard_trigger.setPlaceholderText("예: 0.60")
+        guardrail_layout.addWidget(self.edit_mid_guard_trigger, 13, 1)
+
+        lbl_mid_off = QLabel("가드레일 스탑값 (%):")
+        lbl_mid_off.setStyleSheet("color: #FFD700; font-weight: bold;")
+        guardrail_layout.addWidget(lbl_mid_off, 13, 2)
+        self.edit_mid_guard_offset = QLineEdit()
+        self.edit_mid_guard_offset.setPlaceholderText("예: -0.10")
+        guardrail_layout.addWidget(self.edit_mid_guard_offset, 13, 3)
         
-        guardrail_layout.setRowStretch(13, 1)
+        guardrail_layout.setRowStretch(14, 1)
         self.tabs.addTab(self.tab_guardrail, "가드레일 설정")
 
         main_layout.addWidget(self.tabs)
@@ -3697,6 +3714,9 @@ class ShinseonConfigDialog(QDialog):
         self.chk_pyramiding_enabled.setChecked(getattr(self.parent, "pyramiding_enabled", True))
         self.edit_pyramiding_ratio.setText(f"{getattr(self.parent, 'pyramiding_ratio', 30.0):.1f}")
 
+        self.edit_mid_guard_trigger.setText(f"{getattr(self.parent, 'mid_guard_trigger', 0.60):.2f}")
+        self.edit_mid_guard_offset.setText(f"{getattr(self.parent, 'mid_guard_offset', -0.10):.2f}")
+
 
     def apply_and_save(self):
         if not self.parent:
@@ -3761,10 +3781,15 @@ class ShinseonConfigDialog(QDialog):
             pyra_enabled = self.chk_pyramiding_enabled.isChecked()
             pyra_ratio = float(self.edit_pyramiding_ratio.text().strip())
             
+            mid_trig_val = float(self.edit_mid_guard_trigger.text().strip())
+            mid_off_val = float(self.edit_mid_guard_offset.text().strip())
+
             self.parent.half_exit_close_ratio = half_exit_ratio_val
             self.parent.session_guardrails = new_guardrails
             self.parent.pyramiding_enabled = pyra_enabled
             self.parent.pyramiding_ratio = pyra_ratio
+            self.parent.mid_guard_trigger = mid_trig_val
+            self.parent.mid_guard_offset = mid_off_val
             
             # 설정 파일 저장
             self.parent.save_shinseon_config()

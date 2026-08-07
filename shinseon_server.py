@@ -686,6 +686,8 @@ class BotCore:
         self.half_exit_close_ratio = 50.0
         self.pyramiding_enabled = True
         self.pyramiding_ratio = 30.0
+        self.mid_guard_trigger = 0.60
+        self.mid_guard_offset = -0.10
 
         # 저장된 shinseon_config.json 있으면 즉시 자동 로드
         try:
@@ -718,6 +720,8 @@ class BotCore:
                 self.half_exit_close_ratio = cfg.get("half_exit_close_ratio", self.half_exit_close_ratio)
                 self.pyramiding_enabled = cfg.get("pyramiding_enabled", self.pyramiding_enabled)
                 self.pyramiding_ratio = cfg.get("pyramiding_ratio", self.pyramiding_ratio)
+                self.mid_guard_trigger = cfg.get("mid_guard_trigger", self.mid_guard_trigger)
+                self.mid_guard_offset = cfg.get("mid_guard_offset", self.mid_guard_offset)
                 print("⚙️ [Server BotCore] shinseon_config.json 설정값 자동 로드 완료!")
         except Exception as e:
             print(f"⚠️ [Server BotCore] Config 로드 실패: {e}")
@@ -2651,6 +2655,21 @@ class ShinseonV35Engine:
                             self.is_position_active = False
                             break
             
+            # [V5.40 신설] 중간 수익 보존 가드레일 (최소값 % 도달 시 가드값 % 스탑로스 자동 배치)
+            mid_trig = float(getattr(self.bot, "mid_guard_trigger", 0.60)) / 100.0
+            mid_off = float(getattr(self.bot, "mid_guard_offset", -0.10))
+            if not getattr(self, "has_mid_guarded", False) and pnl_pct >= mid_trig:
+                self.has_mid_guarded = True
+                new_sl_price = self.entry_price * (1.0 + (mid_off / 100.0)) if direction == "LONG" else self.entry_price * (1.0 - (mid_off / 100.0))
+                self.last_placed_stop_price = new_sl_price
+                asyncio.create_task(self.execute_bitget_internal_packet(side="STOP_LOSS", order_type=str(round(new_sl_price, 1))))
+                
+                log_msg = f"🛡️ [수익 보존 가드 발동] 수익률 {pnl_pct*100:.2f}% 도달하여 스탑로스를 {mid_off:+.2f}% 위치({new_sl_price:.1f})로 상향 방어했습니다!"
+                if self.bot and self.bot.dashboard:
+                    self.bot.dashboard.add_log(log_msg)
+                    tg_msg = f"<b>🛡️ [수익 보존 가드 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>수익률 {pnl_pct*100:.2f}% 도달하여 스탑로스 상향 방어</b>\n새 스탑로스: <b>{new_sl_price:,.1f} USDT ({mid_off:+.2f}%)</b>"
+                    self.bot.dashboard.send_telegram_notification(tg_msg)
+
             if half_exit_enabled:
                 if not getattr(self, "is_half_exited", False) and pnl_pct >= half_exit_trigger:
                     self.is_half_exited = True
@@ -2678,7 +2697,8 @@ class ShinseonV35Engine:
                         tg_msg = f"<b>🛡️ [스마트 본전가드 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>분할익절 OFF 세션 100% 수량 유지 및 본전가드 상향</b>\n새 스탑로스: <b>{new_stop_price:,.1f} USDT</b>"
                         self.bot.dashboard.send_telegram_notification(tg_msg)
                 
-            if getattr(self, "is_half_exited", False) and getattr(self, "awaiting_pullback_pyramid", False) and not getattr(self, "has_pyramided", False) and getattr(self.bot.dashboard, "pyramiding_enabled", False):
+            is_pyra_enabled = getattr(self.bot, "pyramiding_enabled", False) or getattr(getattr(self.bot, "dashboard", None), "pyramiding_enabled", False)
+            if getattr(self, "is_half_exited", False) and getattr(self, "awaiting_pullback_pyramid", False) and not getattr(self, "has_pyramided", False) and is_pyra_enabled:
                 pullback_offset = float(getattr(getattr(self.bot, "dashboard", None), "pullback_pyramiding_offset", 0.003))
                     
                 if pnl_pct <= (half_exit_trigger - pullback_offset):
