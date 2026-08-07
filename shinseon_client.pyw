@@ -287,7 +287,7 @@ class BidirectionalProgressBar(QWidget):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.04"  # V5.02 CSV 10대 한글 헤더 장착 및 듀얼 50% AND 1초 기어 개편
+        self.CURRENT_VERSION = "V5.06"  # V5.02 CSV 10대 한글 헤더 장착 및 듀얼 50% AND 1초 기어 개편
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None

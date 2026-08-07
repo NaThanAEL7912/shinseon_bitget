@@ -1997,8 +1997,45 @@ class ShinseonV35Engine:
 
         # 1단계: 동적 레이더 임계치 검증
         if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
-            # [쿨타임 사전 검증 최우선 전진 배치]: 쿨타임 대기 중인 경우 진입/추가매수 시도 및 메트릭 로그 출력을 차단하고 1.0초 1회만 카운트다운 알림
             now_t_chk = time.time()
+            
+            # [포지션 보유 중 반대 시그널 포착 시]: 기존 포지션 전량 청산 후 익절/손절 쿨타임 적용 (v5.06)
+            if self.is_position_active and not getattr(self, "exit_in_progress", False):
+                if direction != self.entry_direction:
+                    logger.info(f"🚨 [TRADE] [반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
+                    self.exit_reason = f"반대 시그널({direction}) 포착에 의한 전량 청산"
+                    self.exit_in_progress = True
+                    
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
+                    
+                    # PnL 판정에 따른 익절(15초) / 손절(300초) 쿨타임 적용
+                    current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
+                    exit_pnl_pct = 0.0
+                    if self.entry_price > 0.0 and current_bitget_price > 0.0:
+                        if self.entry_direction == "LONG":
+                            exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price
+                        else:
+                            exit_pnl_pct = (self.entry_price - current_bitget_price) / self.entry_price
+                            
+                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
+                    if exit_pnl_pct < 0.0:
+                        target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0))
+                        cd_label = "반대신호 손절 쿨타임"
+                    else:
+                        target_cd = float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
+                        cd_label = "반대신호 익절 쿨타임"
+                        
+                    self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
+                    if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
+                        self.cooldown_timer_task.cancel()
+                    self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cd, cd_label))
+                    
+                    if self.bot and hasattr(self.bot, "dashboard") and self.bot.dashboard:
+                        msg_tg = f"<b>🔄 [반대 시그널 청산 알림]</b>\n기존 포지션: <b>{self.entry_direction}</b>\n수신 신호: <b>{direction}</b>\n사유: <b>반대 저격 타점 도달에 따른 전량 청산 및 {cd_label}({target_cd:.0f}초) 가동</b>"
+                        self.bot.dashboard.send_telegram_notification(msg_tg)
+                    return
+
+            # [쿨타임 사전 검증 최우선 전진 배치]: 쿨타임 대기 중인 경우 진입/추가매수 시도 및 메트릭 로그 출력을 차단하고 1.0초 1회만 카운트다운 알림
             if time.time() < getattr(self, "cooldown_until_time", 0.0):
                 remain_sec = getattr(self, "cooldown_until_time", 0.0) - time.time()
                 if self.bot.ui_cb and now_t_chk - getattr(self, "last_cooldown_log_time", 0.0) >= 1.0:
