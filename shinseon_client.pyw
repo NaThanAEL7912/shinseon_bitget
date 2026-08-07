@@ -486,7 +486,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.09"
+        self.CURRENT_VERSION = "V5.10"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -674,10 +674,11 @@ class ShinseonDashboard(QMainWindow):
         self.lbl_today_stats.setStyleSheet("background: rgba(0, 230, 118, 0.08); border: 1px solid rgba(0, 230, 118, 0.25); border-radius: 4px; padding: 4px 10px; color: #00E676; font-size: 11px;")
         
         title_layout.addWidget(self.lbl_brand)
-        title_layout.addSpacing(15)
-        title_layout.addWidget(self.lbl_cum_stats)
-        title_layout.addWidget(self.btn_open_cum_report)
         title_layout.addStretch()
+        title_layout.addWidget(self.btn_open_cum_report)
+        title_layout.addSpacing(6)
+        title_layout.addWidget(self.lbl_cum_stats)
+        title_layout.addSpacing(18)
         title_layout.addWidget(self.lbl_today_stats)
         main_layout.addLayout(title_layout)
         
