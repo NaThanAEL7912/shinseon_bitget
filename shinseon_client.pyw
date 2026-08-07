@@ -282,11 +282,8 @@ class BidirectionalProgressBar(QWidget):
 
 
 # ==============================================================================
-# 메인 GUI 대시보드 클래스 (Imperial Obsidian Halo 입체 광택 QSS 적용)
+# 누적 트레이딩 상세 보고서 센터 팝업 클래스
 # ==============================================================================
-class ShinseonDashboard(QMainWindow):
-    def __init__(self, bot_core):
-        super().__init__()
 class CumulativeReportDialog(QDialog):
     def __init__(self, parent=None, stats_data=None):
         super().__init__(parent)
@@ -482,7 +479,14 @@ class CumulativeReportDialog(QDialog):
         if self.parent() and hasattr(self.parent(), "request_stats_update"):
             self.parent().request_stats_update()
 
-        self.CURRENT_VERSION = "V5.08"  # V5.02 CSV 10대 한글 헤더 장착 및 듀얼 50% AND 1초 기어 개편
+
+# ==============================================================================
+# 메인 GUI 대시보드 클래스 (Imperial Obsidian Halo 입체 광택 QSS 적용)
+# ==============================================================================
+class ShinseonDashboard(QMainWindow):
+    def __init__(self, bot_core):
+        super().__init__()
+        self.CURRENT_VERSION = "V5.09"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
