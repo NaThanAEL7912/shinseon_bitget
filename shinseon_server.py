@@ -2262,10 +2262,10 @@ class ShinseonV35Engine:
                         self.bot.dashboard.send_telegram_notification(msg_tg)
                     return
 
-            # [쿨타임 사전 검증 최우선 전진 배치]: 쿨타임 대기 중인 경우 진입/추가매수 시도 및 메트릭 로그 출력을 차단하고 1.0초 1회만 카운트다운 알림
+            # [쿨타임 사전 검증 최우선 전진 배치]: 쿨타임 대기 중인 경우 진입/추가매수 시도 차단
             if time.time() < getattr(self, "cooldown_until_time", 0.0):
                 remain_sec = getattr(self, "cooldown_until_time", 0.0) - time.time()
-                if self.bot.ui_cb and now_t_chk - getattr(self, "last_cooldown_log_time", 0.0) >= 1.0:
+                if getattr(self.bot, "ui_cb", None) and now_t_chk - getattr(self, "last_cooldown_log_time", 0.0) >= 1.0:
                     self.last_cooldown_log_time = now_t_chk
                     self.bot.ui_cb(0.0, 0, f"⏳ [쿨타임 대기 중] 진입 보류 (남은 시간: {remain_sec:.1f}초)")
                 return
