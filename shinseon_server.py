@@ -97,6 +97,8 @@ async def send_telegram_notification_server(message):
             "text": message,
             "parse_mode": "HTML"
         }
+        clean_text = message.replace("<b>", "").replace("</b>", "").replace("\n", " | ")
+        logger.info(f"📱 [TELEGRAM OUT] 발송: {clean_text}")
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=payload, timeout=5.0) as resp:
                 pass
@@ -142,7 +144,7 @@ async def run_telegram_command_poller(bot_core):
                             if chat_id and from_chat_id != chat_id:
                                 continue
                                 
-                            logger.info(f"📱 [텔레그램 원격 어명 포착] '{text}'")
+                            logger.info(f"📱 [TELEGRAM IN] 텔레그램 명령 수신: '{text}'")
                             if text in ["시작", "/시작", "/start"]:
                                 if bot_core.v35_engine:
                                     bot_core.v35_engine.bot_state = "RUNNING"
@@ -765,13 +767,15 @@ class BotCore:
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
 
-                    # [초단위 전량 LOG 기록]: 1초마다 시세, 오더플로우, 포지션, 핑, 세션 등 행동 일체 기록
+                    # [초단위 전량 LOG 기록]: 동일 로그는 1번만 기록
                     c_status = status_msg.replace('\n', ' | ')
                     b_state = getattr(self.v35_engine, 'bot_state', 'RUNNING') if self.v35_engine else 'RUNNING'
-                    now_sec = time.time()
-                    if now_sec - getattr(self, "last_1s_log_time", 0.0) >= 1.0:
-                        self.last_1s_log_time = now_sec
-                        logger.info(f"⚡ [1초 감시] BTC: ${self.current_price:,.1f} | Liq: ${display_liq:,.0f} (L:${long_liq:,.0f}/S:${short_liq:,.0f}) | OI: {display_oi:+.4f}% | Ping: {latency_show:.1f}ms | Session: {current_session} | State: {b_state} | Status: {c_status}")
+                    # 세션 문자열에서 시간 부분 제거
+                    session_clean = current_session.split('(')[0].strip()
+                    log_msg = f"⚡ [1초 감시] BTC: ${self.current_price:,.1f} | Liq: ${display_liq:,.0f} (L:${long_liq:,.0f}/S:${short_liq:,.0f}) | OI: {display_oi:+.4f}% | Session: {session_clean} | State: {b_state} | Status: {c_status}"
+                    if log_msg != getattr(self, "last_1s_log_msg", None):
+                        logger.info(log_msg)
+                        self.last_1s_log_msg = log_msg
 
                     ui_callback(
                         self.current_price,
@@ -1534,6 +1538,7 @@ class ShinseonV35Engine:
                                             res = await resp.json()
                                             if res.get("code") == "00000":
                                                 self.bot.ui_cb(0.0, 0, "✅ [플래시 청산 성공] 비트겟 100% 전량 시장가 청산 완료")
+                                                logger.info("🚨 [TRADE] [플래시 청산 성공] 비트겟 100% 전량 시장가 청산 완료")
                                                 self.is_position_active = False
                                                 self.position_volume = 0
                                                 self.entry_price = 0.0
@@ -1609,6 +1614,7 @@ class ShinseonV35Engine:
                                         res = await resp.json()
                                         if res.get("code") == "00000":
                                             self.bot.ui_cb(0.0, 0, f"✅ [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료")
+                                            logger.info(f"🚨 [TRADE] [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료")
                                             self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
                                             if order_type != "50_PERCENT_CLOSE":
                                                 self.is_half_exited = True
@@ -1632,8 +1638,10 @@ class ShinseonV35Engine:
                                     params = {'reduceOnly': True}
                                 order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
                                 self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
+                                logger.info(f"🚨 [TRADE] [전량 청산 성공] 비트겟 시장가 청산 완료 ({amount} BTC)")
                             except Exception as e:
                                 self.bot.ui_cb(0.0, 0, f"❌ [청산 에러] 비트겟 API 예외 발생: {e}")
+                                logger.error(f"🚨 [TRADE] [청산 에러] 비트겟 API 예외: {e}")
                                 return False
                             
                             self.is_position_active = False
@@ -1702,8 +1710,10 @@ class ShinseonV35Engine:
                                 pass
                             order = await exchange.create_order(symbol, 'market', ccxt_side, amount, params={'tradeSide': 'open'})
                             self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
+                            logger.info(f"🚨 [TRADE] [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"❌ [진입 에러] 비트겟 API 예외 발생: {e}")
+                            logger.error(f"🚨 [TRADE] [진입 에러] 비트겟 API 예외: {e}")
                             return False
                         
                         vol_int = int(round(amount * 1000))
@@ -2630,11 +2640,14 @@ class WsServer:
 
     async def register(self, websocket):
         self.clients.add(websocket)
+        client_addr = getattr(websocket, "remote_address", "Unknown")
+        logger.info(f"🌐 [WEB_ACCESS] 신선 클라이언트 웹소켓 접속 완료 (Client IP: {client_addr})")
         try:
             async for message in websocket:
                 try:
                     payload = json.loads(message)
                     cmd = payload.get("cmd")
+                    logger.info(f"🌐 [WEB_COMMAND] 클라이언트 패킷 수신: {cmd}")
                     if cmd == "CMD_SYNC_POSITION":
                         asyncio.create_task(self.handle_sync_position(websocket))
                     elif cmd == "CMD_START_BOT":
@@ -2809,6 +2822,7 @@ class WsServer:
             pass
         finally:
             self.clients.discard(websocket)
+            logger.info(f"🌐 [WEB_ACCESS] 신선 클라이언트 웹소켓 접속 해제 (Client IP: {client_addr})")
 
     async def broadcast_event(self, event_type, data):
         if not self.clients:
