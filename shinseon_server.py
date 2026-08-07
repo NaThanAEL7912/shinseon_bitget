@@ -2908,8 +2908,12 @@ class ShinseonV35Engine:
             actual_qty = getattr(self, "last_actual_exit_qty", 0.0)
             if actual_qty <= 0.0:
                 actual_qty = float(getattr(self, "position_volume", 0)) / 1000.0
+            if actual_price <= 0.0:
+                actual_price = signal_price if signal_price > 0.0 else current_bitget_price
+            if not actual_time:
+                actual_time = signal_time
 
-            if actual_price > 0.0 and actual_time:
+            if True:
                 if direction == "LONG":
                     exit_slippage_usd = signal_price - actual_price
                 else:
