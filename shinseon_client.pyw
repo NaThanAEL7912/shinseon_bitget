@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.33"
+        self.CURRENT_VERSION = "V5.35"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2921,8 +2921,7 @@ class ShinseonDashboard(QMainWindow):
             self._last_logged_liq = liq_10s
             if delta_liq >= 5000.0: # $5k 이상 신규 청산 파동 발생 시 즉시 격발
                 side_label = "SHORT" if short_liq > long_liq else "LONG"
-                tag_str = "찐청산" if getattr(self, "_last_has_real_force", False) else "청산포착"
-                self.add_log(f"💥 [바이낸스 {tag_str}] {side_label} 신규 청산 ${delta_liq:,.0f} 발생! (1분 누적: ${liq_10s:,.0f})")
+                self.add_log(f"💥 [바이낸스 청산포착] {side_label} 신규 강제 청산 ${delta_liq:,.0f} 발생! (1분 누적: ${liq_10s:,.0f})")
         elif liq_10s < last_logged_liq:
             self._last_logged_liq = liq_10s
 
