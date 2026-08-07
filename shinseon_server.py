@@ -298,10 +298,13 @@ async def sync_past_bitget_trades_7d(bot_core):
         if not trades:
             return
 
+        # V5.36 팩트: 2026-08-07 20:20:00 KST 이후 체결건만 수집하도록 세션 기준 시각 필터 장착
+        reset_ts_ms = 1786015200000.0  # 2026-08-07 20:20:00 KST ms timestamp
         exit_trades = [
             t for t in trades 
-            if str(t.get('info', {}).get('tradeSide', '')).lower() in ['close', 'close_long', 'close_short'] 
-            or t.get('info', {}).get('reduceOnly', False)
+            if (float(t.get('timestamp', 0) or 0) >= reset_ts_ms)
+            and (str(t.get('info', {}).get('tradeSide', '')).lower() in ['close', 'close_long', 'close_short'] 
+                 or t.get('info', {}).get('reduceOnly', False))
         ]
         recovered_cnt = 0
         summary = load_trade_stats_summary()
