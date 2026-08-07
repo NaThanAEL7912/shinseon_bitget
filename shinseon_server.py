@@ -767,6 +767,7 @@ class BotCore:
 
                     # [초단위 전량 LOG 기록]: 1초마다 시세, 오더플로우, 포지션, 핑, 세션 등 행동 일체 기록
                     c_status = status_msg.replace('\n', ' | ')
+                    b_state = getattr(self.v35_engine, 'bot_state', 'RUNNING') if self.v35_engine else 'RUNNING'
                     now_sec = time.time()
                     if now_sec - getattr(self, "last_1s_log_time", 0.0) >= 1.0:
                         self.last_1s_log_time = now_sec
