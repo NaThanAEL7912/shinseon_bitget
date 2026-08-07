@@ -2769,7 +2769,12 @@ class WsServer:
                         csv_text = ""
                         if os.path.exists(log_file):
                             try:
+                                size = os.path.getsize(log_file)
+                                max_read_bytes = 5 * 1024 * 1024  # 최대 5MB 안전 캡처
                                 with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                                    if size > max_read_bytes:
+                                        f.seek(size - max_read_bytes)
+                                        f.readline()
                                     log_text = f.read()
                             except Exception as e_log:
                                 logger.error(f"Read log_file error: {e_log}")
