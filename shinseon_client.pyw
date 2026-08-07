@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.26"
+        self.CURRENT_VERSION = "V5.27"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1494,7 +1494,7 @@ class ShinseonDashboard(QMainWindow):
                     
                     async for message in ws:
                         data = json.loads(message)
-                        msg_type = data.get('type')
+                        msg_type = data.get('evt') or data.get('type')
                         payload = data.get('data', {})
                         
                         if msg_type == 'update':
