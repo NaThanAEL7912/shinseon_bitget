@@ -1881,9 +1881,10 @@ class ShinseonV35Engine:
                             self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 v2 API 직송] 수량: {amount} BTC (방향: {pos_side.upper()})")
                             try:
                                 env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
-                                api_key = env_vars.get("BITGET_API_KEY", "")
-                                secret_key = env_vars.get("BITGET_SECRET_KEY", "")
-                                passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+                                ex_obj = getattr(self.bot, "bitget_exchange", None)
+                                api_key = env_vars.get("BITGET_API_KEY") or env_vars.get("bitget_api_key") or env_vars.get("api_key") or getattr(ex_obj, "apiKey", "")
+                                secret_key = env_vars.get("BITGET_SECRET_KEY") or env_vars.get("bitget_secret_key") or env_vars.get("secret_key") or getattr(ex_obj, "secret", "")
+                                passphrase = env_vars.get("BITGET_PASSPHRASE") or env_vars.get("bitget_passphrase") or env_vars.get("passphrase") or getattr(ex_obj, "password", "")
                                 
                                 url_base = "https://api.bitget.com"
                                 path_order = "/api/v2/mix/order/place-order"
@@ -2577,15 +2578,13 @@ class ShinseonV35Engine:
                                     logger.error(f"스마트스탑 비상 청산 에러: {em_err}")
 
             # ================= 하이브리드 분할 익절 가드레일 =================
-            current_time_str = __import__("time").strftime("%Y-%m-%d %H:%M:%S")
+            current_time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
             s_key = "NY"
             try:
-                from datetime import datetime, timedelta
-                now_dt = datetime.now()
-                trading_dt = now_dt - timedelta(hours=9)
+                now_dt = get_kst_now()
                 hour_val = now_dt.hour
                 minute_val = now_dt.minute
-                is_weekend = trading_dt.weekday() in [5, 6]
+                is_weekend = now_dt.weekday() in [5, 6]
                 if 9 <= hour_val < 16:
                     s_key = "WEEKEND_ASIA" if is_weekend else "ASIA"
                 elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
