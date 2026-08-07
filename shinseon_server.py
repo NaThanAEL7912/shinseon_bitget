@@ -29,6 +29,23 @@ def get_kst_now():
     from datetime import datetime, timezone, timedelta
     return datetime.now(timezone(timedelta(hours=9)))
 
+def check_is_weekend_kst(dt_kst):
+    """
+    [V5.38 글로벌 금융 시장 주말 판정 팩트 정공법 함수]
+    - 뉴욕 주말 마감: 뉴욕 금요일 17:00 (EDT) == KST 토요일 오전 06:00
+    - 뉴욕 주말 개장: 뉴욕 일요일 18:00 (EDT) == KST 월요일 오전 07:00
+    - KST 토요일 00:00~06:00 은 뉴욕 금요일 평일장이므로 is_weekend = False !
+    """
+    w_day = dt_kst.weekday()
+    h_val = dt_kst.hour
+    if w_day == 5: # 토요일
+        return h_val >= 6
+    elif w_day == 6: # 일요일
+        return True
+    elif w_day == 0: # 월요일
+        return h_val < 7
+    return False
+
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] [%(levelname)s] %(message)s',
@@ -826,7 +843,7 @@ class BotCore:
 
                     # 시간대별 세션 판정 및 기본 임계치 추출 (09시~09시 트레이딩 데이 연동 + 1분 완충 타임락 개발계획서_260)
                     trading_dt = kst_dt - timedelta(hours=9)
-                    is_weekend = kst_dt.weekday() in [5, 6]
+                    is_weekend = check_is_weekend_kst(kst_dt)
                     minute_val = kst_dt.hour * 60 + kst_dt.minute
                     
                     # 1분 완충 타임락 규칙 적용:
@@ -2584,7 +2601,7 @@ class ShinseonV35Engine:
                 now_dt = get_kst_now()
                 hour_val = now_dt.hour
                 minute_val = now_dt.minute
-                is_weekend = now_dt.weekday() in [5, 6]
+                is_weekend = check_is_weekend_kst(now_dt)
                 if 9 <= hour_val < 16:
                     s_key = "WEEKEND_ASIA" if is_weekend else "ASIA"
                 elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
