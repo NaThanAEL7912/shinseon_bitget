@@ -767,8 +767,10 @@ class BotCore:
 
                     # [초단위 전량 LOG 기록]: 1초마다 시세, 오더플로우, 포지션, 핑, 세션 등 행동 일체 기록
                     c_status = status_msg.replace('\n', ' | ')
-                    b_state = getattr(self.v35_engine, 'bot_state', 'RUNNING') if self.v35_engine else 'RUNNING'
-                    logger.info(f"⚡ [1초 감시] BTC: ${self.current_price:,.1f} | Liq: ${display_liq:,.0f} (L:${long_liq:,.0f}/S:${short_liq:,.0f}) | OI: {display_oi:+.4f}% | Ping: {latency_show:.1f}ms | Session: {current_session} | State: {b_state} | Status: {c_status}")
+                    now_sec = time.time()
+                    if now_sec - getattr(self, "last_1s_log_time", 0.0) >= 1.0:
+                        self.last_1s_log_time = now_sec
+                        logger.info(f"⚡ [1초 감시] BTC: ${self.current_price:,.1f} | Liq: ${display_liq:,.0f} (L:${long_liq:,.0f}/S:${short_liq:,.0f}) | OI: {display_oi:+.4f}% | Ping: {latency_show:.1f}ms | Session: {current_session} | State: {b_state} | Status: {c_status}")
 
                     ui_callback(
                         self.current_price,
