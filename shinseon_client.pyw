@@ -496,8 +496,8 @@ class CumulativeReportDialog(QDialog):
                     self.detail_table.setItem(r_idx, c_idx, item)
 
     def request_refresh(self):
-        if self.parent() and hasattr(self.parent(), "request_stats_update"):
-            self.parent().request_stats_update()
+        if self.parent() and hasattr(self.parent(), "request_stats_recovery"):
+            self.parent().request_stats_recovery()
 
 
 # ==============================================================================
@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.23"
+        self.CURRENT_VERSION = "V5.26"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1424,6 +1424,12 @@ class ShinseonDashboard(QMainWindow):
         if self.is_ws_active():
             import json
             asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_STATS_DETAIL'})))
+
+    def request_stats_recovery(self):
+        if self.is_ws_active():
+            import json
+            self.add_log("🔄 [수동 체결 복원] 비트겟 최근 7일(100건) 체결 내역 복원 및 실적 통계 수동 동기화를 요청합니다...")
+            asyncio.create_task(self.ws.send(json.dumps({'cmd': 'CMD_REQ_STATS_SYNC_RECOVERY'})))
 
     def open_cumulative_report_dialog(self):
         self.request_stats_update()

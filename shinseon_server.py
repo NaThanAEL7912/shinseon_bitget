@@ -284,6 +284,79 @@ def record_trade_history_event(side, qty, entry_price, exit_price, pnl_usd, roe_
     except Exception as e:
         logger.error(f"record_trade_history_event 수술 예외: {e}")
 
+async def sync_past_bitget_trades_7d(bot_core):
+    """
+    [V5.26 스마트 실시간 새로고침 체결 복원기]
+    폐하께서 팝업창에서 [실시간 새로고침] 클릭 시 수동 작동:
+    비트겟 선물 체결 내역 최근 100건(7일 이내)을 스캔하여 누락된 청산 실적을 
+    일별 통계 파일(trade_stats_YYYY-MM-DD.json) 및 요약 파일(trade_stats_summary.json)에 100% 복원
+    """
+    if not bot_core or not getattr(bot_core, "bitget_exchange", None):
+        return
+    try:
+        trades = await bot_core.bitget_exchange.fetch_my_trades(symbol='BTC/USDT:USDT', limit=100)
+        if not trades:
+            return
+
+        exit_trades = [t for t in trades if t.get('info', {}).get('reduceOnly', False) or t.get('info', {}).get('tradeSide') in ['close_long', 'close_short']]
+        recovered_cnt = 0
+        for t in exit_trades:
+            ts = t.get('timestamp', 0) / 1000.0
+            dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
+            date_str = dt_kst.strftime("%Y-%m-%d")
+            time_str = dt_kst.strftime("%H:%M:%S")
+            
+            daily_rec = load_daily_stats(date_str)
+            existing_details = daily_rec.get("trades_detail", [])
+            trade_id = str(t.get('id', ''))
+            already_exists = any(d.get("trade_id") == trade_id for d in existing_details)
+            if already_exists:
+                continue
+                
+            side_raw = t.get('side', '').upper()
+            pos_side = "SHORT" if "LONG" in t.get('info', {}).get('tradeSide', '').upper() or side_raw == "BUY" else "LONG"
+            qty = float(t.get('amount', 0.0) or 0.0)
+            exit_p = float(t.get('price', 0.0) or 0.0)
+            pnl_val = float(t.get('info', {}).get('pnl', 0.0) or 0.0)
+            
+            ent_p = exit_p
+            roe_val = 0.0
+            if qty > 0 and exit_p > 0:
+                ent_p = exit_p - (pnl_val / qty) if pos_side == "LONG" else exit_p + (pnl_val / qty)
+                if ent_p > 0:
+                    roe_val = (exit_p - ent_p) / ent_p * 3000.0 if pos_side == "LONG" else (ent_p - exit_p) / ent_p * 3000.0
+            
+            item = {
+                "trade_id": trade_id,
+                "date": date_str,
+                "time": time_str,
+                "side": pos_side,
+                "qty": qty,
+                "entry_p": ent_p,
+                "exit_p": exit_p,
+                "pnl": pnl_val,
+                "roe": roe_val,
+                "reason": "비트겟 체결 복원기 수동 복구"
+            }
+            
+            daily_rec["trades"] += 1
+            if pnl_val >= 0:
+                daily_rec["wins"] += 1
+                daily_rec["profit_tot"] += pnl_val
+            else:
+                daily_rec["losses"] += 1
+                daily_rec["loss_tot"] += abs(pnl_val)
+            daily_rec["pnl"] += pnl_val
+            daily_rec["win_rate"] = (daily_rec["wins"] / daily_rec["trades"]) * 100.0 if daily_rec["trades"] > 0 else 0.0
+            daily_rec.setdefault("trades_detail", []).insert(0, item)
+            save_daily_stats(date_str, daily_rec)
+            recovered_cnt += 1
+            
+        if recovered_cnt > 0:
+            logger.info(f"🔄 [체결 복원 완료] 비트겟 과거 체결 내역 {recovered_cnt}건 일별 로그 파일 복원 완료")
+    except Exception as e:
+        logger.error(f"Bitget trade sync recovery error: {e}")
+
 def get_calculated_stats_payload(last_downloaded_date=None):
     summary = load_trade_stats_summary()
     now_dt = get_kst_now()
@@ -3166,6 +3239,12 @@ class WsServer:
                             "csv_text": csv_text,
                             "log_text": log_text
                         })
+                    elif cmd == "CMD_REQ_STATS_SYNC_RECOVERY":
+                        if self.bot_core:
+                            await sync_past_bitget_trades_7d(self.bot_core)
+                        stats_payload = get_calculated_stats_payload()
+                        await self.broadcast_event("EVT_SYNC_STATS", stats_payload)
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": "📡 [서버 응답] 🔄 비트겟 최근 7일(100건) 체결 내역 수동 복원 및 실적 통계 동기화가 완료되었습니다."})
                     elif cmd == "CMD_REQ_CSV":
                         csv_path = "shinseon_data.csv"
                         if os.path.exists(csv_path):
