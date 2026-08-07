@@ -486,7 +486,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.16"
+        self.CURRENT_VERSION = "V5.17"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -669,17 +669,25 @@ class ShinseonDashboard(QMainWindow):
         """)
         self.btn_open_cum_report.clicked.connect(self.open_cumulative_report_dialog)
 
-        # 3. [오늘의 매매 결과 전광판] (우측 파란/스카이 블루 상자 영역 - 구동상태 대체!)
+        # 3. [오늘의 매매 결과 전광판] (오른쪽 상단 - 비트겟 거래소 버튼 디자인 스타일 이식!)
         self.lbl_today_stats = QLabel("📅 [금일 실적] <b>손익: $0.00 | 승률: 0.0% (0승 0패)</b>")
-        self.lbl_today_stats.setStyleSheet("background: rgba(0, 229, 255, 0.10); border: 1px solid rgba(0, 229, 255, 0.35); border-radius: 4px; padding: 4px 10px; color: #00E5FF; font-size: 11px;")
+        self.lbl_today_stats.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #324452, stop:1 #1F2D38);
+            color: #DEBA9D;
+            font-weight: bold;
+            font-size: 11px;
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid #A88869;
+        """)
         
         title_layout.addWidget(self.lbl_brand)
         title_layout.addStretch()
         title_layout.addWidget(self.btn_open_cum_report)
         title_layout.addSpacing(6)
         title_layout.addWidget(self.lbl_cum_stats)
-        # 차트 우측 수직 라인 경계선에 정교하게 정렬하기 위한 358px 고정 Spacing
-        title_layout.addSpacing(358)
+        # 좌측 메인 패널 우측 수직 경계선(붉은선)에 우측 끝을 자석 칼정렬하기 위한 145px Spacing
+        title_layout.addSpacing(145)
         title_layout.addWidget(self.lbl_today_stats)
         main_layout.addLayout(title_layout)
         
