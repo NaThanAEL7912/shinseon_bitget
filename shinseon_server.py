@@ -1259,10 +1259,10 @@ class BotCore:
                                 elif o.get("S") == "SELL":
                                     self.sell_liq_buffer.append((now_t, usd_val))
                                 
-                                # 💥 바이낸스 찐청산 발생 시 실시간 금액 로그 브로드캐스트
+                                # 💥 바이낸스 신규 강제 청산 발생 시 실시간 금액 로그 브로드캐스트
                                 rolling_tot = sum(val for t, val in self.liq_buffer if now_t - t <= 60.0)
                                 cur_price = getattr(self, "current_price", 0.0)
-                                log_msg = f"💥 [바이낸스 찐청산 포착] {side_label} 청산 ${usd_val:,.0f} 발생! (1분 누적: ${rolling_tot:,.0f})"
+                                log_msg = f"💥 [바이낸스 청산포착] {side_label} 신규 강제 청산 ${usd_val:,.0f} 발생! (1분 누적: ${rolling_tot:,.0f})"
                                 asyncio.create_task(self.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": cur_price}))
                 except Exception as liq_err:
                     self.liq_wss_connected = False
