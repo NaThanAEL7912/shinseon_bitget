@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.21",
+    "CURRENT_VERSION": "V5.22",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -13,14 +13,14 @@
             "enabled": true
         },
         "europe": {
-            "liq": 100000.0,
-            "oi": 0.808,
+            "liq": 300000.0,
+            "oi": 0.15,
             "sl": -1.3,
             "enabled": true
         },
         "us": {
             "liq": 500000.0,
-            "oi": 0.2,
+            "oi": 0.18,
             "sl": -1.3,
             "enabled": true
         },

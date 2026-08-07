@@ -2213,53 +2213,60 @@ class ShinseonV35Engine:
         if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
             now_t_chk = time.time()
             
-            # [포지션 보유 중 반대 시그널 포착 시]: 기존 포지션 전량 청산 후 익절/손절 쿨타임 적용 (v5.06)
+            # [포지션 보유 중 스위칭 / 추가매수 / 불타기 검증 엔진 (SHINSEON 원본 규격)]
             if self.is_position_active and not getattr(self, "exit_in_progress", False):
                 if direction != self.entry_direction:
-                    logger.info(f"🚨 [TRADE] [반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
-                    self.exit_reason = f"반대 시그널({direction}) 포착에 의한 전량 청산"
-                    self.exit_in_progress = True
-                    
-                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
-                    
-                    # PnL 판정에 따른 익절(15초) / 손절(300초) 쿨타임 적용
-                    current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
-                    exit_pnl_pct = 0.0
-                    if self.entry_price > 0.0 and current_bitget_price > 0.0:
-                        if self.entry_direction == "LONG":
-                            exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price
-                        else:
-                            exit_pnl_pct = (self.entry_price - current_bitget_price) / self.entry_price
-                            
-                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
-                    if exit_pnl_pct < 0.0:
-                        target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0))
-                        cd_label = "반대신호 손절 쿨타임"
-                    else:
-                        target_cd = float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
-                        cd_label = "반대신호 익절 쿨타임"
+                    # [OI 감소성 페이크 차단 필터]: OI > 0 (플러스 자금 유입)일 때만 진짜 스위칭 청산 발동!
+                    if oi_delta_1m > 0:
+                        logger.info(f"🚨 [TRADE] [반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달 (OI > 0)! ➡️ 기존 포지션 전량 시장가 청산 집행")
+                        self.exit_reason = f"반대 시그널({direction}) 포착에 의한 전량 청산"
+                        self.exit_in_progress = True
                         
-                    self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
-                    if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
-                        self.cooldown_timer_task.cancel()
-                    self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cd, cd_label))
+                        dashboard = getattr(self.bot, "dashboard", None) or self.bot
+                        current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
+                        exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price if self.entry_direction == "LONG" else (self.entry_price - current_bitget_price) / self.entry_price
+                        target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if exit_pnl_pct < 0.0 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
+                        cd_label = "반대신호 손절 쿨타임" if exit_pnl_pct < 0.0 else "반대신호 익절 쿨타임"
+                        self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
+                        
+                        asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
+                        return
+                    else:
+                        logger.warning(f"🛡️ [OI 감소 페이크 반대 신호 차단] OI 감소 중({oi_delta_1m:+.4f}%) 반대 신호({direction}) 포착 ➡️ 청산 보류 및 보유 유지")
+                        return
+                else:
+                    # [동일 방향 중복 신호 발생 ➡️ 2차/3차 추가 매수(물타기) 또는 눌림목 불타기 검증]
+                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
+                    split_cooldown = float(getattr(dashboard, "split_cooldown_seconds", 900.0))
                     
-                    if self.bot and hasattr(self.bot, "dashboard") and self.bot.dashboard:
-                        msg_tg = build_telegram_trade_msg(
-                            title="🔄 [반대 시그널 청산 알림]",
-                            direction=f"{self.entry_direction} ➡️ {direction}",
-                            reason=f"반대 저격 타점 도달에 따른 전량 청산 및 {cd_label}({target_cd:.0f}초) 가동",
-                            signal_time=get_kst_now().strftime("%Y-%m-%d %H:%M:%S"),
-                            signal_qty=float(getattr(self, "position_volume", 0)) / 1000.0,
-                            signal_price=binance_mid,
-                            actual_time=get_kst_now().strftime("%Y-%m-%d %H:%M:%S"),
-                            actual_qty=float(getattr(self, "position_volume", 0)) / 1000.0,
-                            actual_price=current_bitget_price,
-                            entry_price=self.entry_price,
-                            leverage=getattr(self, "leverage_level", 30) or 30,
-                            is_entry=False
-                        )
-                        self.bot.dashboard.send_telegram_notification(msg_tg)
+                    # A. 2차 추매 (1차 평단 대비 설정 손실폭 이하 마이너스 도달 시)
+                    if not getattr(self, "has_second_entry", False):
+                        trig_2_pct = float(getattr(dashboard, "split_entry_2_trigger_pct", -0.3)) / 100.0
+                        pnl_from_1 = (binance_mid - self.entry_price_1) / self.entry_price_1 if self.entry_direction == "LONG" else (self.entry_price_1 - binance_mid) / self.entry_price_1
+                        if pnl_from_1 <= trig_2_pct:
+                            if time.time() - getattr(self, "last_split_entry_time", 0.0) >= split_cooldown:
+                                self.has_second_entry = True
+                                self.last_split_entry_time = time.time()
+                                logger.info(f"⚡ [2차 추가매수 발동] 동일방향 신호 컨펌! 1차 진입가 대비 {pnl_from_1*100.0:+.2f}% 도달 (임계치: {trig_2_pct*100.0:.2f}%)")
+                                asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_100_PERCENT"))
+                                return
+                    # B. 3차 추매 (1차 평단 대비 3차 손실폭 이하 마이너스 도달 시)
+                    elif getattr(self, "has_second_entry", False) and not getattr(self, "has_third_entry", False):
+                        trig_3_pct = float(getattr(dashboard, "split_entry_3_trigger_pct", -0.6)) / 100.0
+                        pnl_from_1 = (binance_mid - self.entry_price_1) / self.entry_price_1 if self.entry_direction == "LONG" else (self.entry_price_1 - binance_mid) / self.entry_price_1
+                        if pnl_from_1 <= trig_3_pct:
+                            if time.time() - getattr(self, "last_split_entry_time", 0.0) >= split_cooldown:
+                                self.has_third_entry = True
+                                self.last_split_entry_time = time.time()
+                                logger.info(f"⚡ [3차 추가매수 발동] 동일방향 신호 컨펌! 1차 진입가 대비 {pnl_from_1*100.0:+.2f}% 도달 (임계치: {trig_3_pct*100.0:.2f}%)")
+                                asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_THIRD_ENTRY"))
+                                return
+                    # C. 눌림목 불타기 (1차 익절 완료 후 동일 방향 신호 컨펌 시)
+                    elif getattr(self, "is_half_exited", False) and getattr(dashboard, "pyramiding_enabled", True) and not getattr(self, "has_pyramided", False):
+                        logger.info(f"🔥 [눌림목 불타기 발동] 1차 익절 후 동일방향 신호 컨펌! 30% 수량 추가 진입")
+                        self.has_pyramided = True
+                        asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_PYRAMIDING"))
+                        return
                     return
 
             # [쿨타임 사전 검증 최우선 전진 배치]: 쿨타임 대기 중인 경우 진입/추가매수 시도 차단
