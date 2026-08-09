@@ -2036,6 +2036,10 @@ class ShinseonV35Engine:
                             order = await exchange.create_order(symbol, 'market', ccxt_side, amount, params={'tradeSide': 'open'})
                             self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
                             logger.info(f"🚨 [TRADE] [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
+                            
+                            act_fill_p = float(order.get('price') or order.get('average') or order.get('info', {}).get('priceAvg') or order.get('info', {}).get('fillPrice') or 0.0)
+                            if act_fill_p > 0.0:
+                                self.last_actual_entry_price = act_fill_p
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"❌ [진입 에러] 비트겟 API 예외 발생: {e}")
                             logger.error(f"🚨 [TRADE] [진입 에러] 비트겟 API 예외: {e}")
@@ -2467,7 +2471,7 @@ class ShinseonV35Engine:
                             signal_price=binance_mid,
                             actual_time=signal_time_str,
                             actual_qty=qty_btc,
-                            actual_price=expected_fill,
+                            actual_price=getattr(self, "last_actual_entry_price", 0.0) or expected_fill,
                             is_entry=True
                         )
                         if self.bot and self.bot.dashboard:

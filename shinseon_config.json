@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.40",
+    "CURRENT_VERSION": "V5.42",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,50 +7,50 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 200000.0,
-            "oi": 0.12,
+            "liq": 100000.0,
+            "oi": 0.06,
             "sl": -1.0,
             "enabled": true
         },
         "europe": {
-            "liq": 300000.0,
-            "oi": 0.15,
+            "liq": 100000.0,
+            "oi": 0.06,
             "sl": -1.3,
             "enabled": true
         },
         "us": {
-            "liq": 500000.0,
-            "oi": 0.18,
+            "liq": 100000.0,
+            "oi": 0.09,
             "sl": -1.3,
             "enabled": true
         },
         "pacific": {
-            "liq": 200000.0,
-            "oi": 0.12,
+            "liq": 100000.0,
+            "oi": 0.06,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_asia": {
-            "liq": 100000.0,
-            "oi": 0.12,
+            "liq": 50000.0,
+            "oi": 0.04,
             "sl": -0.5,
             "enabled": true
         },
         "weekend_europe": {
-            "liq": 100000.0,
-            "oi": 0.15,
+            "liq": 50000.0,
+            "oi": 0.04,
             "sl": -0.5,
             "enabled": true
         },
         "weekend_us": {
-            "liq": 300000.0,
-            "oi": 0.2,
+            "liq": 50000.0,
+            "oi": 0.06,
             "sl": -1.3,
             "enabled": true
         },
         "weekend_pacific": {
             "liq": 50000.0,
-            "oi": 0.09,
+            "oi": 0.04,
             "sl": -0.3,
             "enabled": true
         }
@@ -80,17 +80,17 @@
             "enabled": true
         },
         "LONDON": {
-            "trigger": 0.9,
+            "trigger": 0.4,
             "guard": -0.15,
             "enabled": true
         },
         "NY": {
-            "trigger": 0.9,
+            "trigger": 0.4,
             "guard": -0.25,
             "enabled": true
         },
         "PACIFIC": {
-            "trigger": 0.9,
+            "trigger": 0.4,
             "guard": -0.25,
             "enabled": true
         },
@@ -100,17 +100,17 @@
             "enabled": true
         },
         "WEEKEND_LONDON": {
-            "trigger": 0.9,
+            "trigger": 0.4,
             "guard": -0.15,
             "enabled": true
         },
         "WEEKEND_NY": {
-            "trigger": 0.9,
+            "trigger": 0.4,
             "guard": -0.25,
             "enabled": true
         },
         "WEEKEND_PACIFIC": {
-            "trigger": 0.9,
+            "trigger": 0.4,
             "guard": -0.25,
             "enabled": true
         }
