@@ -340,19 +340,28 @@ async def sync_past_bitget_trades_7d(bot_core):
             if already_exists:
                 continue
                 
+            t_info = t.get('info', {}) or {}
+            hold_side = str(t_info.get('holdSide') or t_info.get('posSide') or '').lower()
             side_raw = str(t.get('side', '')).lower()
-            # tradeSide == "close" 인 경우: side가 buy이면 SHORT 청산, sell이면 LONG 청산
-            pos_side = "SHORT" if side_raw == "buy" else "LONG"
-            qty = float(t.get('amount', 0.0) or 0.0)
-            exit_p = float(t.get('price', 0.0) or 0.0)
-            pnl_val = float(t.get('info', {}).get('profit', 0.0) or t.get('info', {}).get('pnl', 0.0) or 0.0)
             
-            ent_p = exit_p
+            if 'short' in hold_side:
+                pos_side = "SHORT"
+            elif 'long' in hold_side:
+                pos_side = "LONG"
+            else:
+                pos_side = "SHORT" if side_raw == "buy" else "LONG"
+                
+            qty = float(t.get('amount', 0.0) or 0.0)
+            exit_p = float(t.get('price', 0.0) or t_info.get('priceAvg', 0.0) or 0.0)
+            pnl_val = float(t_info.get('profit', 0.0) or t_info.get('achievedProfits', 0.0) or t_info.get('pnl', 0.0) or t.get('pnl', 0.0) or 0.0)
+            
+            ent_p = float(t_info.get('openPriceAvg', 0.0) or 0.0)
+            if ent_p <= 0.0 and qty > 0 and exit_p > 0:
+                ent_p = exit_p + (pnl_val / qty) if pos_side == "SHORT" else exit_p - (pnl_val / qty)
+                
             roe_val = 0.0
-            if qty > 0 and exit_p > 0:
-                ent_p = exit_p - (pnl_val / qty) if pos_side == "LONG" else exit_p + (pnl_val / qty)
-                if ent_p > 0:
-                    roe_val = (exit_p - ent_p) / ent_p * 3000.0 if pos_side == "LONG" else (ent_p - exit_p) / ent_p * 3000.0
+            if ent_p > 0 and exit_p > 0:
+                roe_val = (ent_p - exit_p) / ent_p * 3000.0 if pos_side == "SHORT" else (exit_p - ent_p) / ent_p * 3000.0
             
             item = {
                 "trade_id": trade_id,
