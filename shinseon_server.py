@@ -331,19 +331,19 @@ async def sync_past_bitget_trades_7d(bot_core):
             trade_id = str(t.get('id', ''))
             
             t_info = t.get('info', {}) or {}
-            trade_side_raw = str(t_info.get('tradeSide') or t_info.get('posSide') or t_info.get('holdSide') or '').lower()
+            pos_side_raw = str(t_info.get('posSide') or t_info.get('holdSide') or t_info.get('tradeSide') or '').lower()
+            trade_side = str(t_info.get('tradeSide', '')).lower()
+            info_side = str(t_info.get('side', '')).lower()
             side_raw = str(t.get('side', '')).lower()
             
-            if 'short' in trade_side_raw:
+            if 'short' in pos_side_raw or trade_side == 'close_short' or info_side == 'buy' or (side_raw == 'buy' and trade_side == 'close'):
                 pos_side = "SHORT"
-            elif 'long' in trade_side_raw:
-                pos_side = "LONG"
             else:
-                pos_side = "SHORT" if side_raw == "buy" else "LONG"
+                pos_side = "LONG"
                 
-            qty = float(t.get('amount', 0.0) or 0.0)
-            exit_p = float(t.get('price', 0.0) or t_info.get('priceAvg', 0.0) or 0.0)
-            pnl_val = float(t_info.get('profit', 0.0) or t_info.get('achievedProfits', 0.0) or t_info.get('pnl', 0.0) or t.get('pnl', 0.0) or 0.0)
+            qty = float(t.get('amount', 0.0) or t_info.get('baseVolume', 0.0) or 0.0)
+            exit_p = float(t.get('price', 0.0) or t_info.get('priceAvg', 0.0) or t_info.get('price', 0.0) or 0.0)
+            pnl_val = float(t_info.get('achievedProfits', 0.0) or t_info.get('profit', 0.0) or t_info.get('pnl', 0.0) or t.get('pnl', 0.0) or 0.0)
             
             ent_p = float(t_info.get('openPriceAvg', 0.0) or 0.0)
             if ent_p <= 0.0 and qty > 0 and exit_p > 0:
