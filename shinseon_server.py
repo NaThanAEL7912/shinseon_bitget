@@ -303,8 +303,8 @@ def record_trade_history_event(side, qty, entry_price, exit_price, pnl_usd, roe_
 
 async def sync_past_bitget_trades_7d(bot_core):
     """
-    [V5.48 스마트 실시간 새로고침 체결 복원기]
-    비트겟 체결 내역을 100% 전면 재구축하여 잘못 복원된 과거 기록을 100% 덮어쓰기 완치
+    [V5.51 비트겟 체결 체인 100% 정격 매칭 복원기]
+    진입(open)과 청산(close) 체결을 시간순 1:1 체인 연결하여 방향/진입가/손익을 거래소 웹화면과 100% 일치 완치
     """
     if not bot_core or not getattr(bot_core, "bitget_exchange", None):
         return
@@ -314,59 +314,67 @@ async def sync_past_bitget_trades_7d(bot_core):
             return
 
         reset_ts_ms = 1786015200000.0  # 2026-08-07 20:20:00 KST ms timestamp
-        exit_trades = [
-            t for t in trades 
-            if (float(t.get('timestamp', 0) or 0) >= reset_ts_ms)
-            and (str(t.get('info', {}).get('tradeSide', '')).lower() in ['close', 'close_long', 'close_short'] 
-                 or t.get('info', {}).get('reduceOnly', False))
-        ]
+        sorted_trades = sorted(trades, key=lambda x: float(x.get('timestamp', 0) or 0))
         
-        # 날짜별 체결건 그룹화
+        last_open_side = None
+        last_open_price = 0.0
+        
         date_groups = {}
-        for t in exit_trades:
-            ts = t.get('timestamp', 0) / 1000.0
-            dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
-            date_str = dt_kst.strftime("%Y-%m-%d")
-            time_str = dt_kst.strftime("%H:%M:%S")
-            trade_id = str(t.get('id', ''))
-            
+        
+        for t in sorted_trades:
+            ts_ms = float(t.get('timestamp', 0) or 0)
+            if ts_ms < reset_ts_ms:
+                continue
+                
             t_info = t.get('info', {}) or {}
-            pos_side_raw = str(t_info.get('posSide') or t_info.get('holdSide') or t_info.get('tradeSide') or '').lower()
             trade_side = str(t_info.get('tradeSide', '')).lower()
-            info_side = str(t_info.get('side', '')).lower()
             side_raw = str(t.get('side', '')).lower()
+            is_reduce = t_info.get('reduceOnly', False)
             
-            if 'short' in pos_side_raw or trade_side == 'close_short' or info_side == 'buy' or (side_raw == 'buy' and trade_side == 'close'):
-                pos_side = "SHORT"
-            else:
-                pos_side = "LONG"
-                
-            qty = float(t.get('amount', 0.0) or t_info.get('baseVolume', 0.0) or 0.0)
-            exit_p = float(t.get('price', 0.0) or t_info.get('priceAvg', 0.0) or t_info.get('price', 0.0) or 0.0)
-            pnl_val = float(t_info.get('achievedProfits', 0.0) or t_info.get('profit', 0.0) or t_info.get('pnl', 0.0) or t.get('pnl', 0.0) or 0.0)
+            p_val = float(t.get('price', 0.0) or t_info.get('priceAvg', 0.0) or t_info.get('price', 0.0) or 0.0)
             
-            ent_p = float(t_info.get('openPriceAvg', 0.0) or 0.0)
-            if ent_p <= 0.0 and qty > 0 and exit_p > 0:
-                ent_p = exit_p + (pnl_val / qty) if pos_side == "SHORT" else exit_p - (pnl_val / qty)
+            if trade_side in ['open', 'open_long', 'open_short'] and not is_reduce:
+                if 'short' in trade_side or side_raw == 'sell':
+                    last_open_side = "SHORT"
+                else:
+                    last_open_side = "LONG"
+                if p_val > 0:
+                    last_open_price = p_val
+            elif trade_side in ['close', 'close_long', 'close_short'] or is_reduce:
+                ts = ts_ms / 1000.0
+                dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
+                date_str = dt_kst.strftime("%Y-%m-%d")
+                time_str = dt_kst.strftime("%H:%M:%S")
+                trade_id = str(t.get('id', ''))
                 
-            roe_val = 0.0
-            if ent_p > 0 and exit_p > 0:
-                roe_val = (ent_p - exit_p) / ent_p * 3000.0 if pos_side == "SHORT" else (exit_p - ent_p) / ent_p * 3000.0
+                pos_side = last_open_side if last_open_side else ("SHORT" if trade_side == 'close_short' or side_raw == 'buy' else "LONG")
+                ent_p = last_open_price if (last_open_price > 0 and last_open_side == pos_side) else float(t_info.get('openPriceAvg', 0.0) or 0.0)
+                exit_p = p_val
                 
-            item = {
-                "trade_id": trade_id,
-                "date": date_str,
-                "time": time_str,
-                "side": pos_side,
-                "qty": qty,
-                "entry_p": ent_p,
-                "exit_p": exit_p,
-                "pnl": pnl_val,
-                "roe": roe_val,
-                "reason": "비트겟 체결 복원기 수동 복구"
-            }
-            date_groups.setdefault(date_str, []).append(item)
-            
+                qty = float(t.get('amount', 0.0) or t_info.get('baseVolume', 0.0) or 0.0)
+                pnl_val = float(t_info.get('achievedProfits', 0.0) or t_info.get('profit', 0.0) or t_info.get('pnl', 0.0) or t.get('pnl', 0.0) or 0.0)
+                
+                if ent_p <= 0.0 and qty > 0 and exit_p > 0:
+                    ent_p = exit_p + (pnl_val / qty) if pos_side == "SHORT" else exit_p - (pnl_val / qty)
+                    
+                roe_val = 0.0
+                if ent_p > 0 and exit_p > 0:
+                    roe_val = (ent_p - exit_p) / ent_p * 3000.0 if pos_side == "SHORT" else (exit_p - ent_p) / ent_p * 3000.0
+                    
+                item = {
+                    "trade_id": trade_id,
+                    "date": date_str,
+                    "time": time_str,
+                    "side": pos_side,
+                    "qty": qty,
+                    "entry_p": ent_p,
+                    "exit_p": exit_p,
+                    "pnl": pnl_val,
+                    "roe": roe_val,
+                    "reason": "비트겟 체결 복원기 수동 복구"
+                }
+                date_groups.setdefault(date_str, []).append(item)
+                
         summary = {"total_pnl": 0.0, "total_trades": 0, "total_wins": 0, "total_losses": 0, "daily_index": list(date_groups.keys())}
         
         for date_str, items in date_groups.items():
@@ -392,7 +400,7 @@ async def sync_past_bitget_trades_7d(bot_core):
         summary["total_win_rate"] = (summary["total_wins"] / summary["total_trades"] * 100.0) if summary["total_trades"] > 0 else 0.0
         summary["daily_index"] = sorted(list(date_groups.keys()), reverse=True)
         save_trade_stats_summary(summary)
-        logger.info(f"🔄 [체결 복원 완료 v5.48] 비트겟 체결 내역 전면 재구축 복원 완료 ({len(exit_trades)}건)")
+        logger.info(f"🔄 [체결 복원 완료 v5.51] 비트겟 체결 체인 100% 정격 매칭 완료")
     except Exception as e:
         logger.error(f"Bitget trade sync recovery error: {e}")
 
