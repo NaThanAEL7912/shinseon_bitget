@@ -405,9 +405,9 @@ class CumulativeReportDialog(QDialog):
         detail_layout.setContentsMargins(12, 22, 12, 12)
         
         self.detail_table = QTableWidget()
-        self.detail_table.setColumnCount(8)
+        self.detail_table.setColumnCount(9)
         self.detail_table.setHorizontalHeaderLabels([
-            "체결 시각", "방향", "수량(BTC)", "진입가($)", "청산가($)", "수익률(%)", "손익금($)", "청산 사유"
+            "진입 시각", "청산 시각", "방향", "수량(BTC)", "진입가($)", "청산가($)", "수익률(%)", "손익금($)", "청산 사유"
         ])
         self.detail_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.detail_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -499,19 +499,27 @@ class CumulativeReportDialog(QDialog):
             for r_idx, t in enumerate(trades):
                 pnl = t.get("pnl", 0.0)
                 col_pnl = QColor("#00E676") if pnl >= 0 else QColor("#FF5252")
+                side_str = str(t.get("side", "LONG")).upper()
+                col_side = QColor("#FF5252") if side_str == "SHORT" else QColor("#00E676")
+                
+                open_time = str(t.get("open_time") or t.get("time", ""))
+                close_time = str(t.get("close_time") or t.get("time", ""))
                 
                 items = [
-                    QTableWidgetItem(str(t.get("time", ""))),
-                    QTableWidgetItem(str(t.get("side", ""))),
-                    QTableWidgetItem(f"{float(t.get('qty', 0.0)):.3f}"),
-                    QTableWidgetItem(f"${t.get('entry_p', 0.0):,.1f}"),
-                    QTableWidgetItem(f"${t.get('exit_p', 0.0):,.1f}"),
-                    QTableWidgetItem(f"{t.get('roe', 0.0):+.2f}%"),
+                    QTableWidgetItem(open_time),
+                    QTableWidgetItem(close_time),
+                    QTableWidgetItem(side_str),
+                    QTableWidgetItem(f"{float(t.get('qty', 0.0)):.4f}"),
+                    QTableWidgetItem(f"${float(t.get('entry_p', 0.0)):,.1f}"),
+                    QTableWidgetItem(f"${float(t.get('exit_p', 0.0)):,.1f}"),
+                    QTableWidgetItem(f"{float(t.get('roe', 0.0)):+.2f}%"),
                     QTableWidgetItem(f"${pnl:+,.2f}"),
-                    QTableWidgetItem(str(t.get("reason", ""))),
+                    QTableWidgetItem(str(t.get("reason", "비트겟 체결 복원기 수동 복구")))
                 ]
-                items[6].setForeground(col_pnl)
-                items[6].setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                items[2].setForeground(col_side)
+                items[2].setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+                items[7].setForeground(col_pnl)
+                items[7].setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
                 
                 for c_idx, item in enumerate(items):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -528,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.52"
+        self.CURRENT_VERSION = "V5.53"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None

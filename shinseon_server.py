@@ -318,6 +318,8 @@ async def sync_past_bitget_trades_7d(bot_core):
         
         last_open_side = None
         last_open_price = 0.0
+        last_open_fee = 0.0
+        last_open_time = ""
         
         date_groups = {}
         
@@ -326,6 +328,11 @@ async def sync_past_bitget_trades_7d(bot_core):
             if ts_ms < reset_ts_ms:
                 continue
                 
+            ts = ts_ms / 1000.0
+            dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
+            date_str = dt_kst.strftime("%Y-%m-%d")
+            time_str = dt_kst.strftime("%H:%M:%S")
+            
             t_info = t.get('info', {}) or {}
             trade_side = str(t_info.get('tradeSide', '')).lower()
             side_raw = str(t.get('side', '')).lower()
@@ -352,11 +359,8 @@ async def sync_past_bitget_trades_7d(bot_core):
                 if p_val > 0:
                     last_open_price = p_val
                 last_open_fee = cur_fee
+                last_open_time = time_str
             elif trade_side in ['close', 'close_long', 'close_short'] or is_reduce:
-                ts = ts_ms / 1000.0
-                dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
-                date_str = dt_kst.strftime("%Y-%m-%d")
-                time_str = dt_kst.strftime("%H:%M:%S")
                 trade_id = str(t.get('id', ''))
                 
                 pos_side = last_open_side if last_open_side else ("SHORT" if trade_side == 'close_short' or side_raw == 'buy' else "LONG")
@@ -382,9 +386,13 @@ async def sync_past_bitget_trades_7d(bot_core):
                     margin = (ent_p * qty) / 30.0
                     roe_val = (net_pnl / margin) * 100.0 if margin > 0 else 0.0
                     
+                open_time_str = last_open_time if (last_open_time and last_open_side == pos_side) else time_str
+                
                 item = {
                     "trade_id": trade_id,
                     "date": date_str,
+                    "open_time": open_time_str,
+                    "close_time": time_str,
                     "time": time_str,
                     "side": pos_side,
                     "qty": qty,
