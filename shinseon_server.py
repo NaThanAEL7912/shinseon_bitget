@@ -303,10 +303,8 @@ def record_trade_history_event(side, qty, entry_price, exit_price, pnl_usd, roe_
 
 async def sync_past_bitget_trades_7d(bot_core):
     """
-    [V5.30 스마트 실시간 새로고침 체결 복원기]
-    폐하께서 팝업창에서 [실시간 새로고침] 클릭 시 수동 작동:
-    비트겟 선물 체결 내역 최근 100건(7일 이내)을 스캔하여 누락된 청산 실적을 
-    일별 통계 파일(trade_stats_YYYY-MM-DD.json) 및 요약 파일(trade_stats_summary.json)에 100% 복원
+    [V5.48 스마트 실시간 새로고침 체결 복원기]
+    비트겟 체결 내역을 100% 전면 재구축하여 잘못 복원된 과거 기록을 100% 덮어쓰기 완치
     """
     if not bot_core or not getattr(bot_core, "bitget_exchange", None):
         return
@@ -315,7 +313,6 @@ async def sync_past_bitget_trades_7d(bot_core):
         if not trades:
             return
 
-        # V5.36 팩트: 2026-08-07 20:20:00 KST 이후 체결건만 수집하도록 세션 기준 시각 필터 장착
         reset_ts_ms = 1786015200000.0  # 2026-08-07 20:20:00 KST ms timestamp
         exit_trades = [
             t for t in trades 
@@ -323,30 +320,23 @@ async def sync_past_bitget_trades_7d(bot_core):
             and (str(t.get('info', {}).get('tradeSide', '')).lower() in ['close', 'close_long', 'close_short'] 
                  or t.get('info', {}).get('reduceOnly', False))
         ]
-        recovered_cnt = 0
-        summary = load_trade_stats_summary()
-        daily_index = set(summary.get("daily_index", []))
-
+        
+        # 날짜별 체결건 그룹화
+        date_groups = {}
         for t in exit_trades:
             ts = t.get('timestamp', 0) / 1000.0
             dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
             date_str = dt_kst.strftime("%Y-%m-%d")
             time_str = dt_kst.strftime("%H:%M:%S")
-            
-            daily_rec = load_daily_stats(date_str)
-            existing_details = daily_rec.get("trades_detail", [])
             trade_id = str(t.get('id', ''))
-            already_exists = any(d.get("trade_id") == trade_id for d in existing_details)
-            if already_exists:
-                continue
-                
+            
             t_info = t.get('info', {}) or {}
-            hold_side = str(t_info.get('holdSide') or t_info.get('posSide') or '').lower()
+            trade_side_raw = str(t_info.get('tradeSide') or t_info.get('posSide') or t_info.get('holdSide') or '').lower()
             side_raw = str(t.get('side', '')).lower()
             
-            if 'short' in hold_side:
+            if 'short' in trade_side_raw:
                 pos_side = "SHORT"
-            elif 'long' in hold_side:
+            elif 'long' in trade_side_raw:
                 pos_side = "LONG"
             else:
                 pos_side = "SHORT" if side_raw == "buy" else "LONG"
@@ -362,7 +352,7 @@ async def sync_past_bitget_trades_7d(bot_core):
             roe_val = 0.0
             if ent_p > 0 and exit_p > 0:
                 roe_val = (ent_p - exit_p) / ent_p * 3000.0 if pos_side == "SHORT" else (exit_p - ent_p) / ent_p * 3000.0
-            
+                
             item = {
                 "trade_id": trade_id,
                 "date": date_str,
@@ -375,35 +365,34 @@ async def sync_past_bitget_trades_7d(bot_core):
                 "roe": roe_val,
                 "reason": "비트겟 체결 복원기 수동 복구"
             }
+            date_groups.setdefault(date_str, []).append(item)
             
-            daily_rec["trades"] += 1
-            if pnl_val >= 0:
-                daily_rec["wins"] += 1
-                daily_rec["profit_tot"] += pnl_val
-            else:
-                daily_rec["losses"] += 1
-                daily_rec["loss_tot"] += abs(pnl_val)
-            daily_rec["pnl"] += pnl_val
-            daily_rec["win_rate"] = (daily_rec["wins"] / daily_rec["trades"]) * 100.0 if daily_rec["trades"] > 0 else 0.0
-            daily_rec.setdefault("trades_detail", []).insert(0, item)
-            
-            roes = [tr.get("roe", 0.0) for tr in daily_rec["trades_detail"]]
-            daily_rec["avg_roe"] = (sum(roes) / len(roes)) if roes else 0.0
+        summary = {"total_pnl": 0.0, "total_trades": 0, "total_wins": 0, "total_losses": 0, "daily_index": list(date_groups.keys())}
+        
+        for date_str, items in date_groups.items():
+            daily_rec = {
+                "date": date_str,
+                "trades": len(items),
+                "wins": sum(1 for it in items if it["pnl"] >= 0),
+                "losses": sum(1 for it in items if it["pnl"] < 0),
+                "win_rate": (sum(1 for it in items if it["pnl"] >= 0) / len(items) * 100.0) if items else 0.0,
+                "profit_tot": sum(it["pnl"] for it in items if it["pnl"] >= 0),
+                "loss_tot": sum(abs(it["pnl"]) for it in items if it["pnl"] < 0),
+                "pnl": sum(it["pnl"] for it in items),
+                "avg_roe": (sum(it["roe"] for it in items) / len(items)) if items else 0.0,
+                "trades_detail": items
+            }
             save_daily_stats(date_str, daily_rec)
-
-            summary["total_pnl"] += pnl_val
-            summary["total_trades"] += 1
-            if pnl_val >= 0:
-                summary["total_wins"] += 1
-            else:
-                summary["total_losses"] += 1
-            daily_index.add(date_str)
-            recovered_cnt += 1
             
-        if recovered_cnt > 0:
-            summary["daily_index"] = sorted(list(daily_index))
-            save_trade_stats_summary(summary)
-            logger.info(f"🔄 [체결 복원 완료] 비트겟 과거 체결 내역 {recovered_cnt}건 일별 로그 파일 복원 완료")
+            summary["total_trades"] += daily_rec["trades"]
+            summary["total_wins"] += daily_rec["wins"]
+            summary["total_losses"] += daily_rec["losses"]
+            summary["total_pnl"] += daily_rec["pnl"]
+            
+        summary["total_win_rate"] = (summary["total_wins"] / summary["total_trades"] * 100.0) if summary["total_trades"] > 0 else 0.0
+        summary["daily_index"] = sorted(list(date_groups.keys()), reverse=True)
+        save_trade_stats_summary(summary)
+        logger.info(f"🔄 [체결 복원 완료 v5.48] 비트겟 체결 내역 전면 재구축 복원 완료 ({len(exit_trades)}건)")
     except Exception as e:
         logger.error(f"Bitget trade sync recovery error: {e}")
 
