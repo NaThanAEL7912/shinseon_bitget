@@ -333,6 +333,17 @@ async def sync_past_bitget_trades_7d(bot_core):
             
             p_val = float(t.get('price', 0.0) or t_info.get('priceAvg', 0.0) or t_info.get('price', 0.0) or 0.0)
             
+            # 수수료 파싱
+            fee_details = t_info.get('feeDetail', [])
+            cur_fee = 0.0
+            if isinstance(fee_details, list):
+                for fd in fee_details:
+                    cur_fee += abs(float(fd.get('totalFee', 0.0) or 0.0))
+            elif isinstance(fee_details, dict):
+                cur_fee = abs(float(fee_details.get('totalFee', 0.0) or 0.0))
+            else:
+                cur_fee = abs(float(t.get('fee', {}).get('cost', 0.0) or 0.0))
+                
             if trade_side in ['open', 'open_long', 'open_short'] and not is_reduce:
                 if 'short' in trade_side or side_raw == 'sell':
                     last_open_side = "SHORT"
@@ -340,6 +351,7 @@ async def sync_past_bitget_trades_7d(bot_core):
                     last_open_side = "LONG"
                 if p_val > 0:
                     last_open_price = p_val
+                last_open_fee = cur_fee
             elif trade_side in ['close', 'close_long', 'close_short'] or is_reduce:
                 ts = ts_ms / 1000.0
                 dt_kst = datetime.fromtimestamp(ts, timezone(timedelta(hours=9))) if ts > 0 else get_kst_now()
@@ -350,16 +362,25 @@ async def sync_past_bitget_trades_7d(bot_core):
                 pos_side = last_open_side if last_open_side else ("SHORT" if trade_side == 'close_short' or side_raw == 'buy' else "LONG")
                 ent_p = last_open_price if (last_open_price > 0 and last_open_side == pos_side) else float(t_info.get('openPriceAvg', 0.0) or 0.0)
                 exit_p = p_val
-                
                 qty = float(t.get('amount', 0.0) or t_info.get('baseVolume', 0.0) or 0.0)
-                pnl_val = float(t_info.get('achievedProfits', 0.0) or t_info.get('profit', 0.0) or t_info.get('pnl', 0.0) or t.get('pnl', 0.0) or 0.0)
                 
+                open_fee = last_open_fee if (last_open_fee > 0 and last_open_side == pos_side) else cur_fee
+                total_fee = open_fee + cur_fee
+                
+                gross_pnl = (ent_p - exit_p) * qty if pos_side == "SHORT" else (exit_p - ent_p) * qty
+                net_pnl = gross_pnl - total_fee
+                
+                # fallback if ent_p not available
                 if ent_p <= 0.0 and qty > 0 and exit_p > 0:
-                    ent_p = exit_p + (pnl_val / qty) if pos_side == "SHORT" else exit_p - (pnl_val / qty)
-                    
+                    achieved_p = float(t_info.get('achievedProfits', 0.0) or t_info.get('profit', 0.0) or 0.0)
+                    if achieved_p != 0.0:
+                        net_pnl = achieved_p - total_fee if achieved_p > 0 else achieved_p
+                        ent_p = exit_p + (net_pnl / qty) if pos_side == "SHORT" else exit_p - (net_pnl / qty)
+                        
                 roe_val = 0.0
-                if ent_p > 0 and exit_p > 0:
-                    roe_val = (ent_p - exit_p) / ent_p * 3000.0 if pos_side == "SHORT" else (exit_p - ent_p) / ent_p * 3000.0
+                if ent_p > 0 and qty > 0:
+                    margin = (ent_p * qty) / 30.0
+                    roe_val = (net_pnl / margin) * 100.0 if margin > 0 else 0.0
                     
                 item = {
                     "trade_id": trade_id,
@@ -369,8 +390,8 @@ async def sync_past_bitget_trades_7d(bot_core):
                     "qty": qty,
                     "entry_p": ent_p,
                     "exit_p": exit_p,
-                    "pnl": pnl_val,
-                    "roe": roe_val,
+                    "pnl": round(net_pnl, 4),
+                    "roe": round(roe_val, 2),
                     "reason": "비트겟 체결 복원기 수동 복구"
                 }
                 date_groups.setdefault(date_str, []).append(item)
