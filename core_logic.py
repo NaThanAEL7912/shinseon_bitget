@@ -1,4 +1,4 @@
-﻿class BotCore:
+class BotCore:
     def __init__(self):
         from collections import deque
         self.c_total = 20000.0
@@ -320,11 +320,11 @@
                         custom_stop_offset = getattr(self.v35_engine, "custom_stop_offset_pct", -0.2)
                         
                         if has_smart_guarded:
-                            status_msg = f"[{direction_active} 吏꾩엯 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(?썳 ?ㅻ쭏??蹂몄쟾媛???묐룞 | 蹂몄쟾媛?? {guard_limit:+.2f}%)"
+                            status_msg = f"[{direction_active} 吏꾩엯 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(?썳 ?ㅻ쭏??蹂몄쟾媛€???묐룞 | 蹂몄쟾媛€?? {guard_limit:+.2f}%)"
                         elif is_half_exited:
-                            status_msg = f"[{direction_active} 吏꾩엯 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(?썳 50% 遺꾪븷?듭젅 ?꾨즺 | 蹂몄쟾媛?? {guard_limit:+.2f}%)"
+                            status_msg = f"[{direction_active} 吏꾩엯 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(?썳 50% 遺꾪븷?듭젅 ?꾨즺 | 蹂몄쟾媛€?? {guard_limit:+.2f}%)"
                         else:
-                            status_msg = f"[{direction_active} 吏꾩엯 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(媛?쒕젅???꾩빟 ?湲? +{guard_trig:.2f}%)"
+                            status_msg = f"[{direction_active} 吏꾩엯 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(媛€?쒕젅???꾩빟 ?€湲? +{guard_trig:.2f}%)"
                             
                         if live_pnl <= (target_sl + 0.2):
                             status_msg = f"??[{direction_active} ?꾧린 @ {entry:,.1f}] PnL: {live_pnl:+.2f}%{usdt_str}\n(?먯젅 ?곕뱶?쇱씤 ?꾨컯: {target_sl:+.2f}%)"
@@ -343,7 +343,7 @@
                         liq_10s=display_liq,
                         oi_speed=display_oi,
                         ping_ms=latency_show,
-                        poison_status="湲곌컖: ?щ━?쇱? 珥덇낵" if (random.random() < 0.015 and not self.v35_engine.is_position_active) else "?뺤긽 媛??以?,
+                        poison_status="기각: 슬리피지 초과" if (random.random() < 0.015 and not self.v35_engine.is_position_active) else "정상 가동 중",
                         current_session=current_session,
                         target_liq=target_liq,
                         target_oi=target_oi,
@@ -558,13 +558,13 @@
         
         while self.is_running:
             try:
-                # ?꾨Ъ ?뱀냼耳??곌껐 (諛⑹떖??李⑤떒 ??곸씠 ?꾨땲誘濡?留ㅼ슦 ?덉젙?곸엫)
+                # ?꾨Ъ ?뱀냼耳??곌껐 (諛⑹떖??李⑤떒 ?€?곸씠 ?꾨땲誘€濡?留ㅼ슦 ?덉젙?곸엫)
                 websocket_conn = await asyncio.wait_for(websockets.connect(uri), timeout=2.0)
                 async with websocket_conn as websocket:
-                    ui_callback(self.current_price, 0, "??[?룬걫] ?섏씠釉뚮━???꾨━誘몄뾼 ?붿쭊 媛??以? ?ㅼ떆媛?媛먯떆 ?묐룞.", current_session="?ㅼ쟾 ?湲?以?)
+                    ui_callback(self.current_price, 0, "⚡ [전달] 하이브리드 프리미엄 엔진 가동 완료! 실시간 감시 작동.", current_session="세션 대기중")
                     
                     while self.is_running:
-                        # 1. ?뱀냼耳??섏떊 ?쒕룄 (?덉젙?곸씤 ?꾨Ъ留앹씠誘濡???꾩븘?껋? ?ㅼ떆 15珥??좎?)
+                        # 1. ?뱀냼耳??섏떊 ?쒕룄 (?덉젙?곸씤 ?꾨Ъ留앹씠誘€濡??€?꾩븘?껋? ?ㅼ떆 15珥??좎?)
                         try:
                             message = await asyncio.wait_for(websocket.recv(), timeout=15.0)
                         except Exception as conn_err:
@@ -637,7 +637,7 @@
                             
             except Exception as e:
                 logger.warning(f"諛붿씠?몄뒪 ?꾨Ъ WSS ?곌껐 ?μ븷 ?∽툘 5珥????먭?移섏쑀 ?쒕룄: {e}")
-                ui_callback(self.current_price, 0, "?좑툘 [?룬걫] 諛붿씠?몄뒪 WSS ?ъ뿰寃??쒕룄 以?..", current_session="WSS 蹂듦뎄 以?)
+                ui_callback(self.current_price, 0, "🛡️ [전달] 바이낸스 WSS 재연결 시도 중...", current_session="WSS 복구 중")
                 await asyncio.sleep(5.0)
 
         if fallback_task and not fallback_task.done():
@@ -704,10 +704,10 @@ class ShinseonV35Engine:
         self.oi_history = deque(maxlen=60)
         self.cooldown_timer_task = None
 
-    async def start_cooldown_countdown_timer(self, duration_sec, reason_label="荑⑦???):
+    async def start_cooldown_countdown_timer(self, duration_sec, reason_label="쿨다운"):
         """
-        [v3.61 荑⑦???1珥??ㅼ떆媛??곸떆 移댁슫?몃떎????대㉧]
-        泥?궛 吏곹썑 duration_sec ?숈븞 1珥?媛꾧꺽?쇰줈 ??쒕낫??濡쒓렇??移댁슫?몃떎???쒖텧
+        [v3.61 荑⑦???1珥??ㅼ떆媛??곸떆 移댁슫?몃떎???€?대㉧]
+        泥?궛 吏곹썑 duration_sec ?숈븞 1珥?媛꾧꺽?쇰줈 ?€?쒕낫??濡쒓렇??移댁슫?몃떎???쒖텧
         """
         try:
             remain = float(duration_sec)
@@ -920,10 +920,10 @@ class ShinseonV35Engine:
 
                     if is_loss:
                         target_cooldown = loss_cd_sec
-                        label = "?먯젅 荑⑦???
+                        label = "손절 쿨다운"
                     else:
                         target_cooldown = profit_cd_sec
-                        label = "?듭젅/?ㅼ쐞移?荑⑦???
+                        label = "익절/스위칭 쿨다운"
 
                     self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cooldown)
                     if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
@@ -1052,7 +1052,7 @@ class ShinseonV35Engine:
                             exit_reason_text = getattr(self, "exit_reason", "")
                             is_loss = ("?먯젅" in exit_reason_text) or ("Stop Loss" in exit_reason_text) or ("?ㅽ깙" in exit_reason_text and "?듭젅" not in exit_reason_text)
                             target_cooldown = loss_cd_sec if is_loss else profit_cd_sec
-                            label = "?먯젅 荑⑦??? if is_loss else "?듭젅/?ㅼ쐞移?荑⑦???
+                            label = "손절 쿨다운" if is_loss else "익절/스위칭 쿨다운"
                             
                             self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cooldown)
                             if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
@@ -1126,7 +1126,7 @@ class ShinseonV35Engine:
         oi_delta_1m = binance_ws_frame['oi_delta_1m']
         binance_mid = binance_ws_frame['mid_price']
         
-        # [1珥?媛蹂 CSV ?덉퐫???곕룞 - 理쒖긽???꾩쭊 諛곗튂]
+        # [1珥?媛€蹂€ CSV ?덉퐫???곕룞 - 理쒖긽???꾩쭊 諛곗튂]
         # 湲곕룞?? target_liq * 0.5 諛?target_oi * 0.5
         current_time = time.time()
         trigger_liq_limit = target_liq * 0.5
@@ -1148,7 +1148,7 @@ class ShinseonV35Engine:
                     self.record_mode_1s = False
                     self.below_trigger_since = None
                     if getattr(self.bot, "dashboard", None):
-                        self.bot.dashboard.add_log(f"?븡 [?덉퐫?? 吏꾩젙 ?곹깭 60珥??좎? ?꾨즺. 1遺??곸떆 湲곕줉 湲곗뼱濡?洹??)
+                        self.bot.dashboard.add_log(f"🛡️ [레코더] 진정 상태 60초 유지 완료. 1분 정시 기록 기어로 복귀")
         
         should_write = False
         date_str = datetime.now().strftime("%Y-%m-%d")
@@ -1171,7 +1171,7 @@ class ShinseonV35Engine:
                 csv_path = os.path.join(BASE_DIR, "docs", "historical_data", csv_filename)
                 time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cvd_10s_sum = sum(val for t, val in getattr(self, "cvd_history", []))
-                gear_str = "1珥? if self.record_mode_1s else "1遺?
+                gear_str = "1초" if self.record_mode_1s else "1분"
                 line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{oi_delta_1m:+.4f},{cvd_10s_sum:+.1f},{gear_str}\n"
                 
                 def _write_csv(path, content):
@@ -1244,10 +1244,10 @@ class ShinseonV35Engine:
 
                     if is_loss:
                         target_cooldown = loss_cd_sec
-                        label = "?먯젅 荑⑦???
+                        label = "손절 쿨다운"
                     else:
                         target_cooldown = profit_cd_sec
-                        label = "?듭젅/?ㅼ쐞移?荑⑦???
+                        label = "익절/스위칭 쿨다운"
 
                     self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cooldown)
                     if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
@@ -1473,11 +1473,11 @@ class ShinseonV35Engine:
                 try:
                     success = await self.execute_bitget_internal_packet(side=direction, order_type="IOC_MARKET")
                     if success:
-                        # ?좉퇋 吏꾩엯 ?깃났 ??臾댁“嫄?60珥?荑⑦???媛??
+                        # ?좉퇋 吏꾩엯 ?깃났 ??臾댁“嫄?60珥?荑⑦???媛€??
                         self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + 60.0)
                         if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
                             self.cooldown_timer_task.cancel()
-                        self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(60.0, "?좉퇋 吏꾩엯 60珥?荑⑦???))
+                        self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(60.0, "신규 진입 60초 쿨다운"))
                         
                         # 泥?吏꾩엯 ?깃났 ??媛먯떆 猷⑦봽 ?꾩슦怨?醫낅즺
                         asyncio.create_task(self.manage_v35_exit_guardrail(direction))
@@ -1689,11 +1689,11 @@ class ShinseonV35Engine:
             if not self.has_second_entry and not getattr(self, "has_third_entry", False):
                 new_stop_price = 0.0
                 if self.peak_pnl_pct >= 0.020:
-                    # +2.0% ?댁긽 ?뚰뙆 ?? 怨좎젏 ?鍮?1.0% ?섎씫?좎뿉 ?몃젅?쇰쭅 ?듭젅???뺤꽦 (Gap 1.0%)
+                    # +2.0% ?댁긽 ?뚰뙆 ?? 怨좎젏 ?€鍮?1.0% ?섎씫?좎뿉 ?몃젅?쇰쭅 ?듭젅???뺤꽦 (Gap 1.0%)
                     new_stop_price = self.entry_price * (1 + self.peak_pnl_pct - 0.010) if direction == "LONG" else self.entry_price * (1 - self.peak_pnl_pct + 0.010)
 
                 elif getattr(self, "is_half_exited", False) or getattr(self, "has_smart_guarded", False):
-                    # 50% 遺꾪븷?듭젅 ???먮뒗 ?ㅻ쭏??蹂몄쟾媛??諛쒕룞 ???몄뀡 媛??蹂댁〈媛寃??곗궛 (32李??섏닠: 0.0???곗궛 諛?踰꾧렇 諛⑹?)
+                    # 50% 遺꾪븷?듭젅 ???먮뒗 ?ㅻ쭏??蹂몄쟾媛€??諛쒕룞 ???몄뀡 媛€??蹂댁〈媛€寃??곗궛 (32李??섏닠: 0.0???곗궛 諛?踰꾧렇 諛⑹?)
                     new_stop_price = self.entry_price * (1.0 + (entry_sl_guard / 100.0)) if direction == "LONG" else self.entry_price * (1.0 - (entry_sl_guard / 100.0))
 
                 elif not getattr(self, "is_half_exited", False) and not getattr(self, "has_smart_guarded", False):
@@ -1840,14 +1840,7 @@ class ShinseonV35Engine:
             else:
                 exit_pnl_pct = (self.entry_price - current_bitget_price) / self.entry_price
 
-        if "?먯젅?? in getattr(self, "exit_reason", "") or "?먯젅" in getattr(self, "exit_reason", "") or exit_pnl_pct < 0.0:
-            final_cooldown_sec = cooldown_limit
-            self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + cooldown_limit)
-            reason_label = "?먯젅 荑⑦???
-        else:
-            final_cooldown_sec = getattr(dashboard, "profit_cooldown_seconds", 60.0)
-            self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + final_cooldown_sec)
-            reason_label = "?듭젅 荑⑦???
+            reason_label = "익절 쿨다운"
 
         if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
             self.cooldown_timer_task.cancel()
@@ -1934,4 +1927,5 @@ class ShinseonV35Engine:
 # ==============================================================================
 # ?몄뀡蹂??꾧퀎移?諛??몃젅?대뵫 ?듭떖 ?ㅼ젙 怨좉툒 ?ㅼ젙李??대옒??(QDialog) (媛쒕컻怨꾪쉷??176)
 # ==============================================================================
-class ShinseonConfigDialog(QDialog):
+class ShinseonConfigDialog:
+    pass

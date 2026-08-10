@@ -2258,19 +2258,33 @@ class ShinseonV35Engine:
                 if getattr(self.bot, "dashboard", None):
                     self.bot.dashboard.add_log(f"❌ [CSV 레코더 쓰기 에러] {e}")
 
-        # [방향성 추출]: ws_frame에 탑재된 지능형 신호 방향을 최우선 채집 (LONG 덮어쓰기 버그 원천 박멸)
-        direction = binance_ws_frame.get('direction')
-        if not direction:
-            long_liq = binance_ws_frame.get('long_liq_usd', 0.0)
-            short_liq = binance_ws_frame.get('short_liq_usd', 0.0)
-            direction = "LONG" if short_liq >= long_liq else "SHORT"
+        # --------------------------------------------------------------------------
+        # 🎯 [V5.62] SHINSEON 황금 전성기 최적 오더플로우 저격 판정 엔진 (백서 100% 정격)
+        # --------------------------------------------------------------------------
+        price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
+        direction = None
+        
+        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
+        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
+            # [1단계]: 가격 변동(price_delta_1m) ✕ OI속도(oi_delta_1m) 4대 저격 매트릭스
+            if price_delta_1m < 0 and oi_delta_1m < 0:
+                direction = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 저점 LONG 저격!
+            elif price_delta_1m > 0 and oi_delta_1m < 0:
+                direction = "SHORT"   # Case B: 📈 가격상승 + OI감소 ➡️ 고점 SHORT 저격!
+            elif price_delta_1m > 0 and oi_delta_1m > 0:
+                direction = "LONG"    # Case C: 📈 가격상승 + OI증가 ➡️ 상승 추세 LONG 탑승!
+            elif price_delta_1m < 0 and oi_delta_1m > 0:
+                direction = "SHORT"   # Case D: 📉 가격하락 + OI증가 ➡️ 하강 추세 SHORT 탑승!
+            else:
+                direction = None
+        else:
+            direction = None  # 임계치 미달 시 기각 (Case 1-5, Case 1-6)
 
         # --------------------------------------------------------------------------
-        # 🚨 [최우선 수술 1]: 반대 방향 저격 신호 선제 청산 기어 전진 배치!
-        # 임계치(target_liq/target_oi) 조건과 관계없이, 또는 임계치 수신 시 보유 포지션과 신호가 반대면 0.001초 선제 청산집행
+        # 🚨 [2단계]: 실전 집행 및 포지션 보유 중 반대 청산 감시 (60초 안전 락다운 포함)
         # --------------------------------------------------------------------------
         is_opposite = False
-        if self.is_position_active:
+        if self.is_position_active and direction:
             raw_opposite = (self.entry_direction == "LONG" and direction == "SHORT") or (self.entry_direction == "SHORT" and direction == "LONG")
             if raw_opposite:
                 elapsed_entry = time.time() - getattr(self, "last_entry_time", 0.0)
@@ -2286,8 +2300,8 @@ class ShinseonV35Engine:
                     is_opposite = True
             
         if self.is_position_active and is_opposite:
-            # 1분 청산 및 OI > 0 (플러스 자금 유입) 조건 충족 시에만 진짜 스위칭 청산 발동!
-            if rolling_1m_liq_usd >= target_liq and oi_delta_1m >= target_oi and oi_delta_1m > 0:
+            # OI > 0 (진짜 자금 유입) 조건 충족 시에만 진짜 스위칭 청산 발동! (Case 2-3, Case 3-3)
+            if oi_delta_1m > 0:
                 if not getattr(self, "exit_in_progress", False):
                     self.exit_in_progress = True
                     self.exit_reason = f"반대 방향 진짜 자금 유입(OI>0 & 임계치돌파) 스위칭 감지 (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"
@@ -2297,6 +2311,7 @@ class ShinseonV35Engine:
                     
                     if getattr(self.bot, "dashboard", None):
                         self.bot.dashboard.add_log(f"🚨 [1단계: 반대 청산 포착] 보유: {self.entry_direction} ➡️ 신호: {direction} | 청산 패킷 직송 개시!")
+
                     
                     # 쿨다운 선제 부여
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
