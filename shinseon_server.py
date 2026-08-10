@@ -1926,15 +1926,16 @@ class ShinseonV35Engine:
                         ratio_factor = custom_ratio if custom_ratio > 0.0 else 0.5
 
                         if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
-                            close_side = "buy" if pos_side == "long" else "sell"
+                            close_side = "buy" if pos_side in ["short", "close_short"] else "sell"
+                            hold_side_val = "short" if pos_side in ["short", "close_short"] else "long"
                             total_contracts = float(active_pos['contracts'])
-                            if total_contracts <= 0.001:
+                            if total_contracts <= 0.0001:
                                 amount = total_contracts
-                                self.bot.ui_cb(0.0, 0, f"ℹ️ [스마트 수량 가드] 현재 포지션 수량({total_contracts} BTC)이 최소 발주 단위(0.001 BTC) 이하이므로 50% 분할 대신 잔여 포지션 전량({amount} BTC) 시장가 청산을 집행합니다.")
+                                self.bot.ui_cb(0.0, 0, f"ℹ️ [스마트 수량 가드] 현재 포지션 수량({total_contracts} BTC)이 최소 발주 단위(0.0001 BTC) 이하이므로 50% 분할 대신 잔여 포지션 전량({amount} BTC) 시장가 청산을 집행합니다.")
                             else:
-                                amount = round(total_contracts * ratio_factor, 3)
-                                if amount < 0.001:
-                                    amount = 0.001
+                                amount = round(total_contracts * ratio_factor, 4)
+                                if amount < 0.0001:
+                                    amount = 0.0001
                             pct_lbl = int(round(ratio_factor * 100))
                             self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 v2 API 직송] 수량: {amount} BTC (방향: {pos_side.upper()})")
                             try:
@@ -1949,13 +1950,13 @@ class ShinseonV35Engine:
                                 body_dict = {
                                     "symbol": "BTCUSDT",
                                     "productType": "USDT-FUTURES",
-                                    "marginMode": active_pos.get('marginMode', 'isolated'),
+                                    "marginMode": "isolated",
                                     "marginCoin": "USDT",
                                     "size": str(amount),
                                     "side": close_side,
                                     "orderType": "market",
                                     "tradeSide": "close",
-                                    "holdSide": pos_side
+                                    "holdSide": hold_side_val
                                 }
                                 body_json = json.dumps(body_dict)
                                 timestamp = str(int(time.time() * 1000))
@@ -1981,6 +1982,13 @@ class ShinseonV35Engine:
                                             if order_type != "50_PERCENT_CLOSE":
                                                 self.is_half_exited = True
                                             self.is_manual_half_exited = True
+                                            
+                                            # [텔레그램 후발송] 비트겟 00000 성공 체결 팩트 확인 후 발송!
+                                            current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
+                                            entry_p_show = getattr(self, "entry_price", 0.0)
+                                            side_show = str(getattr(self, "entry_direction", pos_side.upper()))
+                                            msg = f"🎯 [{pct_lbl}% 분할익절 알림]\n방향: {side_show}\n사유: 수익률 도달 ({pct_lbl}% 익절 실행 완료)\n평단가: {entry_p_show:,.1f} USDT\n현재가: {current_bitget_price:,.1f} USDT"
+                                            send_telegram_msg(msg)
                                             return True
                                         else:
                                             self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 실패] {res.get('msg', '알 수 없음')} (코드: {res.get('code')})")
