@@ -2732,9 +2732,7 @@ class ShinseonV35Engine:
                     self.awaiting_pullback_pyramid = True
                     asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
                     
-                    if self.bot.dashboard:
-                        msg = f"<b>🎯 [분할익절 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>수익률 {half_exit_trigger*100:.2f}% 도달 (50% 익절 실행)</b>\n평단가: <b>{self.entry_price:,.1f} USDT</b>\n현재가: <b>{current_bitget_price:,.1f} USDT</b>"
-                        self.bot.dashboard.send_telegram_notification(msg)
+                    # 텔레그램 알림은 비트겟 API execute_bitget_internal_packet 00000 성공 체결 후 직송 발송됨 (V5.59)
                     
                     await asyncio.sleep(1.0)
                     new_sl_price = self.entry_price * (1.0 + (entry_sl_guard / 100.0)) if direction == "LONG" else self.entry_price * (1.0 - (entry_sl_guard / 100.0))
