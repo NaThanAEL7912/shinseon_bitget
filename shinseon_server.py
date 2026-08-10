@@ -402,22 +402,24 @@ def get_calculated_stats_payload(last_downloaded_date=None):
     summary = load_trade_stats_summary()
     now_dt = get_kst_now()
     today_str = now_dt.strftime("%Y-%m-%d")
-    
-    tot_trades = summary.get("total_trades", 0)
-    tot_wins = summary.get("total_wins", 0)
-    tot_losses = summary.get("total_losses", 0)
-    tot_win_rate = (tot_wins / tot_trades * 100.0) if tot_trades > 0 else 0.0
-    tot_pnl = summary.get("total_pnl", 0.0)
+    SESSION_START_DATE = "2026-08-09"
     
     daily_index = summary.get("daily_index", [])
+    filtered_index = [d for d in daily_index if d >= SESSION_START_DATE]
+    
     if last_downloaded_date:
-        # 마지막 동기화 날짜 이후(포함)의 증분 날짜만 필터링!
-        target_dates = [d for d in daily_index if d >= last_downloaded_date]
+        target_dates = [d for d in filtered_index if d >= last_downloaded_date]
     else:
-        target_dates = daily_index
+        target_dates = filtered_index
         
-    daily_records = [load_daily_stats(d) for d in target_dates]
+    daily_records = [load_daily_stats(d) for d in target_dates if d and d >= SESSION_START_DATE]
     today_rec = load_daily_stats(today_str)
+    
+    tot_trades = sum(r.get("trades", 0) for r in daily_records)
+    tot_wins = sum(r.get("wins", 0) for r in daily_records)
+    tot_losses = sum(r.get("losses", 0) for r in daily_records)
+    tot_win_rate = (tot_wins / tot_trades * 100.0) if tot_trades > 0 else 0.0
+    tot_pnl = sum(r.get("pnl", 0.0) for r in daily_records)
     
     payload = {
         "total_pnl": tot_pnl,

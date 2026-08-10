@@ -433,7 +433,7 @@ class CumulativeReportDialog(QDialog):
         self.populate_data()
 
     def populate_data(self):
-        daily_records = self.stats_data.get("daily_records", [])
+        daily_records = [r for r in self.stats_data.get("daily_records", []) if r.get("date", "") >= "2026-08-09"]
         self.daily_table.setRowCount(len(daily_records))
         
         for r_idx, rec in enumerate(daily_records):
@@ -506,7 +506,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.42"
+        self.CURRENT_VERSION = "V5.44"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
