@@ -2368,6 +2368,13 @@ class ShinseonV35Engine:
             # [포지션 보유 중 스위칭 / 추가매수 / 불타기 검증 엔진 (SHINSEON 원본 규격)]
             if self.is_position_active and not getattr(self, "exit_in_progress", False):
                 if direction != self.entry_direction:
+                    # [진입 60초 안전 락다운]: 진입 직후 60초 동안은 어떠한 반대 신호 청산도 100% 원천 차단!
+                    elapsed_entry = time.time() - getattr(self, "last_entry_time", 0.0)
+                    if elapsed_entry < 60.0:
+                        rem_sec = 60.0 - elapsed_entry
+                        logger.info(f"🛡️ [진입 60초 안전 락다운] 진입 직후 60초간 반대 청산 무조건 유예 중 (남은 시간: {rem_sec:.1f}초) ➡️ 휩소 청산 100% 차단")
+                        return
+                        
                     # [OI 감소성 페이크 차단 필터]: OI > 0 (플러스 자금 유입)일 때만 진짜 스위칭 청산 발동!
                     if oi_delta_1m > 0:
                         logger.info(f"🚨 [TRADE] [반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달 (OI > 0)! ➡️ 기존 포지션 전량 시장가 청산 집행")
