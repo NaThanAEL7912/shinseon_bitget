@@ -432,6 +432,28 @@ class CumulativeReportDialog(QDialog):
         layout.addLayout(btn_layout)
         self.populate_data()
 
+    def update_header_summary(self):
+        tot_pnl = self.stats_data.get("total_pnl", 0.0)
+        win_rate = self.stats_data.get("total_win_rate", 0.0)
+        tot_trades = self.stats_data.get("total_trades", 0)
+        tot_wins = self.stats_data.get("total_wins", 0)
+        tot_losses = self.stats_data.get("total_losses", 0)
+        
+        color_pnl = "#00E676" if tot_pnl >= 0 else "#FF5252"
+        pnl_str = f"${tot_pnl:+,.2f}"
+        
+        if hasattr(self, "lbl_summary"):
+            self.lbl_summary.setText(
+                f"누적 순손익: <b style='color:{color_pnl}; font-size:16px;'>{pnl_str}</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+                f"전체 승률: <b style='color:#DEBA9D; font-size:15px;'>{win_rate:.1f}%</b> &nbsp;&nbsp;|&nbsp;&nbsp; "
+                f"총 거래: <b>{tot_trades}전 {tot_wins}승 {tot_losses}패</b>"
+            )
+
+    def update_data_and_render(self, new_stats_data):
+        self.stats_data = new_stats_data or {}
+        self.update_header_summary()
+        self.populate_data()
+
     def populate_data(self):
         daily_records = [r for r in self.stats_data.get("daily_records", []) if r.get("date", "") >= "2026-08-09"]
         self.daily_table.setRowCount(len(daily_records))
@@ -468,7 +490,7 @@ class CumulativeReportDialog(QDialog):
         row = selected_rows[0].row()
         date_str = self.daily_table.item(row, 0).text()
         
-        daily_records = self.stats_data.get("daily_records", [])
+        daily_records = [r for r in self.stats_data.get("daily_records", []) if r.get("date", "") >= "2026-08-09"]
         selected_rec = next((r for r in daily_records if r.get("date") == date_str), None)
         
         if selected_rec:
@@ -481,7 +503,7 @@ class CumulativeReportDialog(QDialog):
                 items = [
                     QTableWidgetItem(str(t.get("time", ""))),
                     QTableWidgetItem(str(t.get("side", ""))),
-                    QTableWidgetItem(f"{t.get('qty', 0.0):.3f}"),
+                    QTableWidgetItem(f"{float(t.get('qty', 0.0)):.3f}"),
                     QTableWidgetItem(f"${t.get('entry_p', 0.0):,.1f}"),
                     QTableWidgetItem(f"${t.get('exit_p', 0.0):,.1f}"),
                     QTableWidgetItem(f"{t.get('roe', 0.0):+.2f}%"),
@@ -506,7 +528,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.46"
+        self.CURRENT_VERSION = "V5.47"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1461,6 +1483,7 @@ class ShinseonDashboard(QMainWindow):
         )
         
         if getattr(self, "cum_dialog", None) and self.cum_dialog.isVisible():
+            self.cum_dialog.update_data_and_render(stats_data)
             self.cum_dialog.stats_data = stats_data
             self.cum_dialog.populate_data()
 
