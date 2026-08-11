@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.67"
+        self.CURRENT_VERSION = "V5.68"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2462,7 +2462,7 @@ class ShinseonDashboard(QMainWindow):
                 if self.is_ws_active():
                     import json
                     try:
-                        asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_roe': 0.0, 'ratio': 100.0})))
+                        asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': False, 'offset_val': 0.0, 'ratio': 100.0})))
                     except Exception:
                         pass
                 return
@@ -2472,8 +2472,8 @@ class ShinseonDashboard(QMainWindow):
             try:
                 offset_val = float(self.edit_stoploss_offset.text().strip())
             except Exception:
-                offset_val = 6.0
-                self.edit_stoploss_offset.setText("6.0")
+                offset_val = 0.8
+                self.edit_stoploss_offset.setText("0.8")
 
             try:
                 ratio_val = float(self.edit_stoploss_ratio.text().strip())
@@ -2482,49 +2482,46 @@ class ShinseonDashboard(QMainWindow):
                 self.edit_stoploss_ratio.setText("100")
 
             self.is_stoploss_active = True
-            self.add_log(f"🛡️ [스마트 스탑 설정 개시] PnL 오프셋: {offset_val:+.2f}%, 청산 비율: {ratio_val:.0f}% 서버 감시 가드를 가동합니다.")
-
-            if self.is_ws_active():
-                import json
-                try:
-                    asyncio.ensure_future(self.ws.send(json.dumps({'cmd': 'CMD_SET_SMART_STOP', 'active': True, 'offset_val': offset_val, 'ratio': ratio_val})))
-                except Exception:
-                    pass
-
-            # UI 가동 상태(ON) 업데이트
-            self.edit_stoploss_offset.setEnabled(False)
-            self.edit_stoploss_ratio.setEnabled(False)
-            self.btn_stoploss.setText("🧹 스마트 스탑 해제")
-            self.btn_stoploss.setStyleSheet("""
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8C3838, stop:1 #5E2626);
-                    color: #DEBA9D;
-                    font-weight: bold;
-                    font-size: 11px;
-                    padding: 8px;
-                    border-radius: 4px;
-                    border: 1px solid #A88869;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #A84444, stop:1 #8C3838);
-                }
-            """)
 
             if self.is_ws_active():
                 import json
                 packet = json.dumps({
                     'cmd': 'CMD_SET_SMART_STOP',
                     'active': True,
-                    'offset_roe': offset_val,
+                    'offset_val': offset_val,
                     'ratio': ratio_val
                 })
                 try:
                     asyncio.ensure_future(self.ws.send(packet))
                 except Exception:
                     pass
-                self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}% ROE) 동기화 전송 완료")
+                self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}%, {ratio_val:.0f}%) 전송 완료")
 
-            self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 포지션에 {offset_val:+.2f}% ROE 감시 가드가 작동되었습니다!")
+            if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
+                self.bot_core.v35_engine.custom_stop_active = True
+                self.bot_core.v35_engine.custom_stop_offset_pct = offset_val
+                self.bot_core.v35_engine.custom_stop_close_ratio = ratio_val
+
+            # UI 가동 상태(ON) 업데이트
+            self.edit_stoploss_offset.setEnabled(False)
+            self.edit_stoploss_ratio.setEnabled(False)
+            self.btn_stoploss.setText("🟢 스마트 스탑 해제")
+            self.btn_stoploss.setStyleSheet("""
+                QPushButton {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E4D2B, stop:1 #11331B);
+                    color: #00FFCC;
+                    font-weight: bold;
+                    font-size: 11px;
+                    padding: 8px;
+                    border-radius: 4px;
+                    border: 1px solid #00FFCC;
+                }
+                QPushButton:hover {
+                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #27663A, stop:1 #1E4D2B);
+                }
+            """)
+
+            self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 포지션에 오프셋 {offset_val:+.2f}%, 청산비율 {ratio_val:.0f}% 감시 가드가 작동되었습니다!")
         except Exception as e:
             self.add_log(f"❌ [스마트 스탑 설정 오류] 사유: {e}")
 
@@ -2642,103 +2639,7 @@ class ShinseonDashboard(QMainWindow):
         self.add_log("🌓 [수동 신속 제어] BITGET 포지션 50% 시장가 청산 명령 발동...")
         asyncio.create_task(self.bot_core.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
 
-    def reset_stoploss_ui(self):
-        if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
-            self.bot_core.v35_engine.custom_stop_active = False
-        if hasattr(self, "edit_stoploss_offset"):
-            self.edit_stoploss_offset.setEnabled(True)
-        if hasattr(self, "edit_stoploss_ratio"):
-            self.edit_stoploss_ratio.setEnabled(True)
-        if hasattr(self, "btn_stoploss"):
-            self.btn_stoploss.setText("🛡️ 스마트 스탑 설정")
-            self.btn_stoploss.setStyleSheet("""
-                QPushButton {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4E4944, stop:1 #35312E);
-                    color: #DEBA9D;
-                    font-weight: bold;
-                    font-size: 11px;
-                    padding: 8px;
-                    border-radius: 4px;
-                    border: 1px solid #A88869;
-                }
-                QPushButton:hover {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #5C5550, stop:1 #4E4944);
-                }
-            """)
 
-    def trigger_stoploss_setting(self):
-        if not self.bot_core.v35_engine:
-            return
-        
-        # 1. 이미 감시 중이면 감시 해제 (토글 OFF)
-        if getattr(self.bot_core.v35_engine, "custom_stop_active", False):
-            self.bot_core.v35_engine.custom_stop_active = False
-            self.reset_stoploss_ui()
-            self.add_log("🧹 [스마트 스탑 해제] 인메모리 스마트 스탑 감시가 해제되었습니다.")
-            return
-
-        # 2. 감시 미설정 상태이면 포지션 확인 후 감시 개시 (토글 ON)
-        if not self.bot_core.v35_engine.is_position_active:
-            self.add_log("⚠️ [스마트 스탑 실패] 현재 열려있는 포지션이 없습니다.")
-            return
-
-        try:
-            offset_val = float(self.edit_stoploss_offset.text().strip())
-        except Exception:
-            offset_val = 0.2
-            self.edit_stoploss_offset.setText("0.2")
-
-        try:
-            ratio_val = float(self.edit_stoploss_ratio.text().strip())
-        except Exception:
-            ratio_val = 100.0
-            self.edit_stoploss_ratio.setText("100")
-
-        entry_price = getattr(self.bot_core.v35_engine, "entry_price", 0.0)
-        entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
-        cur_price = getattr(self, "current_price", 0.0)
-        if cur_price <= 0.0:
-            cur_price = getattr(self, "last_price", 0.0)
-
-        if entry_price > 0.0 and cur_price > 0.0:
-            if entry_dir == "LONG":
-                cur_pnl = ((cur_price - entry_price) / entry_price) * 100.0
-            else:
-                cur_pnl = ((entry_price - cur_price) / entry_price) * 100.0
-        else:
-            cur_pnl = getattr(self.bot_core.v35_engine, "last_live_pnl_pct", 0.0)
-
-        self.bot_core.v35_engine.custom_stop_set_pnl = cur_pnl
-        self.bot_core.v35_engine.custom_stop_offset_pct = offset_val
-        self.bot_core.v35_engine.custom_stop_close_ratio = ratio_val
-        self.bot_core.v35_engine.custom_stop_active = True
-
-        if hasattr(self, "edit_stoploss_offset"):
-            self.edit_stoploss_offset.setEnabled(False)
-        if hasattr(self, "edit_stoploss_ratio"):
-            self.edit_stoploss_ratio.setEnabled(False)
-
-        if not getattr(self.bot_core.v35_engine, "is_guardrail_running", False):
-            entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
-            asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(entry_dir))
-
-        self.btn_stoploss.setText("🟢 스마트 스탑 해제")
-        self.btn_stoploss.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E4D2B, stop:1 #11331B);
-                color: #00FFCC;
-                font-weight: bold;
-                font-size: 11px;
-                padding: 8px;
-                border-radius: 4px;
-                border: 1px solid #00FFCC;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #27663A, stop:1 #1E4D2B);
-            }
-        """)
-
-        self.add_log(f"🛡️ [스마트 스탑 설정] 현재PnL: {cur_pnl:+.2f}%, 설정오프셋: {offset_val:+.2f}%, 청산비율: {ratio_val:.0f}% 감시 개시")
 
     def add_price_alert(self):
         raw_text = self.edit_price_alert_target.text().strip().replace(',', '')

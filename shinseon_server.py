@@ -2758,37 +2758,7 @@ class ShinseonV35Engine:
             entry_sl_guard = s_guardrails["guard"]
             half_exit_enabled = s_guardrails.get("enabled", True)
 
-            # [인메모리 스마트 스탑(Smart Stop) 오프셋 감시 엔진 (SHINSEON 원본 규격)]
-            if getattr(self, "custom_stop_active", False):
-                offset_val = float(getattr(self, "custom_stop_offset_pct", -0.2))
-                pnl_at_set = float(getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0))
-                live_pnl = pnl_pct * 100.0
 
-                if offset_val < pnl_at_set:
-                    is_triggered = (live_pnl <= offset_val)
-                    cond_str = "이하"
-                    stop_label = "손절/보존"
-                else:
-                    is_triggered = (live_pnl >= offset_val)
-                    cond_str = "이상"
-                    stop_label = "상승/반등익절"
-
-                if is_triggered:
-                    self.custom_stop_active = False
-                    ratio = float(getattr(self, "custom_stop_close_ratio", 100.0))
-                    order_type = "50_PERCENT_CLOSE" if ratio < 100.0 else "FORCE_MARKET_UNCAPPED"
-                    
-                    self.exit_reason = f"스마트 스탑 발동 (PnL: {live_pnl:+.2f}%, 설정: {offset_val:+.2f}%)"
-                    self.exit_in_progress = True
-                    clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type=order_type)
-                    if clear_ok:
-                        log_msg = f"🛡️ [스마트 스탑 발동] 실시간 PnL({live_pnl:+.2f}%)이 설정값({offset_val:+.2f}%) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산 완료)"
-                        logger.info(log_msg)
-                        if self.bot and hasattr(self.bot, "broadcast_event"):
-                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
-                        if order_type == "FORCE_MARKET_UNCAPPED":
-                            self.is_position_active = False
-                            break
             
             # [V5.40 신설] 중간 수익 보존 가드레일 (최소값 % 도달 시 가드값 % 스탑로스 자동 배치)
             mid_trig = float(getattr(self.bot, "mid_guard_trigger", 0.60)) / 100.0
