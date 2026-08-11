@@ -2003,9 +2003,9 @@ class ShinseonV35Engine:
                             amount = max(0.001, round(amount, 3))
                             try:
                                 if active_pos.get('info', {}).get('posMode') == 'hedge_mode' or active_pos.get('hedged', True):
-                                    params = {'tradeSide': 'close', 'holdSide': pos_side.lower()}
+                                    params = {'tradeSide': 'close', 'holdSide': pos_side.lower(), 'marginMode': 'isolated', 'marginCoin': 'USDT'}
                                 else:
-                                    params = {'reduceOnly': True}
+                                    params = {'reduceOnly': True, 'marginMode': 'isolated', 'marginCoin': 'USDT'}
                                 order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
                                 self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
                                 logger.info(f"🚨 [TRADE] [전량 청산 성공] 비트겟 시장가 청산 완료 ({amount} BTC)")
@@ -2072,19 +2072,95 @@ class ShinseonV35Engine:
                             p_target = bitget_bal * (ratio / 100.0)
                             amount = max(0.001, round(p_target / current_price, 3))
                             
-                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주 v4.88] {side} {amount} BTC (설정 레버리지: {int(lev)}배 | 1차/2차/3차 분할 비중 정격 연동) 시장가 주문 시작...")
+                        self.bot.ui_cb(0.0, 0, f"🎯 [진입 발주 v5.66 REST API 직송] {side} {amount} BTC (설정 레버리지: {int(lev)}배) 시장가 주문 시작...")
                         try:
-                            try:
-                                await exchange.set_leverage(int(round(lev)), symbol)
-                            except Exception as lev_err:
-                                pass
-                            order = await exchange.create_order(symbol, 'market', ccxt_side, amount, params={'tradeSide': 'open'})
-                            self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
-                            logger.info(f"🚨 [TRADE] [진입 성공] {side} {amount} BTC 체결 완료 (레버리지 {int(lev)}배)")
+                            env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
+                            ex_obj = getattr(self.bot, "bitget_exchange", None)
+                            api_key = env_vars.get("BITGET_API_KEY") or env_vars.get("bitget_api_key") or env_vars.get("api_key") or getattr(ex_obj, "apiKey", "")
+                            secret_key = env_vars.get("BITGET_SECRET_KEY") or env_vars.get("bitget_secret_key") or env_vars.get("secret_key") or getattr(ex_obj, "secret", "")
+                            passphrase = env_vars.get("BITGET_PASSPHRASE") or env_vars.get("bitget_passphrase") or env_vars.get("passphrase") or getattr(ex_obj, "password", "")
                             
-                            act_fill_p = float(order.get('price') or order.get('average') or order.get('info', {}).get('priceAvg') or order.get('info', {}).get('fillPrice') or 0.0)
-                            if act_fill_p > 0.0:
-                                self.last_actual_entry_price = act_fill_p
+                            url_base = "https://api.bitget.com"
+                            
+                            # 1. 마진 모드 사전 강제 설정 (Isolated)
+                            try:
+                                path_mm = "/api/v2/mix/account/set-margin-mode"
+                                body_mm = json.dumps({
+                                    "symbol": "BTCUSDT",
+                                    "productType": "USDT-FUTURES",
+                                    "marginCoin": "USDT",
+                                    "marginMode": "isolated"
+                                })
+                                ts_mm = str(int(time.time() * 1000))
+                                msg_mm = ts_mm + "POST" + path_mm + body_mm
+                                mac_mm = hmac.new(secret_key.encode('utf-8'), msg_mm.encode('utf-8'), hashlib.sha256)
+                                sign_mm = base64.b64encode(mac_mm.digest()).decode('utf-8')
+                                headers_mm = {
+                                    'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_mm, 'ACCESS-TIMESTAMP': ts_mm,
+                                    'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                                }
+                                async with aiohttp.ClientSession() as session:
+                                    async with session.post(url_base + path_mm, headers=headers_mm, data=body_mm) as resp_mm:
+                                        await resp_mm.json()
+                            except Exception:
+                                pass
+
+                            # 2. 레버리지 설정
+                            try:
+                                path_lev = "/api/v2/mix/account/set-leverage"
+                                body_lev = json.dumps({
+                                    "symbol": "BTCUSDT",
+                                    "productType": "USDT-FUTURES",
+                                    "marginCoin": "USDT",
+                                    "leverage": str(int(round(lev))),
+                                    "holdSide": "long" if side == "LONG" else "short"
+                                })
+                                ts_lev = str(int(time.time() * 1000))
+                                msg_lev = ts_lev + "POST" + path_lev + body_lev
+                                mac_lev = hmac.new(secret_key.encode('utf-8'), msg_lev.encode('utf-8'), hashlib.sha256)
+                                sign_lev = base64.b64encode(mac_lev.digest()).decode('utf-8')
+                                headers_lev = {
+                                    'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_lev, 'ACCESS-TIMESTAMP': ts_lev,
+                                    'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                                }
+                                async with aiohttp.ClientSession() as session:
+                                    async with session.post(url_base + path_lev, headers=headers_lev, data=body_lev) as resp_lev:
+                                        await resp_lev.json()
+                            except Exception:
+                                pass
+
+                            # 3. v2 API 진입 발주 패킷 직송 (Isolated + holdSide 강제 명시)
+                            path_ord = "/api/v2/mix/order/place-order"
+                            body_ord_dict = {
+                                "symbol": "BTCUSDT",
+                                "productType": "USDT-FUTURES",
+                                "marginMode": "isolated",
+                                "marginCoin": "USDT",
+                                "size": str(amount),
+                                "side": "buy" if side == "LONG" else "sell",
+                                "orderType": "market",
+                                "tradeSide": "open",
+                                "holdSide": "long" if side == "LONG" else "short"
+                            }
+                            body_ord_json = json.dumps(body_ord_dict)
+                            ts_ord = str(int(time.time() * 1000))
+                            msg_ord = ts_ord + "POST" + path_ord + body_ord_json
+                            mac_ord = hmac.new(secret_key.encode('utf-8'), msg_ord.encode('utf-8'), hashlib.sha256)
+                            sign_ord = base64.b64encode(mac_ord.digest()).decode('utf-8')
+                            headers_ord = {
+                                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_ord, 'ACCESS-TIMESTAMP': ts_ord,
+                                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                            }
+                            async with aiohttp.ClientSession() as session:
+                                async with session.post(url_base + path_ord, headers=headers_ord, data=body_ord_json) as resp_ord:
+                                    res_ord = await resp_ord.json()
+                                    if res_ord.get("code") == "00000":
+                                        self.bot.ui_cb(0.0, 0, f"✅ [진입 성공] {side} {amount} BTC (격리 {int(lev)}배) 체결 완료")
+                                        logger.info(f"🚨 [TRADE] [진입 성공] {side} {amount} BTC (격리 {int(lev)}배) 체결 완료")
+                                    else:
+                                        self.bot.ui_cb(0.0, 0, f"❌ [진입 실패] 비트겟 응답: {res_ord.get('msg')}")
+                                        logger.error(f"🚨 [TRADE] [진입 실패] 비트겟 응답: {res_ord}")
+                                        return False
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"❌ [진입 에러] 비트겟 API 예외 발생: {e}")
                             logger.error(f"🚨 [TRADE] [진입 에러] 비트겟 API 예외: {e}")
@@ -2150,41 +2226,16 @@ class ShinseonV35Engine:
         session_val = binance_ws_frame.get('session', 'MAIN')
         bot_state_val = binance_ws_frame.get('bot_state', 'RUNNING')
         
-        # [스마트 듀얼 샘플링 주기 스위칭]
-        # 평시: 1분 주기 (60초)
-        # 듀얼 임계치 50% AND 활성화 시 (liq_1m_total >= liq_threshold * 0.5 AND abs(oi_1m_pct) >= oi_threshold * 0.5): 1초 주기 (1초마다)
+        # [상시 1초 초고밀도 딥다이브 로깅 모드]
+        # 폐하의 어명에 따라 듀얼 임계치 50% 조건을 폐지하고 무조건 1초 간격으로 상시 기록합니다.
         current_time = time.time()
-        trigger_liq_limit = target_liq * 0.5
-        trigger_oi_limit = target_oi * 0.5
-        
-        is_triggered = (rolling_1m_liq_usd >= trigger_liq_limit) and (abs(oi_delta_1m) >= trigger_oi_limit)
-        
-        if is_triggered:
-            if not self.record_mode_1s:
-                self.record_mode_1s = True
-                if getattr(self.bot, "dashboard", None):
-                    self.bot.dashboard.add_log(f"⚡ [레코더] 듀얼 임계치 50% AND 돌파! 1초 고밀도 기록 기어 작동 (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)")
-            self.below_trigger_since = None
-        else:
-            if self.record_mode_1s:
-                if self.below_trigger_since is None:
-                    self.below_trigger_since = current_time
-                elif current_time - self.below_trigger_since >= 60.0:
-                    self.record_mode_1s = False
-                    self.below_trigger_since = None
-                    if getattr(self.bot, "dashboard", None):
-                        self.bot.dashboard.add_log(f"🕊 [레코더] 진정 상태 60초 유지 완료. 1분 상시 기록 기어로 귀환")
         
         should_write = False
         date_str = get_kst_now().strftime("%Y-%m-%d")
         if self.last_record_time == 0.0 or date_str != getattr(self, "last_record_date", ""):
             should_write = True
-        elif self.record_mode_1s:
-            if current_time - self.last_record_time >= 1.0:
-                should_write = True
-        else:
-            if current_time - self.last_record_time >= 60.0:
-                should_write = True
+        elif current_time - self.last_record_time >= 1.0:
+            should_write = True
                 
         if should_write:
             first_write = (self.last_record_time == 0.0)

@@ -1029,7 +1029,7 @@ class ShinseonV35Engine:
                         amount = max(0.001, round(amount, 3))
                         
                         try:
-                            order = await exchange.create_order(symbol, 'market', close_side, amount, params={'reduceOnly': True})
+                            order = await exchange.create_order(symbol, 'market', close_side, amount, params={'reduceOnly': True, 'marginMode': 'isolated', 'marginCoin': 'USDT'})
                             self.bot.ui_cb(0.0, 0, f"??[泥?궛 ?깃났] 二쇰Ц ?꾨즺: {amount} BTC")
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"??[泥?궛 ?먮윭] 鍮꾪듃寃?API ?덉쇅 諛쒖깮: {e}")
@@ -1087,7 +1087,11 @@ class ShinseonV35Engine:
                         
                         self.bot.ui_cb(0.0, 0, f"?렞 [吏꾩엯 諛쒖＜] {side} {amount} BTC ?쒖옣媛 二쇰Ц ?쒖옉...")
                         try:
-                            order = await exchange.create_order(symbol, 'market', ccxt_side, amount)
+                            try:
+                                await exchange.set_margin_mode('isolated', symbol, params={'marginCoin': 'USDT'})
+                            except Exception:
+                                pass
+                            order = await exchange.create_order(symbol, 'market', ccxt_side, amount, params={'tradeSide': 'open', 'marginMode': 'isolated', 'marginCoin': 'USDT'})
                             self.bot.ui_cb(0.0, 0, f"??[吏꾩엯 ?깃났] {side} {amount} BTC 泥닿껐 ?꾨즺")
                         except Exception as e:
                             self.bot.ui_cb(0.0, 0, f"??[吏꾩엯 ?먮윭] 鍮꾪듃寃?API ?덉쇅 諛쒖깮: {e}")
