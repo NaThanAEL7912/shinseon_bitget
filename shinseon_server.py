@@ -2694,13 +2694,13 @@ class ShinseonV35Engine:
                     live_roe = pnl_pct * 100.0 * leverage_val
                     live_roe_rounded = round(live_roe, 2)
 
-                    if offset_val < pnl_at_set:
-                        # 설정 오프셋이 설정 시점 ROE보다 이하인 경우 ➡️ 하방 수익보존/손절
+                    if offset_val < pnl_at_set and offset_val <= live_roe_rounded:
+                        # 설정 오프셋이 설정 시점 ROE 및 현재 ROE 이하인 경우 ➡️ 하방 수익보존/손절
                         is_triggered = (live_roe_rounded <= offset_val)
                         cond_str = "이하"
                         stop_label = "수익보존/손절"
                     else:
-                        # 설정 오프셋이 설정 시점 ROE보다 이상인 경우 ➡️ 상방 목표익절
+                        # 설정 오프셋이 설정 시점 ROE 이상 또는 현재 ROE 이상인 경우 ➡️ 상방 목표익절/반등
                         is_triggered = (live_roe_rounded >= offset_val)
                         cond_str = "이상"
                         stop_label = "상승/반등익절"
@@ -3265,16 +3265,12 @@ class WsServer:
                             v35.custom_stop_offset_pct = offset_val
                             v35.custom_stop_offset_roe = offset_val
                             v35.custom_stop_close_ratio = ratio
-                            cur_price = self.bot_core.current_price
-                            ent_price = getattr(v35, "entry_price", cur_price)
-                            entry_dir = getattr(v35, "entry_direction", "LONG")
-                            lev_val = getattr(v35, "leverage_level", 30) or 30
-                            if ent_price > 0 and cur_price > 0:
-                                pnl_pct = (cur_price - ent_price) / ent_price * lev_val * 100.0 if entry_dir == "LONG" else (ent_price - cur_price) / ent_price * lev_val * 100.0
-                            else:
-                                pnl_pct = 0.0
-                            v35.custom_stop_set_pnl = pnl_pct
-                            v35.custom_stop_set_roe = pnl_pct
+                            # [정공법 완치] 이전 포지션 진입가 잔재 수식이 아닌, 실시간 0.01초 루프에서 측정된 생생한 최신 ROE로 동기화
+                            live_pnl_pct = getattr(v35, "last_live_pnl_pct", 0.0)
+                            lev_val = getattr(v35, "leverage", 30) or 30
+                            live_roe = round(live_pnl_pct * lev_val, 2)
+                            v35.custom_stop_set_pnl = live_roe
+                            v35.custom_stop_set_roe = live_roe
                             
                             # [서버 전담 실행 엔진 강제 가동] 스마트 스탑 설정 시 감시 루프가 안 돌고 있으면 즉시 팝업 구동
                             if active and v35.is_position_active and not getattr(v35, "is_guardrail_running", False):
