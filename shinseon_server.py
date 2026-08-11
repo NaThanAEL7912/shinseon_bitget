@@ -2694,13 +2694,13 @@ class ShinseonV35Engine:
                     live_roe = pnl_pct * 100.0 * leverage_val
                     live_roe_rounded = round(live_roe, 2)
 
-                    if offset_val < pnl_at_set and offset_val <= live_roe_rounded:
-                        # 설정 오프셋이 설정 시점 ROE 및 현재 ROE 이하인 경우 ➡️ 하방 수익보존/손절
+                    if offset_val < pnl_at_set:
+                        # 1. 설정 오프셋이 설정 시점 ROE 이하인 경우 ➡️ 하방 수익보존/손절 모드
                         is_triggered = (live_roe_rounded <= offset_val)
                         cond_str = "이하"
                         stop_label = "수익보존/손절"
                     else:
-                        # 설정 오프셋이 설정 시점 ROE 이상 또는 현재 ROE 이상인 경우 ➡️ 상방 목표익절/반등
+                        # 2. 설정 오프셋이 설정 시점 ROE 이상인 경우 ➡️ 상방 목표익절/반등 모드
                         is_triggered = (live_roe_rounded >= offset_val)
                         cond_str = "이상"
                         stop_label = "상승/반등익절"
