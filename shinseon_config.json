@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.77",
+    "CURRENT_VERSION": "V5.78",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,49 +7,49 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 200000.0,
+            "liq": 400000.0,
             "oi": 0.12,
             "sl": -1.0,
             "enabled": true
         },
         "europe": {
-            "liq": 300000.0,
+            "liq": 600000.0,
             "oi": 0.15,
             "sl": -1.0,
             "enabled": true
         },
         "us": {
-            "liq": 500000.0,
+            "liq": 1000000.0,
             "oi": 0.18,
             "sl": -1.3,
             "enabled": true
         },
         "pacific": {
-            "liq": 200000.0,
+            "liq": 400000.0,
             "oi": 0.12,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_asia": {
-            "liq": 100000.0,
+            "liq": 200000.0,
             "oi": 0.12,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_europe": {
-            "liq": 200000.0,
+            "liq": 300000.0,
             "oi": 0.15,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_us": {
-            "liq": 300000.0,
+            "liq": 500000.0,
             "oi": 0.18,
             "sl": -1.3,
             "enabled": true
         },
         "weekend_pacific": {
-            "liq": 100000.0,
+            "liq": 200000.0,
             "oi": 0.12,
             "sl": -1.0,
             "enabled": true

@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.77"
+        self.CURRENT_VERSION = "V5.78"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -3163,7 +3163,7 @@ class DataDownloadCenterDialog(QDialog):
         req_date = m.group(1)
         if self.parent_ui and hasattr(self.parent_ui, 'ws') and self.parent_ui.is_ws_active():
             import json
-            asyncio.create_task(self.parent_ui.ws.send(json.dumps({'cmd': 'CMD_REQ_FILE_DOWNLOAD', 'payload': {'date': req_date}})))
+            asyncio.create_task(self.parent_ui.ws.send(json.dumps({'cmd': 'CMD_REQ_FILE_DOWNLOAD', 'date': req_date, 'payload': {'date': req_date}})))
             self.lbl_status.setText(f"📥 [{req_date}] 파일 다운로드 요청 송신 완료... 잠시만 기다려주십시오.")
         else:
             self.lbl_status.setText("⚠️ 서버 웹소켓 미연결 상태입니다.")

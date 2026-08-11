@@ -3404,7 +3404,8 @@ class WsServer:
                         sorted_dates = sorted(list(dates_set), reverse=True)
                         await self.broadcast_event("EVT_FILE_LIST", {"dates": sorted_dates})
                     elif cmd == "CMD_REQ_FILE_DOWNLOAD":
-                        req_date = payload.get("date", get_kst_now().strftime("%Y-%m-%d"))
+                        inner_payload = payload.get("payload", {}) if isinstance(payload.get("payload"), dict) else {}
+                        req_date = payload.get("date") or inner_payload.get("date") or get_kst_now().strftime("%Y-%m-%d")
                         log_file = os.path.join(LOGS_DIR, f"shinseon_trade_{req_date}.log")
                         csv_file = os.path.join(BASE_DIR, "docs", "historical_data", f"orderflow_history_{req_date}.csv")
                         
