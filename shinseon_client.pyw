@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.76"
+        self.CURRENT_VERSION = "V5.77"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1794,7 +1794,9 @@ class ShinseonDashboard(QMainWindow):
                 "entry_sl_guard_pct": self.entry_sl_guard_pct,
                 "session_guardrails": self.session_guardrails,
                 "pyramiding_enabled": self.pyramiding_enabled,
-                "pyramiding_ratio": self.pyramiding_ratio
+                "pyramiding_ratio": self.pyramiding_ratio,
+                "mid_guard_trigger": getattr(self, "mid_guard_trigger", 0.60),
+                "mid_guard_offset": getattr(self, "mid_guard_offset", -0.10)
             }
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config_data, f, indent=4, ensure_ascii=False)
@@ -1881,6 +1883,8 @@ class ShinseonDashboard(QMainWindow):
                         self.session_thresholds[k]["enabled"] = True
                 self.pyramiding_enabled = config_data.get("pyramiding_enabled", True)
                 self.pyramiding_ratio = config_data.get("pyramiding_ratio", 30.0)
+                self.mid_guard_trigger = config_data.get("mid_guard_trigger", 0.60)
+                self.mid_guard_offset = config_data.get("mid_guard_offset", -0.10)
                 
                 # 비활성화 상태 스타일 보정 트리거
                 self.toggle_manual_threshold_inputs()

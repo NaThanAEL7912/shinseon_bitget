@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.76",
+    "CURRENT_VERSION": "V5.77",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -75,7 +75,7 @@
     "entry_sl_guard_pct": 0.0,
     "session_guardrails": {
         "ASIA": {
-            "trigger": 0.4,
+            "trigger": 0.9,
             "guard": 0.0,
             "enabled": true
         },
@@ -86,12 +86,12 @@
         },
         "NY": {
             "trigger": 0.9,
-            "guard": -0.25,
+            "guard": 0.0,
             "enabled": true
         },
         "PACIFIC": {
             "trigger": 0.9,
-            "guard": -0.25,
+            "guard": 0.0,
             "enabled": true
         },
         "WEEKEND_ASIA": {
