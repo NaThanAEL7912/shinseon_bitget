@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.69"
+        self.CURRENT_VERSION = "V5.70"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1622,6 +1622,10 @@ class ShinseonDashboard(QMainWindow):
 
                             self.lbl_radar_title.setText(f"<b style='color:#FFFFFF; font-size: 13px;'>■ [雷達] 실시간 오더플로우 레이더</b><br><span style='color:{status_color}; font-size: 11px; font-weight:bold;'>{status_icon} {status_msg}</span> <span style='color:#DEBA9D; font-size: 11px; font-weight:bold;'>({current_sess})</span>")
 
+                            c_stop_active = payload.get('custom_stop_active', None)
+                            c_stop_offset = payload.get('custom_stop_offset', None)
+                            c_stop_ratio = payload.get('custom_stop_ratio', None)
+
                             self.update_live_ui(
                                 price=self.current_price,
                                 guardrail_stage=1,
@@ -1637,7 +1641,10 @@ class ShinseonDashboard(QMainWindow):
                                 short_liq=short_l,
                                 expected_dir=exp_dir,
                                 liq_wss_connected=liq_wss_connected,
-                                has_real_force=has_real_force
+                                has_real_force=has_real_force,
+                                custom_stop_active=c_stop_active,
+                                custom_stop_offset=c_stop_offset,
+                                custom_stop_ratio=c_stop_ratio
                             )
                         elif msg_type == 'csv_data':
                             csv_content = data.get('content')
@@ -2687,12 +2694,44 @@ class ShinseonDashboard(QMainWindow):
                 summary_list.append(f"${a['target']:,.1f}({dir_sym})")
             self.lbl_active_price_alerts.setText(f"🔔 감시 중 ({len(self.price_alerts)}건): " + ", ".join(summary_list))
 
-    def update_live_ui(self, price, guardrail_stage, signal_text, liq_10s=0.0, oi_speed=0.0, ping_ms=0.0, poison_status="정상 가동 중", current_session="로딩 중", target_liq=2000000.0, target_oi=1.00, long_liq=0.0, short_liq=0.0, expected_dir="LONG", liq_wss_connected=None, has_real_force=None):
+    def update_live_ui(self, price, guardrail_stage, signal_text, liq_10s=0.0, oi_speed=0.0, ping_ms=0.0, poison_status="정상 가동 중", current_session="로딩 중", target_liq=2000000.0, target_oi=1.00, long_liq=0.0, short_liq=0.0, expected_dir="LONG", liq_wss_connected=None, has_real_force=None, custom_stop_active=None, custom_stop_offset=None, custom_stop_ratio=None):
         # 텔레그램 원격 제어 정보 조회용 인스턴스 캐시 업데이트 (개발계획서_178)
         self.last_price = price
         self.last_current_session = current_session
         self.last_liq_10s = liq_10s
         self.last_oi_speed = oi_speed
+        
+        # [서버-대시보드 양방향 실시간 상태 동기화] (기획서_172)
+        if custom_stop_active is not None:
+            if custom_stop_active:
+                self.is_stoploss_active = True
+                if hasattr(self, "edit_stoploss_offset") and custom_stop_offset is not None:
+                    if not self.edit_stoploss_offset.hasFocus():
+                        self.edit_stoploss_offset.setText(f"{custom_stop_offset:.1f}")
+                    self.edit_stoploss_offset.setEnabled(False)
+                if hasattr(self, "edit_stoploss_ratio") and custom_stop_ratio is not None:
+                    if not self.edit_stoploss_ratio.hasFocus():
+                        self.edit_stoploss_ratio.setText(f"{int(custom_stop_ratio)}")
+                    self.edit_stoploss_ratio.setEnabled(False)
+                if hasattr(self, "btn_stoploss"):
+                    self.btn_stoploss.setText("🟢 스마트 스탑 해제")
+                    self.btn_stoploss.setStyleSheet("""
+                        QPushButton {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E4D2B, stop:1 #11331B);
+                            color: #00FFCC;
+                            font-weight: bold;
+                            font-size: 11px;
+                            padding: 8px;
+                            border-radius: 4px;
+                            border: 1px solid #00FFCC;
+                        }
+                        QPushButton:hover {
+                            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #27663A, stop:1 #1E4D2B);
+                        }
+                    """)
+            else:
+                if getattr(self, "is_stoploss_active", False):
+                    self.reset_stoploss_ui()
         
         if price > 0.0:
             self.current_price = price

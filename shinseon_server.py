@@ -1146,6 +1146,10 @@ class BotCore:
 
                     # [V5.33 수술] '1초 감시' 중복 로깅 구문 100% 삭제 (파일 용량 비대화 차단)
 
+                    custom_stop_active = getattr(self.v35_engine, "custom_stop_active", False)
+                    custom_stop_offset = float(getattr(self.v35_engine, "custom_stop_offset_roe", getattr(self.v35_engine, "custom_stop_offset_pct", 0.8)))
+                    custom_stop_ratio = float(getattr(self.v35_engine, "custom_stop_close_ratio", 100.0))
+
                     ui_callback(
                         self.current_price,
                         1,
@@ -1161,7 +1165,10 @@ class BotCore:
                         short_liq=short_liq,
                         expected_dir=direction,
                         has_real_force=has_real_force,
-                        liq_wss_connected=liq_wss_connected
+                        liq_wss_connected=liq_wss_connected,
+                        custom_stop_active=custom_stop_active,
+                        custom_stop_offset=custom_stop_offset,
+                        custom_stop_ratio=custom_stop_ratio
                     )
                     
                 except Exception as ex:
