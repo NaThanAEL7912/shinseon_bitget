@@ -2673,32 +2673,24 @@ class ShinseonV35Engine:
                 self.peak_pnl_pct = pnl_pct
             self.last_live_pnl_pct = pnl_pct * 100.0
 
-            # [HOTFIX v4.06] 자동 봇 시작 버튼이 꺼져있을 경우 모든 강제 청산/손절/익절 개입 완벽 차단 (관망 유지)
-            if not getattr(self, "is_snipe_active", False):
-                continue
-
-            # [HOTFIX v4.07] 세션 체크박스가 풀려있는 경우 모든 강제 청산/손절 개입 원천 차단
-            g_curr_key = getattr(self, "current_session_key", "us")
-            g_dashboard = getattr(self.bot, "dashboard", None) or self.bot
-            g_thresholds_map = getattr(g_dashboard, "session_thresholds", {}) if g_dashboard else {}
-            if not g_thresholds_map.get(g_curr_key, {}).get("enabled", True):
-                continue
-
-            # [v2.80/v2.96/v3.62/v3.77] 실시간 토글형 인메모리 스마트 PnL 오프셋 스탑 감시 (상대적 위치 기반 듀얼 방향성 Engine)
+            # --------------------------------------------------------------------------
+            # [스마트 스탑] 웹서버 전담 실시간 ROE 오프셋 청산 엔진 (봇 온/오프 독립 가동)
+            # --------------------------------------------------------------------------
             if getattr(self, "custom_stop_active", False):
                 leverage_val = getattr(self, "leverage", 30) or 30
                 offset_val = getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", -6.0))
                 pnl_at_set = getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val))
                 live_roe = pnl_pct * 100.0 * leverage_val
+                live_roe_rounded = round(live_roe, 2)
 
                 if offset_val < pnl_at_set:
-                    # 설정값이 현재 ROE보다 아래 ➡️ 하방 하락/보존/손절 모드
-                    is_triggered = (live_roe <= offset_val)
+                    # 설정 오프셋이 설정 시점 ROE보다 이하인 경우 ➡️ 하방 수익보존/손절
+                    is_triggered = (live_roe_rounded <= offset_val)
                     cond_str = "이하"
-                    stop_label = "손절/보존"
+                    stop_label = "수익보존/손절"
                 else:
-                    # 설정값이 현재 ROE보다 위 ➡️ 상방 상승/반등/익절 모드
-                    is_triggered = (live_roe >= offset_val)
+                    # 설정 오프셋이 설정 시점 ROE보다 이상인 경우 ➡️ 상방 목표익절
+                    is_triggered = (live_roe_rounded >= offset_val)
                     cond_str = "이상"
                     stop_label = "상승/반등익절"
 
@@ -2713,25 +2705,18 @@ class ShinseonV35Engine:
                     if clear_ok:
                         if order_type == "FORCE_MARKET_UNCAPPED":
                             self.is_position_active = False
-                        log_msg = f"🛡️ [스마트 스탑 발동] 실시간 ROE({live_roe:+.2f}%)가 설정값({offset_val:+.2f}% ROE) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산: {order_type})"
-                        if self.bot and self.bot.dashboard:
-                            self.bot.dashboard.add_log(log_msg)
-                            if hasattr(self.bot.dashboard, "reset_stoploss_ui"):
-                                self.bot.dashboard.reset_stoploss_ui()
+                        log_msg = f"🛡️ [웹서버 스마트 스탑 청산 실행 완료] 실시간 ROE({live_roe:+.2f}%)가 설정 오프셋({offset_val:+.2f}% ROE) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산 완료)"
+                        logger.info(log_msg)
+                        if self.bot and hasattr(self.bot, "broadcast_event"):
+                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
+                            asyncio.create_task(self.bot.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": current_bitget_price}))
                         self.exit_msg_sent = True
                         if order_type == "FORCE_MARKET_UNCAPPED":
                             break
-                    else:
-                        if order_type == "FORCE_MARKET_UNCAPPED":
-                            self.is_position_active = True
-                            self.exit_in_progress = False
-                            log_msg = "⚠️ [청산 1차 실패] 2중 비상 마스터 청산 격발!"
-                            if self.bot and self.bot.dashboard:
-                                self.bot.dashboard.add_log(log_msg)
-                                try:
-                                    await self.bot.dashboard.execute_bitget_emergency_master_internal()
-                                except Exception as em_err:
-                                    logger.error(f"스마트스탑 비상 청산 에러: {em_err}")
+
+            # [HOTFIX v4.06] 자동 봇 시작 버튼이 꺼져있을 경우 일반 가드레일 손절/익절 개입 완벽 차단
+            if not getattr(self, "is_snipe_active", False):
+                continue
 
             # ================= 하이브리드 분할 익절 가드레일 =================
             current_time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
@@ -3262,19 +3247,28 @@ class WsServer:
                         offset_val = float(payload.get("offset_val", payload.get("offset_roe", -0.2)))
                         ratio = float(payload.get("ratio", 100.0))
                         if self.bot_core and self.bot_core.v35_engine:
-                            self.bot_core.v35_engine.custom_stop_active = active
-                            self.bot_core.v35_engine.custom_stop_offset_pct = offset_val
-                            self.bot_core.v35_engine.custom_stop_close_ratio = ratio
+                            v35 = self.bot_core.v35_engine
+                            v35.custom_stop_active = active
+                            v35.custom_stop_offset_pct = offset_val
+                            v35.custom_stop_offset_roe = offset_val
+                            v35.custom_stop_close_ratio = ratio
                             cur_price = self.bot_core.current_price
-                            ent_price = getattr(self.bot_core.v35_engine, "entry_price", cur_price)
-                            entry_dir = getattr(self.bot_core.v35_engine, "entry_direction", "LONG")
-                            lev_val = getattr(self.bot_core.v35_engine, "leverage_level", 30) or 30
+                            ent_price = getattr(v35, "entry_price", cur_price)
+                            entry_dir = getattr(v35, "entry_direction", "LONG")
+                            lev_val = getattr(v35, "leverage_level", 30) or 30
                             if ent_price > 0 and cur_price > 0:
                                 pnl_pct = (cur_price - ent_price) / ent_price * lev_val * 100.0 if entry_dir == "LONG" else (ent_price - cur_price) / ent_price * lev_val * 100.0
                             else:
                                 pnl_pct = 0.0
-                            self.bot_core.v35_engine.custom_stop_set_pnl = pnl_pct
-                        act_str = f"📡 [서버 응답] 🛡️ 스마트 스탑 오프셋({offset_val:+.2f}%, {ratio:.0f}%) 서버 감시가 가동되었습니다." if active else "📡 [서버 응답] 🧹 스마트 스탑 서버 감시가 해제되었습니다."
+                            v35.custom_stop_set_pnl = pnl_pct
+                            v35.custom_stop_set_roe = pnl_pct
+                            
+                            # [서버 전담 실행 엔진 강제 가동] 스마트 스탑 설정 시 감시 루프가 안 돌고 있으면 즉시 팝업 구동
+                            if active and v35.is_position_active and not getattr(v35, "is_guardrail_running", False):
+                                asyncio.create_task(v35.manage_v35_exit_guardrail(entry_dir))
+                                logger.info("🚀 [웹서버] 스마트 스탑 전담 실시간 감시 엔진 루프 팝업 구동 완료!")
+
+                        act_str = f"📡 [웹서버 수신] 🛡️ 스마트 스탑 설정값 수신 완료 (오프셋: {offset_val:+.2f}%, 청산비율: {ratio:.0f}%) ➡️ 웹서버 24시간 실시간 감시 개시!" if active else "📡 [웹서버 수신] 🧹 스마트 스탑 웹서버 감시 해제 완료"
                         await self.broadcast_event("EVT_RESPONSE_LOG", {"message": act_str})
                     elif cmd == "CMD_UPDATE_CONFIG":
                         config_data = payload.get("config", {})
