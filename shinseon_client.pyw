@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.73"
+        self.CURRENT_VERSION = "V5.75"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1749,6 +1749,8 @@ class ShinseonDashboard(QMainWindow):
                     "pyramiding_ratio": getattr(self, "pyramiding_ratio", 30.0),
                     "mid_guard_trigger": getattr(self, "mid_guard_trigger", 0.60),
                     "mid_guard_offset": getattr(self, "mid_guard_offset", -0.10),
+                    "session_guardrails": getattr(self, "session_guardrails", {}),
+                    "session_thresholds": getattr(self, "session_thresholds", {}),
                     "manual_threshold": self.chk_manual_threshold.isChecked(),
                     "target_liq": self.edit_target_liq.text(),
                     "target_oi": self.edit_target_oi.text(),

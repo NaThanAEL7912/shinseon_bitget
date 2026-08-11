@@ -2727,8 +2727,8 @@ class ShinseonV35Engine:
             except Exception as smart_stop_err:
                 logger.error(f"⚠️ [스마트 스탑 감시 수식 예외 방어] {smart_stop_err}", exc_info=True)
 
-            # [HOTFIX v4.06] 자동 봇 시작 버튼이 꺼져있을 경우 일반 가드레일 손절/익절 개입 완벽 차단
-            if not getattr(self, "is_snipe_active", False):
+            # [HOTFIX v5.75] 포지션이 유효한 경우(수동/자동 불문) 세션 가드레일 분할익절 100% 감시 집행
+            if not getattr(self, "is_position_active", False):
                 continue
 
             # ================= 하이브리드 분할 익절 가드레일 =================
@@ -2751,7 +2751,7 @@ class ShinseonV35Engine:
                 logger.error(f"가드레일 세션 판정 오류: {e}")
             
             dash_obj = getattr(self.bot, "dashboard", None) or self.bot
-            s_guardrails = getattr(dash_obj, "session_guardrails", {}).get(s_key, {"trigger": 0.9, "guard": -0.25, "enabled": True})
+            s_guardrails = (getattr(self, "session_guardrails", None) or getattr(dash_obj, "session_guardrails", {})).get(s_key, {"trigger": 0.9, "guard": -0.25, "enabled": True})
             half_exit_trigger = s_guardrails["trigger"] / 100.0
             entry_sl_guard = s_guardrails["guard"]
             half_exit_enabled = s_guardrails.get("enabled", True)
@@ -3150,15 +3150,24 @@ class WsServer:
                     leverage = int(active_pos.get('leverage', 10) or 10)
                     
                     if self.bot_core.v35_engine:
-                        self.bot_core.v35_engine.is_position_active = True
-                        self.bot_core.v35_engine.entry_direction = side
-                        self.bot_core.v35_engine.position_side = side
-                        self.bot_core.v35_engine.entry_price = entry_price
-                        self.bot_core.v35_engine.position_volume = contracts
-                        self.bot_core.v35_engine.leverage = leverage
-                        self.bot_core.v35_engine.bitget_roe_pct = float(active_pos.get('percentage', 0.0) or 0.0)
-                        self.bot_core.v35_engine.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
-                        self.bot_core.v35_engine.bitget_mark_price = float(active_pos.get('markPrice', 0.0) or 0.0)
+                        v35 = self.bot_core.v35_engine
+                        prev_entry = float(getattr(v35, "entry_price", 0.0) or 0.0)
+                        # [V5.75 완치] 신규 포지션이거나 평단가가 달라지면 구형 분할익절 플래그 100% 리셋
+                        if not v35.is_position_active or abs(prev_entry - entry_price) > 0.1:
+                            v35.is_half_exited = False
+                            v35.has_smart_guarded = False
+                            v35.is_manual_half_exited = False
+                            v35.awaiting_pullback_pyramid = False
+                            
+                        v35.is_position_active = True
+                        v35.entry_direction = side
+                        v35.position_side = side
+                        v35.entry_price = entry_price
+                        v35.position_volume = contracts
+                        v35.leverage = leverage
+                        v35.bitget_roe_pct = float(active_pos.get('percentage', 0.0) or 0.0)
+                        v35.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
+                        v35.bitget_mark_price = float(active_pos.get('markPrice', 0.0) or 0.0)
                         
                     bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
                     payload = {
@@ -3173,10 +3182,15 @@ class WsServer:
                     logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: {payload}")
                 else:
                     if self.bot_core.v35_engine:
-                        self.bot_core.v35_engine.is_position_active = False
-                        self.bot_core.v35_engine.position_volume = 0
-                        self.bot_core.v35_engine.entry_price = 0.0
-                        self.bot_core.v35_engine.entry_direction = ""
+                        v35 = self.bot_core.v35_engine
+                        v35.is_position_active = False
+                        v35.position_volume = 0
+                        v35.entry_price = 0.0
+                        v35.entry_direction = ""
+                        v35.is_half_exited = False
+                        v35.has_smart_guarded = False
+                        v35.is_manual_half_exited = False
+                        v35.awaiting_pullback_pyramid = False
                     bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
                     await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False, 'bot_state': bot_state_val})
                     logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False, bot_state={bot_state_val})")
@@ -3298,8 +3312,12 @@ class WsServer:
                                     logger.error(f"bitget_exchange init error: {e_ex}")
                             if "session_thresholds" in config_data:
                                 self.bot_core.session_thresholds = config_data["session_thresholds"]
+                                if self.bot_core.v35_engine:
+                                    self.bot_core.v35_engine.session_thresholds = config_data["session_thresholds"]
                             if "session_guardrails" in config_data:
                                 self.bot_core.session_guardrails = config_data["session_guardrails"]
+                                if self.bot_core.v35_engine:
+                                    self.bot_core.v35_engine.session_guardrails = config_data["session_guardrails"]
                             if "manual_threshold" in config_data:
                                 self.bot_core.manual_threshold = config_data["manual_threshold"]
                             if "target_liq" in config_data:
