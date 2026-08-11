@@ -1016,14 +1016,21 @@ class BotCore:
                             long_liq = display_liq * 0.5
                             short_liq = display_liq * 0.5
                             
-                    # 지능형 저격 방향성 판정
+                    # [SHINSEON_오더플로우_판단_백서.md 4대 저격 매트릭스 100% 정격 연동]
                     oi_delta_1m = display_oi
-                    if short_liq > long_liq:
-                        direction = "LONG"   # 숏 청산 폭등 ➡️ 무조건 LONG!
-                    elif long_liq > short_liq:
-                        direction = "SHORT"  # 롱 청산 폭락 ➡️ 무조건 SHORT!
+                    price_1m_ago = self.price_history[0][1] if self.price_history else self.current_price
+                    price_delta_1m = self.current_price - price_1m_ago
+                    
+                    if price_delta_1m < 0 and oi_delta_1m < 0:
+                        direction = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 🟢 LONG
+                    elif price_delta_1m > 0 and oi_delta_1m < 0:
+                        direction = "SHORT"   # Case B: 📈 가격상승 + OI감소 ➡️ 🔴 SHORT
+                    elif price_delta_1m > 0 and oi_delta_1m > 0:
+                        direction = "LONG"    # Case C: 📈 가격상승 + OI증가 ➡️ 🟢 LONG
+                    elif price_delta_1m < 0 and oi_delta_1m > 0:
+                        direction = "SHORT"   # Case D: 📉 가격하락 + OI증가 ➡️ 🔴 SHORT
                     else:
-                        direction = "LONG" if price_delta_10s > 0 else "SHORT"
+                        direction = "LONG" if price_delta_1m >= 0 else "SHORT"
                         
                     # v1.1 성능 격상: CVD 델타 산출 및 1분 큐 업데이트
                     cvd_delta = self.agg_buy_vol - self.agg_sell_vol
@@ -1048,6 +1055,7 @@ class BotCore:
                             'long_liq_usd': long_liq,
                             'short_liq_usd': short_liq,
                             'oi_delta_1m': display_oi,
+                            'price_delta_1m': price_delta_1m,
                             'mid_price': self.current_price,
                             'direction': direction,
                             'session': current_session,
@@ -2241,14 +2249,19 @@ class ShinseonV35Engine:
             first_write = (self.last_record_time == 0.0)
             self.last_record_date = date_str
             try:
-                # [타점 시그널 (signal) 100% AND 양대 임계치 동시 충족 판정]
-                # LONG: liq_1m_total >= liq_threshold AND oi_1m_pct >= oi_threshold
-                # SHORT: liq_1m_total >= liq_threshold AND oi_1m_pct <= -oi_threshold
-                # NONE: 미달 시
-                if (rolling_1m_liq_usd >= target_liq) and (oi_delta_1m >= target_oi):
-                    signal_val = "LONG"
-                elif (rolling_1m_liq_usd >= target_liq) and (oi_delta_1m <= -target_oi):
-                    signal_val = "SHORT"
+                # [타점 시그널 (signal) SHINSEON_오더플로우_판단_백서.md 4대 매트릭스 100% 정격 판정]
+                price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
+                if (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi):
+                    if price_delta_1m < 0 and oi_delta_1m < 0:
+                        signal_val = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 🟢 LONG
+                    elif price_delta_1m > 0 and oi_delta_1m < 0:
+                        signal_val = "SHORT"   # Case B: 📈 가격상승 + OI감소 ➡️ 🔴 SHORT
+                    elif price_delta_1m > 0 and oi_delta_1m > 0:
+                        signal_val = "LONG"    # Case C: 📈 가격상승 + OI증가 ➡️ 🟢 LONG
+                    elif price_delta_1m < 0 and oi_delta_1m > 0:
+                        signal_val = "SHORT"   # Case D: 📉 가격하락 + OI증가 ➡️ 🔴 SHORT
+                    else:
+                        signal_val = "NONE"
                 else:
                     signal_val = "NONE"
 
