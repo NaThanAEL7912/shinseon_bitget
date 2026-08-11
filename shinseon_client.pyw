@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V5.75"
+        self.CURRENT_VERSION = "V5.76"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -3504,9 +3504,9 @@ class ShinseonConfigDialog(QDialog):
         # 세션별 가드레일 설정 헤더 (Row 0)
         lbl_sess = QLabel("세션")
         lbl_sess.setAlignment(Qt.AlignCenter)
-        lbl_trig = QLabel("분할익절 임계값(%)")
+        lbl_trig = QLabel("분할익절 임계값 (PnL %)")
         lbl_trig.setAlignment(Qt.AlignCenter)
-        lbl_grd = QLabel("본전/버퍼 가드(%)")
+        lbl_grd = QLabel("본전/버퍼 가드 (PnL %)")
         lbl_grd.setAlignment(Qt.AlignCenter)
         lbl_en = QLabel("분할익절 가동")
         lbl_en.setAlignment(Qt.AlignCenter)
@@ -3606,14 +3606,14 @@ class ShinseonConfigDialog(QDialog):
         guardrail_layout.addWidget(self.edit_pyramiding_ratio, 12, 2)
 
         # [V5.40 신설] 중간 수익 보존 가드레일 설정 (최소값 / 가드값)
-        lbl_mid_trig = QLabel("🛡️ 보존가드 발동 최소값 (%):")
+        lbl_mid_trig = QLabel("🛡️ 보존가드 발동 최소값 (PnL %):")
         lbl_mid_trig.setStyleSheet("color: #00FFCC; font-weight: bold;")
         guardrail_layout.addWidget(lbl_mid_trig, 13, 0)
         self.edit_mid_guard_trigger = QLineEdit()
         self.edit_mid_guard_trigger.setPlaceholderText("예: 0.60")
         guardrail_layout.addWidget(self.edit_mid_guard_trigger, 13, 1)
 
-        lbl_mid_off = QLabel("가드레일 스탑값 (%):")
+        lbl_mid_off = QLabel("가드레일 스탑값 (PnL %):")
         lbl_mid_off.setStyleSheet("color: #FFD700; font-weight: bold;")
         guardrail_layout.addWidget(lbl_mid_off, 13, 2)
         self.edit_mid_guard_offset = QLineEdit()
