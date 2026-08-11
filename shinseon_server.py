@@ -2652,74 +2652,80 @@ class ShinseonV35Engine:
         # 기동 시 배치한 최초 기본 스탑로스 가격으로 last_placed_stop_price를 사전 동기화하여 중복 발주 방지
         self.last_placed_stop_price = self.entry_price * (1.0 - initial_sl_pct) if direction == "LONG" else self.entry_price * (1.0 + initial_sl_pct)
         while self.is_position_active:
-            await asyncio.sleep(0.01)
-            
-            # 실시간 세션별 손절선 동적 업데이트 (세션 시간 전환 시 반영)
-            initial_sl_pct = abs(getattr(self, "current_session_sl", -1.3)) / 100.0
-            
-            current_bitget_price = await self.get_live_bitget_price_internal()
-            if current_bitget_price <= 0.0:
-                continue
+            try:
+                await asyncio.sleep(0.01)
                 
-            # 3.0초 도킹 유예 시간 동안은 안전 보존을 위해 청산 감시 일시 스킵
-            import time
-            grace_until = getattr(self, "grace_period_until", 0.0)
-            if time.time() < grace_until:
-                self.peak_pnl_pct = 0.0
-                continue
-            
-            # 1차 진입가 대비 PnL 및 실시간 평단 대비 PnL 계산
-            if direction == "LONG":
-                pnl_from_entry_1 = (current_bitget_price - self.entry_price_1) / self.entry_price_1
-                pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price
-            else:
-                pnl_from_entry_1 = (self.entry_price_1 - current_bitget_price) / self.entry_price_1
-                pnl_pct = (self.entry_price - current_bitget_price) / self.entry_price
+                # 실시간 세션별 손절선 동적 업데이트 (세션 시간 전환 시 반영)
+                initial_sl_pct = abs(getattr(self, "current_session_sl", -1.3)) / 100.0
                 
-            if pnl_pct > self.peak_pnl_pct:
-                self.peak_pnl_pct = pnl_pct
-            self.last_live_pnl_pct = pnl_pct * 100.0
+                current_bitget_price = await self.get_live_bitget_price_internal()
+                if current_bitget_price <= 0.0:
+                    continue
+                    
+                # 3.0초 도킹 유예 시간 동안은 안전 보존을 위해 청산 감시 일시 스킵
+                import time
+                grace_until = getattr(self, "grace_period_until", 0.0)
+                if time.time() < grace_until:
+                    self.peak_pnl_pct = 0.0
+                    continue
+                
+                # 1차 진입가 대비 PnL 및 실시간 평단 대비 PnL 계산 (0 나누기 방지 정공법 가드)
+                ent1 = float(getattr(self, "entry_price_1", 0.0) or getattr(self, "entry_price", 0.0) or current_bitget_price)
+                ent = float(getattr(self, "entry_price", 0.0) or current_bitget_price)
 
-            # --------------------------------------------------------------------------
-            # [스마트 스탑] 웹서버 전담 실시간 ROE 오프셋 청산 엔진 (봇 온/오프 독립 가동)
-            # --------------------------------------------------------------------------
-            if getattr(self, "custom_stop_active", False):
-                leverage_val = getattr(self, "leverage", 30) or 30
-                offset_val = getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", -6.0))
-                pnl_at_set = getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val))
-                live_roe = pnl_pct * 100.0 * leverage_val
-                live_roe_rounded = round(live_roe, 2)
-
-                if offset_val < pnl_at_set:
-                    # 설정 오프셋이 설정 시점 ROE보다 이하인 경우 ➡️ 하방 수익보존/손절
-                    is_triggered = (live_roe_rounded <= offset_val)
-                    cond_str = "이하"
-                    stop_label = "수익보존/손절"
+                if direction == "LONG":
+                    pnl_from_entry_1 = (current_bitget_price - ent1) / ent1 if ent1 > 0.0 else 0.0
+                    pnl_pct = (current_bitget_price - ent) / ent if ent > 0.0 else 0.0
                 else:
-                    # 설정 오프셋이 설정 시점 ROE보다 이상인 경우 ➡️ 상방 목표익절
-                    is_triggered = (live_roe_rounded >= offset_val)
-                    cond_str = "이상"
-                    stop_label = "상승/반등익절"
+                    pnl_from_entry_1 = (ent1 - current_bitget_price) / ent1 if ent1 > 0.0 else 0.0
+                    pnl_pct = (ent - current_bitget_price) / ent if ent > 0.0 else 0.0
+                    
+                if pnl_pct > self.peak_pnl_pct:
+                    self.peak_pnl_pct = pnl_pct
+                self.last_live_pnl_pct = pnl_pct * 100.0
 
-                if is_triggered:
-                    self.custom_stop_active = False
-                    ratio = float(getattr(self, "custom_stop_close_ratio", 100.0))
-                    if ratio < 100.0:
-                        order_type = f"PARTIAL_CLOSE_{int(ratio)}"
+                # --------------------------------------------------------------------------
+                # [스마트 스탑] 웹서버 전담 실시간 ROE 오프셋 청산 엔진 (봇 온/오프 독립 가동)
+                # --------------------------------------------------------------------------
+                if getattr(self, "custom_stop_active", False):
+                    leverage_val = getattr(self, "leverage", 30) or 30
+                    offset_val = getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", -6.0))
+                    pnl_at_set = getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val))
+                    live_roe = pnl_pct * 100.0 * leverage_val
+                    live_roe_rounded = round(live_roe, 2)
+
+                    if offset_val < pnl_at_set:
+                        # 설정 오프셋이 설정 시점 ROE보다 이하인 경우 ➡️ 하방 수익보존/손절
+                        is_triggered = (live_roe_rounded <= offset_val)
+                        cond_str = "이하"
+                        stop_label = "수익보존/손절"
                     else:
-                        order_type = "FORCE_MARKET_UNCAPPED"
-                    clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type=order_type, custom_ratio=ratio/100.0)
-                    if clear_ok:
-                        if order_type == "FORCE_MARKET_UNCAPPED":
-                            self.is_position_active = False
-                        log_msg = f"🛡️ [웹서버 스마트 스탑 청산 실행 완료] 실시간 ROE({live_roe:+.2f}%)가 설정 오프셋({offset_val:+.2f}% ROE) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산 완료)"
-                        logger.info(log_msg)
-                        if self.bot and hasattr(self.bot, "broadcast_event"):
-                            asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
-                            asyncio.create_task(self.bot.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": current_bitget_price}))
-                        self.exit_msg_sent = True
-                        if order_type == "FORCE_MARKET_UNCAPPED":
-                            break
+                        # 설정 오프셋이 설정 시점 ROE보다 이상인 경우 ➡️ 상방 목표익절
+                        is_triggered = (live_roe_rounded >= offset_val)
+                        cond_str = "이상"
+                        stop_label = "상승/반등익절"
+
+                    if is_triggered:
+                        self.custom_stop_active = False
+                        ratio = float(getattr(self, "custom_stop_close_ratio", 100.0))
+                        if ratio < 100.0:
+                            order_type = f"PARTIAL_CLOSE_{int(ratio)}"
+                        else:
+                            order_type = "FORCE_MARKET_UNCAPPED"
+                        clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type=order_type, custom_ratio=ratio/100.0)
+                        if clear_ok:
+                            if order_type == "FORCE_MARKET_UNCAPPED":
+                                self.is_position_active = False
+                            log_msg = f"🛡️ [웹서버 스마트 스탑 청산 실행 완료] 실시간 ROE({live_roe:+.2f}%)가 설정 오프셋({offset_val:+.2f}% ROE) {cond_str} 도달! ({ratio:.0f}% {stop_label} 청산 완료)"
+                            logger.info(log_msg)
+                            if self.bot and hasattr(self.bot, "broadcast_event"):
+                                asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
+                                asyncio.create_task(self.bot.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": current_bitget_price}))
+                            self.exit_msg_sent = True
+                            if order_type == "FORCE_MARKET_UNCAPPED":
+                                break
+            except Exception as smart_stop_err:
+                logger.error(f"⚠️ [스마트 스탑 감시 수식 예외 방어] {smart_stop_err}", exc_info=True)
 
             # [HOTFIX v4.06] 자동 봇 시작 버튼이 꺼져있을 경우 일반 가드레일 손절/익절 개입 완벽 차단
             if not getattr(self, "is_snipe_active", False):
