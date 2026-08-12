@@ -2269,19 +2269,9 @@ class ShinseonV35Engine:
             first_write = (self.last_record_time == 0.0)
             self.last_record_date = date_str
             try:
-                # [타점 시그널 (signal) SHINSEON_오더플로우_판단_백서.md 4대 매트릭스 100% 정격 판정]
-                price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
+                # [타점 시그널 (signal) 일원화: binance_ws_frame 단일 깃발 100% 직송 동기화]
                 if (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi):
-                    if price_delta_1m < 0 and oi_delta_1m < 0:
-                        signal_val = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 🟢 LONG
-                    elif price_delta_1m > 0 and oi_delta_1m < 0:
-                        signal_val = "SHORT"   # Case B: 📈 가격상승 + OI감소 ➡️ 🔴 SHORT
-                    elif price_delta_1m > 0 and oi_delta_1m > 0:
-                        signal_val = "LONG"    # Case C: 📈 가격상승 + OI증가 ➡️ 🟢 LONG
-                    elif price_delta_1m < 0 and oi_delta_1m > 0:
-                        signal_val = "SHORT"   # Case D: 📉 가격하락 + OI증가 ➡️ 🔴 SHORT
-                    else:
-                        signal_val = "NONE"
+                    signal_val = binance_ws_frame.get('direction', 'NONE')
                 else:
                     signal_val = "NONE"
 
