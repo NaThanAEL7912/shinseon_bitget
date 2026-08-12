@@ -2103,52 +2103,59 @@ class ShinseonV35Engine:
                             
                             url_base = "https://api.bitget.com"
                             
-                            # 1. 마진 모드 사전 강제 설정 (Isolated)
-                            try:
-                                path_mm = "/api/v2/mix/account/set-margin-mode"
-                                body_mm = json.dumps({
-                                    "symbol": "BTCUSDT",
-                                    "productType": "USDT-FUTURES",
-                                    "marginCoin": "USDT",
-                                    "marginMode": "isolated"
-                                })
-                                ts_mm = str(int(time.time() * 1000))
-                                msg_mm = ts_mm + "POST" + path_mm + body_mm
-                                mac_mm = hmac.new(secret_key.encode('utf-8'), msg_mm.encode('utf-8'), hashlib.sha256)
-                                sign_mm = base64.b64encode(mac_mm.digest()).decode('utf-8')
-                                headers_mm = {
-                                    'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_mm, 'ACCESS-TIMESTAMP': ts_mm,
-                                    'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
-                                }
-                                async with aiohttp.ClientSession() as session:
-                                    async with session.post(url_base + path_mm, headers=headers_mm, data=body_mm) as resp_mm:
-                                        await resp_mm.json()
-                            except Exception:
-                                pass
+                            # 1. 마진 모드 설정 (이전 설정과 동일하면 0.001초 통신 패스)
+                            if getattr(self, "active_margin_mode", None) != "isolated":
+                                try:
+                                    path_mm = "/api/v2/mix/account/set-margin-mode"
+                                    body_mm = json.dumps({
+                                        "symbol": "BTCUSDT",
+                                        "productType": "USDT-FUTURES",
+                                        "marginCoin": "USDT",
+                                        "marginMode": "isolated"
+                                    })
+                                    ts_mm = str(int(time.time() * 1000))
+                                    msg_mm = ts_mm + "POST" + path_mm + body_mm
+                                    mac_mm = hmac.new(secret_key.encode('utf-8'), msg_mm.encode('utf-8'), hashlib.sha256)
+                                    sign_mm = base64.b64encode(mac_mm.digest()).decode('utf-8')
+                                    headers_mm = {
+                                        'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_mm, 'ACCESS-TIMESTAMP': ts_mm,
+                                        'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                                    }
+                                    async with aiohttp.ClientSession() as session:
+                                        async with session.post(url_base + path_mm, headers=headers_mm, data=body_mm) as resp_mm:
+                                            res_mm = await resp_mm.json()
+                                            if res_mm.get("code") == "00000":
+                                                self.active_margin_mode = "isolated"
+                                except Exception:
+                                    pass
 
-                            # 2. 레버리지 설정
-                            try:
-                                path_lev = "/api/v2/mix/account/set-leverage"
-                                body_lev = json.dumps({
-                                    "symbol": "BTCUSDT",
-                                    "productType": "USDT-FUTURES",
-                                    "marginCoin": "USDT",
-                                    "leverage": str(int(round(lev))),
-                                    "holdSide": "long" if side == "LONG" else "short"
-                                })
-                                ts_lev = str(int(time.time() * 1000))
-                                msg_lev = ts_lev + "POST" + path_lev + body_lev
-                                mac_lev = hmac.new(secret_key.encode('utf-8'), msg_lev.encode('utf-8'), hashlib.sha256)
-                                sign_lev = base64.b64encode(mac_lev.digest()).decode('utf-8')
-                                headers_lev = {
-                                    'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_lev, 'ACCESS-TIMESTAMP': ts_lev,
-                                    'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
-                                }
-                                async with aiohttp.ClientSession() as session:
-                                    async with session.post(url_base + path_lev, headers=headers_lev, data=body_lev) as resp_lev:
-                                        await resp_lev.json()
-                            except Exception:
-                                pass
+                            # 2. 레버리지 설정 (이전 레버리지와 동일하면 0.001초 통신 패스)
+                            target_lev_int = int(round(lev))
+                            if getattr(self, "active_leverage", None) != target_lev_int:
+                                try:
+                                    path_lev = "/api/v2/mix/account/set-leverage"
+                                    body_lev = json.dumps({
+                                        "symbol": "BTCUSDT",
+                                        "productType": "USDT-FUTURES",
+                                        "marginCoin": "USDT",
+                                        "leverage": str(target_lev_int),
+                                        "holdSide": "long" if side == "LONG" else "short"
+                                    })
+                                    ts_lev = str(int(time.time() * 1000))
+                                    msg_lev = ts_lev + "POST" + path_lev + body_lev
+                                    mac_lev = hmac.new(secret_key.encode('utf-8'), msg_lev.encode('utf-8'), hashlib.sha256)
+                                    sign_lev = base64.b64encode(mac_lev.digest()).decode('utf-8')
+                                    headers_lev = {
+                                        'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_lev, 'ACCESS-TIMESTAMP': ts_lev,
+                                        'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                                    }
+                                    async with aiohttp.ClientSession() as session:
+                                        async with session.post(url_base + path_lev, headers=headers_lev, data=body_lev) as resp_lev:
+                                            res_lev = await resp_lev.json()
+                                            if res_lev.get("code") == "00000":
+                                                self.active_leverage = target_lev_int
+                                except Exception:
+                                    pass
 
                             # 3. v2 API 진입 발주 패킷 직송 (Isolated + holdSide 강제 명시)
                             path_ord = "/api/v2/mix/order/place-order"
