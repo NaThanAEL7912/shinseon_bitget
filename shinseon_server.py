@@ -2341,10 +2341,8 @@ class ShinseonV35Engine:
         price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
         direction = None
         
-        is_sess_enabled = getattr(self, "is_current_session_enabled", True)
-        
-        # [0단계]: 필수 듀얼 임계치 및 세션 활성화 검사 (세션가동 == True AND 청산액 >= target_liq AND OI속도 >= target_oi)
-        if is_sess_enabled and rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
+        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
+        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
             # [1단계]: 가격 변동(price_delta_1m) ✕ OI속도(oi_delta_1m) 4대 저격 매트릭스
             if price_delta_1m < 0 and oi_delta_1m < 0:
                 direction = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 저점 LONG 저격!
@@ -2529,6 +2527,14 @@ class ShinseonV35Engine:
                         asyncio.create_task(self.execute_bitget_internal_packet(side=self.entry_direction, order_type="ADD_PYRAMIDING"))
                         return
                     return
+
+            # [세션 비활성화 시 신규 진입 정밀 차단 (기존 포지션 청산은 100% 정상 가동)]
+            is_sess_enabled = getattr(self, "is_current_session_enabled", True)
+            if not self.is_position_active and not is_sess_enabled:
+                if getattr(self.bot, "ui_cb", None) and now_t_chk - getattr(self, "last_sess_dis_log_time", 0.0) >= 3.0:
+                    self.last_sess_dis_log_time = now_t_chk
+                    self.bot.ui_cb(0.0, 0, f"⚪ [{self.current_session_name}] 세션 비활성화 설정 중 (신규 진입 차단 / 기존 청산 정상 작동)")
+                return
 
             # [쿨타임 사전 검증 최우선 전진 배치]: 쿨타임 대기 중인 경우 진입/추가매수 시도 차단
             if time.time() < getattr(self, "cooldown_until_time", 0.0):
