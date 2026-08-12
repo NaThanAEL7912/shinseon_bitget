@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.78",
+    "CURRENT_VERSION": "V5.79",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -10,7 +10,7 @@
             "liq": 400000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": true
+            "enabled": false
         },
         "europe": {
             "liq": 600000.0,
@@ -28,13 +28,13 @@
             "liq": 400000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": true
+            "enabled": false
         },
         "weekend_asia": {
             "liq": 200000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": true
+            "enabled": false
         },
         "weekend_europe": {
             "liq": 300000.0,
@@ -52,7 +52,7 @@
             "liq": 200000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": true
+            "enabled": false
         }
     },
     "leverage_level": 30,
@@ -116,5 +116,7 @@
         }
     },
     "pyramiding_enabled": true,
-    "pyramiding_ratio": 30.0
+    "pyramiding_ratio": 30.0,
+    "mid_guard_trigger": 0.6,
+    "mid_guard_offset": -0.1
 }

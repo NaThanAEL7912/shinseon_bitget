@@ -957,11 +957,14 @@ class BotCore:
                         if self.v35_engine:
                             self.v35_engine.ENTRY_SLIPPAGE_CAP = target_slippage / 100.0
 
+                    is_session_enabled = thresholds.get(session_key, {}).get("enabled", True)
+
                     # 백엔드 엔진에 세션별 손절선 및 세션 정보 전달
                     if self.v35_engine:
                         self.v35_engine.current_session_sl = target_sl
                         self.v35_engine.current_session_key = session_key
                         self.v35_engine.current_session_name = current_session
+                        self.v35_engine.is_current_session_enabled = is_session_enabled
                     
                     # 1. 모드에 따른 데이터 분기 및 1분 가격 변동 산출
                     now_t = time.time()
@@ -1139,7 +1142,10 @@ class BotCore:
                             status_msg += f"\n(🛡 스마트 스탑 가드: {custom_stop_offset:+.2f}% ROE {stop_label} 감시 중)"
 
                     elif self.v35_engine.is_snipe_active:
-                        status_msg = "🟢 실전 저격 감시 가동 중..."
+                        if not is_session_enabled:
+                            status_msg = f"⚪ [{current_session}] 세션 비활성화 설정 중 (진입 차단)"
+                        else:
+                            status_msg = "🟢 실전 저격 감시 가동 중..."
                         
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
@@ -2335,8 +2341,10 @@ class ShinseonV35Engine:
         price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
         direction = None
         
-        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
-        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
+        is_sess_enabled = getattr(self, "is_current_session_enabled", True)
+        
+        # [0단계]: 필수 듀얼 임계치 및 세션 활성화 검사 (세션가동 == True AND 청산액 >= target_liq AND OI속도 >= target_oi)
+        if is_sess_enabled and rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
             # [1단계]: 가격 변동(price_delta_1m) ✕ OI속도(oi_delta_1m) 4대 저격 매트릭스
             if price_delta_1m < 0 and oi_delta_1m < 0:
                 direction = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 저점 LONG 저격!
