@@ -2475,24 +2475,23 @@ class ShinseonV35Engine:
                         logger.info(f"🛡️ [진입 60초 안전 락다운] 진입 직후 60초간 반대 청산 무조건 유예 중 (남은 시간: {rem_sec:.1f}초) ➡️ 휩소 청산 100% 차단")
                         return
                         
-                    # [OI 감소성 페이크 차단 필터]: OI > 0 (플러스 자금 유입)일 때만 진짜 스위칭 청산 발동!
-                    if oi_delta_1m > 0:
-                        logger.info(f"🚨 [TRADE] [반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달 (OI > 0)! ➡️ 기존 포지션 전량 시장가 청산 집행")
-                        self.exit_reason = f"반대 시그널({direction}) 포착에 의한 전량 청산"
-                        self.exit_in_progress = True
-                        
-                        dashboard = getattr(self.bot, "dashboard", None) or self.bot
-                        current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
-                        exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price if self.entry_direction == "LONG" else (self.entry_price - current_bitget_price) / self.entry_price
-                        target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if exit_pnl_pct < 0.0 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
-                        cd_label = "반대신호 손절 쿨타임" if exit_pnl_pct < 0.0 else "반대신호 익절 쿨타임"
-                        self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
-                        
-                        asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
-                        return
-                    else:
-                        logger.warning(f"🛡️ [OI 감소 페이크 반대 신호 차단] OI 감소 중({oi_delta_1m:+.4f}%) 반대 신호({direction}) 포착 ➡️ 청산 보류 및 보유 유지")
-                        return
+                    # [v2.55 황금 전성기 헌법 복원]: OI 부호(+/-) 상관없이 반대 신호 수신 즉시 기존 포지션 100% 전량 시장가 청산!
+                    logger.info(f"🚨 [TRADE] [v2.55 반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
+                    self.exit_reason = f"v2.55 반대 시그널({direction}) 포착에 의한 전량 청산"
+                    self.exit_in_progress = True
+                    
+                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
+                    current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
+                    exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price if self.entry_direction == "LONG" else (self.entry_price - current_bitget_price) / self.entry_price
+                    target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if exit_pnl_pct < 0.0 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
+                    cd_label = "반대신호 손절 쿨타임" if exit_pnl_pct < 0.0 else "반대신호 익절/스위칭 쿨타임"
+                    self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
+                    if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
+                        self.cooldown_timer_task.cancel()
+                    self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cd, cd_label))
+                    
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
+                    return
                 else:
                     # [동일 방향 중복 신호 발생 ➡️ 2차/3차 추가 매수(물타기) 또는 눌림목 불타기 검증]
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
