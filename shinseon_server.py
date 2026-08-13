@@ -2614,9 +2614,12 @@ class ShinseonV35Engine:
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step4_msg}))
                         
                         signal_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        qty_btc = float(getattr(self, "position_volume", 0)) / 1000.0
-                        if qty_btc <= 0.0:
-                            qty_btc = 0.007
+                        dashboard_obj = getattr(self.bot, "dashboard", None) or self.bot
+                        ratio_val = float(getattr(dashboard_obj, "split_entry_1_ratio", 100.0) or 100.0)
+                        bal_val = float(getattr(self.bot, "bitget_balance", 0.0) or 30.0)
+                        qty_btc = max(0.001, round((bal_val * (ratio_val / 100.0)) / binance_mid, 3))
+                        if getattr(self, "position_volume", 0) > 0:
+                            qty_btc = float(self.position_volume) / 1000.0
                         entry1_msg = build_telegram_trade_msg(
                             title="🎯 [1차 진입 알림]",
                             direction=direction,
@@ -3112,7 +3115,8 @@ class ShinseonV35Engine:
                     try:
                         btc_qty = actual_qty if actual_qty > 0 else signal_qty
                         if btc_qty <= 0.0:
-                            btc_qty = 0.007
+                            bal_val = float(getattr(self.bot, "bitget_balance", 0.0) or 30.0)
+                            btc_qty = max(0.001, round(bal_val / (self.entry_price if self.entry_price > 0 else 63000.0), 3))
                         ent_p = self.entry_price if self.entry_price > 0 else signal_price
                         ext_p = actual_price if actual_price > 0 else signal_price
                         pnl_val = (ext_p - ent_p) * btc_qty if direction == "LONG" else (ent_p - ext_p) * btc_qty
