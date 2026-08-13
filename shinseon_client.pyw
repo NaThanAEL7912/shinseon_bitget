@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QVBoxLayo
                              QHBoxLayout, QWidget, QLabel, QLineEdit, QTextEdit, QPlainTextEdit,
                              QGraphicsDropShadowEffect, QProgressBar, QCheckBox,
                              QScrollArea, QFrame, QDialog, QTabWidget, QGridLayout, QGroupBox, QMessageBox, QComboBox, QListWidget, QTableWidget, QTableWidgetItem, QHeaderView, QSplitter)
-from PySide6.QtCore import Qt, QPointF, QRectF, QUrl, QSharedMemory
+from PySide6.QtCore import Qt, QPointF, QRectF, QUrl
 from PySide6.QtGui import QPainter, QPicture, QColor, QFont, QBrush, QPen, QLinearGradient
 from PySide6.QtWebEngineWidgets import QWebEngineView
 import pyqtgraph as pg
@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.09"
+        self.CURRENT_VERSION = "V6.10"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1735,23 +1735,22 @@ class ShinseonDashboard(QMainWindow):
                     "session_thresholds": getattr(self, "session_thresholds", {}),
                     "session_guardrails": getattr(self, "session_guardrails", {}),
                     "leverage_level": getattr(self, "leverage_level", 30),
-                    "betting_ratio": getattr(self, "betting_ratio", 750.0),
-                    "split_entry_1_ratio": getattr(self, "split_entry_1_ratio", 500.0),
-                    "split_entry_2_ratio": getattr(self, "split_entry_2_ratio", 250.0),
+                    "betting_ratio": getattr(self, "betting_ratio", 400.0),
+                    "split_entry_1_ratio": getattr(self, "split_entry_1_ratio", 250.0),
+                    "split_entry_2_ratio": getattr(self, "split_entry_2_ratio", 100.0),
                     "split_entry_2_trigger_pct": getattr(self, "split_entry_2_trigger_pct", -0.3),
                     "split_entry_3_ratio": getattr(self, "split_entry_3_ratio", 50.0),
                     "split_entry_3_trigger_pct": getattr(self, "split_entry_3_trigger_pct", -0.6),
                     "split_cooldown_seconds": getattr(self, "split_cooldown_seconds", 900.0),
-                    "cooldown_seconds": getattr(self, "cooldown_seconds", 30.0),
+                    "cooldown_seconds": getattr(self, "cooldown_seconds", 60.0),
                     "profit_cooldown_seconds": getattr(self, "profit_cooldown_seconds", 15.0),
-                    "half_exit_enabled": getattr(self, "half_exit_enabled", True),
-                    "half_exit_trigger_pct": getattr(self, "half_exit_trigger_pct", 0.90),
                     "half_exit_close_ratio": getattr(self, "half_exit_close_ratio", 50.0),
-                    "entry_sl_guard_pct": getattr(self, "entry_sl_guard_pct", -0.30),
                     "pyramiding_enabled": getattr(self, "pyramiding_enabled", True),
                     "pyramiding_ratio": getattr(self, "pyramiding_ratio", 30.0),
                     "mid_guard_trigger": getattr(self, "mid_guard_trigger", 0.60),
                     "mid_guard_offset": getattr(self, "mid_guard_offset", -0.10),
+                    "session_guardrails": getattr(self, "session_guardrails", {}),
+                    "session_thresholds": getattr(self, "session_thresholds", {}),
                     "manual_threshold": self.chk_manual_threshold.isChecked(),
                     "target_liq": self.edit_target_liq.text(),
                     "target_oi": self.edit_target_oi.text(),
@@ -1759,11 +1758,10 @@ class ShinseonDashboard(QMainWindow):
                 }
                 packet = {"cmd": "CMD_UPDATE_CONFIG", "config": config_payload}
                 asyncio.create_task(self.ws.send(json.dumps(packet)))
-                self.add_log("📡 [서버 수송 완료] 변경된 3대 설정 파라미터 패킷이 웹서버로 즉시 전송되었습니다.")
             except Exception as e:
                 logger.error(f"서버 설정 전송 오류: {e}")
         else:
-            self.add_log("⚠️ [서버 수송 대기] 웹소켓 재접속 중이옵니다. 접속 완료 직후 자동 전송됩니다.")
+            pass
 
     def save_shinseon_config(self):
         try:
@@ -3998,18 +3996,6 @@ class ShinseonLicenseDialog(QDialog):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
-    # [과부하/충돌 원천 차단]: 싱글톤 뮤텍스 중복 실행 방지 가드 장착
-    _singleton_mem = QSharedMemory("SHINSEON_BITGET_SINGLETON_MUTEX_V599")
-    if not _singleton_mem.create(1):
-        if _singleton_mem.error() == QSharedMemory.AlreadyExists:
-            msg_box = QMessageBox()
-            msg_box.setWindowTitle("[神選 : 신선 (신의 선택)] 대시보드 경고")
-            msg_box.setText("⚠️ [중복 실행 원천 차단]\n\n이미 [神選 : 신선] 마스터 대시보드 프로세스가 구동 중입니다!\n\n중복 실행 시 웹소켓 피드 및 비트겟 실전 주문 세션 충돌이 발생하므로 신규 중복 창 실행이 원천 차단됩니다.")
-            msg_box.setIcon(QMessageBox.Warning)
-            msg_box.exec()
-            sys.exit(0)
-
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
     

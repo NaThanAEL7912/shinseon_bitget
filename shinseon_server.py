@@ -2368,13 +2368,13 @@ class ShinseonV35Engine:
         # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
         if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
             # [V6.07]: 지수가중 기울기 ✕ OI속도 ✕ 롱/숏 청산 주도 비율 2차 안전 방화벽
-            if price_slope_1m < 0 and oi_delta_1m < 0 and long_liq >= short_liq:
+            if price_slope_1m < 0 and oi_delta_1m < 0 and long_liq_usd >= short_liq_usd:
                 direction = "LONG"    # Case A: 📉 EMA하락 + OI감소 + 롱청산주도 ➡️ 저점 LONG 저격!
-            elif price_slope_1m > 0 and oi_delta_1m < 0 and short_liq >= long_liq:
+            elif price_slope_1m > 0 and oi_delta_1m < 0 and short_liq_usd >= long_liq_usd:
                 direction = "SHORT"   # Case B: 📈 EMA상승 + OI감소 + 숏청산주도 ➡️ 고점 SHORT 저격!
-            elif price_slope_1m > 0 and oi_delta_1m > 0 and short_liq >= long_liq:
+            elif price_slope_1m > 0 and oi_delta_1m > 0 and short_liq_usd >= long_liq_usd:
                 direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 상승 추세 LONG 탑승!
-            elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq >= short_liq:
+            elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq_usd >= short_liq_usd:
                 direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 하강 추세 SHORT 탑승!
             else:
                 direction = None      # 휩쏘/불일치 시 100% NONE 기각!
@@ -3515,26 +3515,6 @@ class WsServer:
                             if engine:
                                 if "leverage_level" in config_data:
                                     engine.LEVERAGE = int(config_data["leverage_level"])
-                                if "betting_ratio" in config_data:
-                                    setattr(engine, "betting_ratio", float(config_data["betting_ratio"]))
-                                if "split_entry_1_ratio" in config_data:
-                                    setattr(engine, "split_entry_1_ratio", float(config_data["split_entry_1_ratio"]))
-                                if "split_entry_2_ratio" in config_data:
-                                    setattr(engine, "split_entry_2_ratio", float(config_data["split_entry_2_ratio"]))
-                                if "split_entry_2_trigger_pct" in config_data:
-                                    setattr(engine, "split_entry_2_trigger_pct", float(config_data["split_entry_2_trigger_pct"]))
-                                if "half_exit_enabled" in config_data:
-                                    setattr(engine, "half_exit_enabled", bool(config_data["half_exit_enabled"]))
-                                if "half_exit_trigger_pct" in config_data:
-                                    setattr(engine, "half_exit_trigger_pct", float(config_data["half_exit_trigger_pct"]))
-                                if "half_exit_close_ratio" in config_data:
-                                    setattr(engine, "half_exit_close_ratio", float(config_data["half_exit_close_ratio"]))
-                                if "entry_sl_guard_pct" in config_data:
-                                    setattr(engine, "entry_sl_guard_pct", float(config_data["entry_sl_guard_pct"]))
-                                if "session_guardrails" in config_data:
-                                    setattr(engine, "session_guardrails", config_data["session_guardrails"])
-                                if "session_thresholds" in config_data:
-                                    setattr(engine, "session_thresholds", config_data["session_thresholds"])
                                 if "target_slippage" in config_data:
                                     try:
                                         slip_val = float(str(config_data["target_slippage"]).strip())
@@ -3561,10 +3541,9 @@ class WsServer:
                             except Exception as e:
                                 logger.error(f"서버 설정 저장 실패: {e}")
 
-                            write_trade_history_log(f"⚙️ [파라미터 설정 변경 적용] 레버리지: {config_data.get('leverage_level', 30)}배 | 배팅비중: {config_data.get('betting_ratio', 750)}% | 1차비중: {config_data.get('split_entry_1_ratio', 500)} | 2차비중: {config_data.get('split_entry_2_ratio', 250)} | 2차DCA조건: {config_data.get('split_entry_2_trigger_pct', -0.30)}%")
+                            write_trade_history_log(f"⚙️ [파라미터 설정 변경 적용] 레버리지: {config_data.get('leverage_level', 30)}배 | 배팅비중: {config_data.get('deploy_ratio', 100)}% | 1차비중: {config_data.get('split_entry_1_ratio', 100)}% | 2차비중: {config_data.get('split_entry_2_ratio', 50)}% | 손절쿨타임: {config_data.get('cooldown_seconds', 300)}초 | 익절쿨타임: {config_data.get('profit_cooldown_seconds', 15)}초 | 추매제한: {config_data.get('add_cooldown_seconds', 900)}초")
                             logger.info("⚙️ [서버 Config 동기화 완료] 클라이언트 파라미터 수신 및 적용 성공")
-                            await self.broadcast_event("ui_update", {"msg": "📡 [서버 100% 동기화 완공] 변경하신 트레이딩 설정값이 웹서버 실전 매매 엔진 및 디스크 파일에 영구 저장 적용되었습니다.", "log_type": 1, "price": getattr(self.bot_core, 'current_price', 0.0)})
-                            await self.broadcast_event("EVT_RESPONSE_LOG", {"message": "📡 [웹서버 수신] ⚙️ 파라미터 설정값 100% 동기화 및 서버 디스크 영구 저장 완료!"})
+                            await self.broadcast_event("ui_update", {"msg": "⚙ [서버 동기화] 클라이언트 트레이딩 파라미터가 AWS 서버에 즉시 반영되었습니다.", "log_type": 1, "price": self.bot_core.current_price})
                     elif cmd == "CMD_REQ_FILE_LIST":
                         dates_set = set()
                         if os.path.exists(LOGS_DIR):
