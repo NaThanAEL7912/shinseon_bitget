@@ -1499,8 +1499,14 @@ class BotCore:
                 else:
                     self.v35_engine.is_position_active = True
                     self.v35_engine.entry_direction = active_pos['side'].upper()
-                    self.v35_engine.entry_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
-                    self.v35_engine.position_volume = float(active_pos.get('contracts', 0.0) or 0.0)
+                    e_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
+                    v_contracts = float(active_pos.get('contracts', 0.0) or 0.0)
+                    if e_price > 0.0:
+                        self.v35_engine.entry_price = e_price
+                        self.v35_engine.active_position_entry_price = e_price
+                    if v_contracts > 0.0:
+                        self.v35_engine.position_volume = v_contracts
+                        self.v35_engine.position_volume_btc = v_contracts
         except Exception as e:
             pass
 
@@ -2651,31 +2657,47 @@ class ShinseonV35Engine:
                             except Exception:
                                 pass
                                 
-                        real_entry_price = getattr(self, "active_position_entry_price", None) or self.entry_price
+                        real_entry_price = getattr(self, "active_position_entry_price", None) or getattr(self, "entry_price", None) or expected_fill
                         if real_entry_price <= 0.0:
                             real_entry_price = expected_fill
                         self.active_position_entry_price = real_entry_price
                         self.entry_price = real_entry_price
                         
-                        real_qty_btc = (float(self.position_volume) / 1000.0) if getattr(self, "position_volume", 0) > 0 else (float(getattr(self, "position_volume", 0)) if getattr(self, "position_volume", 0) > 0 else 0.001)
+                        real_qty_btc = getattr(self, "position_volume_btc", 0.0) or getattr(self, "position_volume", 0.0)
+                        if real_qty_btc > 1.0:
+                            real_qty_btc = real_qty_btc / 1000.0
                         if real_qty_btc <= 0.0:
                             real_qty_btc = 0.001
                             
-                        step4_msg = f"✅ [4단계 체결완료 v5.88] 비트겟 선물 {direction} 시장가 실체결 확정! (실체결가: ${real_entry_price:,.1f}, 수량: {real_qty_btc:.4f} BTC)"
+                        # 폐하의 어명: 웹서버 전용 독립 락다운 저장소 구축 및 저장
+                        self.real_bitget_trade_store = {
+                            'entry_price': real_entry_price,
+                            'qty_btc': real_qty_btc,
+                            'direction': direction,
+                            'timestamp': time.time()
+                        }
+                            
+                        step4_msg = f"✅ [4단계 체결완료 v5.90] 비트겟 선물 {direction} 시장가 실체결 확정! (실체결가: ${real_entry_price:,.1f}, 수량: {real_qty_btc:.4f} BTC)"
                         if self.bot and hasattr(self.bot, "broadcast_event"):
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step4_msg}))
                         
                         signal_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 텔레그램 발송 엔진은 오직 웹서버 저장소(self.real_bitget_trade_store)의 저장된 값만 사용!
+                        store_data = getattr(self, "real_bitget_trade_store", {})
+                        tg_entry_p = store_data.get('entry_price', real_entry_price)
+                        tg_qty_btc = store_data.get('qty_btc', real_qty_btc)
+                        
                         entry1_msg = build_telegram_trade_msg(
                             title="🎯 [1차 진입 알림]",
                             direction=direction,
                             reason=f"1분 청산 ${rolling_1m_liq_usd:,.0f} & OI속도 {oi_delta_1m:+.4f}% 동시 돌파",
                             signal_time=signal_time_str,
-                            signal_qty=real_qty_btc,
+                            signal_qty=tg_qty_btc,
                             signal_price=binance_mid,
                             actual_time=signal_time_str,
-                            actual_qty=real_qty_btc,
-                            actual_price=real_entry_price,
+                            actual_qty=tg_qty_btc,
+                            actual_price=tg_entry_p,
                             is_entry=True
                         )
                         if self.bot and self.bot.dashboard:
@@ -3227,8 +3249,12 @@ class WsServer:
                         v35.is_position_active = True
                         v35.entry_direction = side
                         v35.position_side = side
-                        v35.entry_price = entry_price
-                        v35.position_volume = contracts
+                        if entry_price > 0.0:
+                            v35.entry_price = entry_price
+                            v35.active_position_entry_price = entry_price
+                        if contracts > 0.0:
+                            v35.position_volume = contracts
+                            v35.position_volume_btc = contracts
                         v35.leverage = leverage
                         v35.bitget_roe_pct = float(active_pos.get('percentage', 0.0) or 0.0)
                         v35.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
