@@ -2289,9 +2289,9 @@ class ShinseonV35Engine:
                 if (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi):
                     raw_sig = binance_ws_frame.get('direction', 'NONE')
                     if raw_sig == "LONG":
-                        signal_val = "🟢 LONG"
+                        signal_val = "★ LONG"
                     elif raw_sig == "SHORT":
-                        signal_val = "🔴 SHORT"
+                        signal_val = "★ SHORT"
                     else:
                         signal_val = "NONE"
                 else:
@@ -2312,41 +2312,15 @@ class ShinseonV35Engine:
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
                         header_line = "일시(KST),비트코인 시세($),1분 누적 청산($),1분 롱 청산($),1분 숏 청산($),청산 임계치($),1분 OI 속도(%),OI속도 임계치(%),타점 시그널,봇 구동 상태\n"
-                        bom_bytes = b'\xef\xbb\xbf'
                         
-                        file_exists = os.path.exists(path) and os.path.getsize(path) >= 3
-                        has_bom = False
-                        if file_exists:
-                            with open(path, "rb") as f:
-                                if f.read(3) == bom_bytes:
-                                    has_bom = True
-
-                        if not file_exists or not has_bom:
-                            existing_content = ""
-                            if os.path.exists(path):
-                                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                                    existing_content = f.read()
-                            
-                            lines = existing_content.splitlines()
-                            body_lines = []
-                            for l in lines:
-                                if not l.strip() or "KST" in l or "timestamp" in l or "일시" in l or "날짜" in l or "?" in l[:10]:
-                                    continue
-                                parts = [p.strip() for p in l.split(',')]
-                                if len(parts) >= 10:
-                                    ts = parts[0].replace('="', '').replace('"', '').replace('=', '')
-                                    parts[0] = f"=\"{ts}\""
-                                    body_lines.append(','.join(parts))
-                            
-                            with open(path, "wb") as f:
-                                f.write(bom_bytes)
-                                f.write(header_line.encode('utf-8'))
-                                for bl in body_lines:
-                                    f.write((bl + "\n").encode('utf-8'))
-                                f.write(content.encode('utf-8'))
+                        file_exists = os.path.exists(path) and os.path.getsize(path) > 0
+                        if not file_exists:
+                            with open(path, "w", encoding="cp949", errors="ignore") as f:
+                                f.write(header_line)
+                                f.write(content)
                         else:
-                            with open(path, "ab") as f:
-                                f.write(content.encode('utf-8'))
+                            with open(path, "a", encoding="cp949", errors="ignore") as f:
+                                f.write(content)
                     except Exception as e:
                         logger.error(f"CSV 레코더 쓰기 에러: {e}")
                         if getattr(self.bot, "dashboard", None):
