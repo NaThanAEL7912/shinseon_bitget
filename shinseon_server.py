@@ -98,6 +98,10 @@ def safe_float(v, default=0.0):
     except: return default
 
 LOGS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+
+def get_kst_now_str():
+    from datetime import datetime, timedelta
+    return (datetime.utcnow() + timedelta(hours=9)).strftime("%Y-%m-%d %H:%M:%S")
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR, exist_ok=True)
 
@@ -2486,7 +2490,7 @@ class ShinseonV35Engine:
                         
                     # [v2.55 황금 전성기 헌법 복원]: OI 부호(+/-) 상관없이 반대 신호 수신 즉시 기존 포지션 100% 전량 시장가 청산!
                     logger.info(f"🚨 [TRADE] [v2.55 반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
-                    self.exit_reason = f"v2.55 반대 시그널({direction}) 포착에 의한 전량 청산"
+                    self.exit_reason = f"반대 방향 진짜 자금 유입(OI>0 & 임계치돌파) 스위칭 감지 (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"
                     self.exit_in_progress = True
                     
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
@@ -2542,14 +2546,15 @@ class ShinseonV35Engine:
                             self.cooldown_timer_task.cancel()
                         self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(final_cd, final_cd_label))
                         
+                        kst_time_str = get_kst_now_str()
                         exit_msg = build_telegram_trade_msg(
                             title="🔄 [반대 시그널 청산 알림]",
                             direction=self.entry_direction or "LONG",
                             reason=self.exit_reason,
-                            signal_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            signal_time=kst_time_str,
                             signal_qty=real_exit_qty,
                             signal_price=binance_mid,
-                            actual_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            actual_time=kst_time_str,
                             actual_qty=real_exit_qty,
                             actual_price=real_exit_price,
                             entry_price=real_entry_p,
@@ -2705,7 +2710,7 @@ class ShinseonV35Engine:
                         if self.bot and hasattr(self.bot, "broadcast_event"):
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step4_msg}))
                         
-                        signal_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        signal_time_str = get_kst_now_str()
                         
                         # 텔레그램 발송 엔진은 오직 웹서버 저장소(self.real_bitget_trade_store)의 저장된 값만 사용!
                         store_data = getattr(self, "real_bitget_trade_store", {})
@@ -3126,8 +3131,7 @@ class ShinseonV35Engine:
 
             signal_time = getattr(self, "last_exit_signal_time", "")
             if not signal_time:
-                import time
-                signal_time = time.strftime("%Y-%m-%d %H:%M:%S")
+                signal_time = get_kst_now_str()
 
             # 웹서버 청산 락다운 저장소 구축 및 추출
             try:
