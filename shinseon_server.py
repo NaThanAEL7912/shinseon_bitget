@@ -3105,18 +3105,28 @@ class ShinseonV35Engine:
                 import time
                 signal_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
-            signal_qty = getattr(self, "last_exit_signal_qty", 0.0)
-            if signal_qty <= 0.0:
-                signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
-                
-            # 실제 체결 정보 추출 (실제 비트겟 시세 연동)
-            actual_price = getattr(self, "last_actual_exit_price", 0.0)
+            # 웹서버 청산 락다운 저장소 구축 및 추출
+            real_exit_price = getattr(self, "last_actual_exit_price", 0.0) or current_bitget_price
+            real_exit_qty = getattr(self, "last_actual_exit_qty", 0.0) or getattr(self, "position_volume_btc", 0.0) or (float(getattr(self, "position_volume", 0)) / 1000.0 if getattr(self, "position_volume", 0) > 0 else 0.001)
+            if real_exit_qty <= 0.0:
+                real_exit_qty = 0.001
+            real_entry_price = getattr(self, "active_position_entry_price", None) or getattr(self, "entry_price", None) or current_bitget_price
+
+            self.real_bitget_exit_store = {
+                'exit_price': real_exit_price,
+                'entry_price': real_entry_price,
+                'qty_btc': real_exit_qty,
+                'direction': direction,
+                'timestamp': time.time()
+            }
+
+            store_exit = getattr(self, "real_bitget_exit_store", {})
+            actual_price = store_exit.get('exit_price', real_exit_price)
+            actual_qty = store_exit.get('qty_btc', real_exit_qty)
+            entry_p_final = store_exit.get('entry_price', real_entry_price)
+            
+            signal_qty = actual_qty
             actual_time = getattr(self, "last_actual_exit_time", "")
-            actual_qty = getattr(self, "last_actual_exit_qty", 0.0)
-            if actual_qty <= 0.0:
-                actual_qty = float(getattr(self, "position_volume", 0)) / 1000.0
-            if actual_price <= 0.0:
-                actual_price = current_bitget_price
             if not actual_time:
                 actual_time = signal_time
 
@@ -3134,10 +3144,10 @@ class ShinseonV35Engine:
                 
                 # PnL 계산
                 if direction == "LONG":
-                    pnl_pct = (actual_price - self.entry_price) / self.entry_price if self.entry_price > 0 else 0.0
+                    pnl_pct = (actual_price - entry_p_final) / entry_p_final if entry_p_final > 0 else 0.0
                     pnl_from_entry_1 = (actual_price - self.entry_price_1) / self.entry_price_1 if self.entry_price_1 > 0 else pnl_pct
                 else:
-                    pnl_pct = (self.entry_price - actual_price) / self.entry_price if self.entry_price > 0 else 0.0
+                    pnl_pct = (entry_p_final - actual_price) / entry_p_final if entry_p_final > 0 else 0.0
                     pnl_from_entry_1 = (self.entry_price_1 - actual_price) / self.entry_price_1 if self.entry_price_1 > 0 else pnl_pct
                     
                 if self.bot and self.bot.dashboard:
@@ -3170,7 +3180,7 @@ class ShinseonV35Engine:
                         actual_time=actual_time if actual_time else signal_time,
                         actual_qty=actual_qty if actual_qty > 0 else signal_qty,
                         actual_price=actual_price if actual_price > 0 else signal_price,
-                        entry_price=getattr(self, "active_position_entry_price", None) or self.entry_price,
+                        entry_price=entry_p_final,
                         leverage=getattr(self, "leverage_level", 30) or 30,
                         is_entry=False
                     )
