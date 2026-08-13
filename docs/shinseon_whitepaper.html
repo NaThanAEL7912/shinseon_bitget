@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SHINSEON BITGET - MASTER WHITEPAPER V5.62</title>
+    <title>SHINSEON BITGET - MASTER WHITEPAPER V6.08 / V6.09</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -266,7 +266,7 @@
 <body>
 
     <header>
-        <div class="version-badge">GOLDEN ERA - V5.62</div>
+        <div class="version-badge">MASTER WHITEPAPER V6.08 / V6.09</div>
         <h1>SHINSEON BITGET</h1>
         <p>오더플로우 융합 딥다이브 초고속 트레이딩 시스템 마스터 백서</p>
     </header>
@@ -340,7 +340,7 @@
 
         <!-- 3. 핵심 코어 엔진 -->
         <section>
-            <h2 class="section-title"><span>03</span> 핵심 판단 코어 엔진 (V5.62)</h2>
+            <h2 class="section-title"><span>03</span> 핵심 판단 코어 엔진 (V6.08 / V6.09)</h2>
             <div class="card" style="border-color: var(--primary-color);">
                 <h3>🚨 황금 전성기 절대 룰 (0단계 듀얼 임계치)</h3>
                 <p style="color: var(--text-muted); margin-bottom: 20px;">
@@ -352,48 +352,53 @@
                     <code>abs(oi_delta_1m) >= target_oi</code>
                 </div>
 
-                <h3>📊 1단계: 방향성 4대 매트릭스 (Case 판별)</h3>
+                                <h3>📊 1단계: 방향성 4대 매트릭스 ✕ 롱/숏 청산 주도 비율 3중 검증 (V6.07)</h3>
                 <table style="margin-bottom: 20px;">
                     <tr>
                         <th>Case</th>
-                        <th>가격 (Price)</th>
-                        <th>OI (미결제약정)</th>
+                        <th>1분 EMA 추세 기울기 (price_slope_1m)</th>
+                        <th>1분 OI 속도 (oi_delta_1m)</th>
+                        <th>롱/숏 청산 주도 비율 2차 검증</th>
                         <th>오더플로우 팩트 (세력의 의도)</th>
                         <th>신선 포지션</th>
                     </tr>
                     <tr>
                         <td><strong>A</strong></td>
-                        <td class="highlight-red">하락 ( < 0 )</td>
-                        <td class="highlight-red">감소 ( < 0 )</td>
-                        <td>롱 개미들의 대규모 청산(손절). 바닥 확인.</td>
+                        <td class="highlight-red">지속 하락 ( &lt; 0 )</td>
+                        <td class="highlight-red">감소 ( &lt; 0 )</td>
+                        <td class="highlight-gold">long_liq &ge; short_liq (롱 청산 주도)</td>
+                        <td>개미 롱 손절 털기 팩트 검증. 바닥 저격.</td>
                         <td class="highlight-green">LONG (매수) 🟢</td>
                     </tr>
                     <tr>
                         <td><strong>B</strong></td>
-                        <td class="highlight-green">상승 ( > 0 )</td>
-                        <td class="highlight-red">감소 ( < 0 )</td>
-                        <td>숏 개미들의 대규모 청산(손절). 고점 확인.</td>
+                        <td class="highlight-green">지속 상승 ( &gt; 0 )</td>
+                        <td class="highlight-red">감소 ( &lt; 0 )</td>
+                        <td class="highlight-gold">short_liq &ge; long_liq (숏 청산 주도)</td>
+                        <td>개미 숏스퀴즈 털기 팩트 검증. 꼭대기 저격.</td>
                         <td class="highlight-red">SHORT (매도) 🔴</td>
                     </tr>
                     <tr>
                         <td><strong>C</strong></td>
-                        <td class="highlight-green">상승 ( > 0 )</td>
-                        <td class="highlight-green">증가 ( > 0 )</td>
-                        <td>세력의 신규 롱 자금 대규모 유입. 추세 지속.</td>
+                        <td class="highlight-green">지속 상승 ( &gt; 0 )</td>
+                        <td class="highlight-green">증가 ( &gt; 0 )</td>
+                        <td class="highlight-gold">short_liq &ge; long_liq (숏 청산 돌파)</td>
+                        <td>세력이 숏 청산 먹으며 상승. 추세 지속.</td>
                         <td class="highlight-green">LONG (매수) 🟢</td>
                     </tr>
                     <tr>
                         <td><strong>D</strong></td>
-                        <td class="highlight-red">하락 ( < 0 )</td>
-                        <td class="highlight-green">증가 ( > 0 )</td>
-                        <td>세력의 신규 숏 자금 대규모 유입. 추세 지속.</td>
+                        <td class="highlight-red">지속 하락 ( &lt; 0 )</td>
+                        <td class="highlight-green">증가 ( &gt; 0 )</td>
+                        <td class="highlight-gold">long_liq &ge; short_liq (롱 청산 돌파)</td>
+                        <td>세력이 롱 청산 먹으며 하락. 추세 지속.</td>
                         <td class="highlight-red">SHORT (매도) 🔴</td>
                     </tr>
                 </table>
 
                 <h3>🛡️ 2단계: 안전 스위칭 및 락다운 로직</h3>
                 <ul class="feature-list">
-                    <li><strong>60초 락다운 (Lockdown):</strong> 주문 진입 후 60초 동안은 <strong>어떠한 추가 진입 신호도 무시</strong>합니다. 이는 연쇄 청산 꼬리에 휩쓸리는 다중 진입을 방지합니다.</li>
+                    <li><strong>안전 쿨타임 (Lockdown):</strong> 주문 청산 후 손절 30.0초 / 익절 15.0초 동안은 <strong>어떠한 추가 진입 신호도 무시</strong>합니다. 이는 연쇄 청산 꼬리에 휩쓸리는 다중 진입을 방지합니다.</li>
                     <li><strong>가짜 찌꺼기 스위칭 방지:</strong> 포지션 보유 중 반대 신호가 떴을 때, <code>OI 델타가 감소(<0)</code>하는 신호(A, B)면 스위칭하지 않고 기존 포지션을 유지합니다. (단순 손절 물량에 속지 않음)</li>
                     <li><strong>진성 자금 스위칭 허용 (쿨타임 기반 연속 진입):</strong> 포지션 보유 중 반대 방향의 <code>OI 델타가 증가(>0)</code>하는 진성 자금 신호(C, D)가 뜨더라도 즉시 반대 포지션으로 무조건 스위칭(Flip)하는 것이 아닙니다. 먼저 <strong>기존 포지션을 전량 청산(익절 또는 손절)</strong>한 뒤 안전 쿨타임(Lockdown)에 돌입하며, 쿨타임 종료 후에도 해당 반대 신호가 계속 유효하게 발생하고 있다면 그때 자연스럽게 <strong>신규 진입(스위칭)</strong>이 이루어집니다.</li>
                 </ul>
@@ -554,7 +559,7 @@
                     </tr>
                     <tr>
                         <td><code>docs/SHINSEON_오더플로우_판단_백서.md</code></td>
-                        <td>🚨 <strong>[불가침 성역]</strong> V5.62 핵심 판단 엔진의 원리가 기록된 대헌법. 폐하의 승인 없이는 인공지능이 절대 수정할 수 없는 파일입니다.</td>
+                        <td>🚨 <strong>[불가침 성역]</strong> V6.08/V6.09 최첨단 지수가중 기울기 & 2차 방화벽 엔진 대헌법. 폐하의 승인 없이는 인공지능이 절대 수정할 수 없는 파일입니다.</td>
                     </tr>
                     <tr>
                         <td><code>client_config.json</code> / <code>server_config.json</code></td>
@@ -578,7 +583,7 @@
                     </li>
                     <li style="margin-top: 15px;">
                         <strong>증상:</strong> 오더플로우 깃발(LONG/SHORT) 방향이 엉뚱하게 뜰 때
-                        <br><strong>해결:</strong> <code>shinseon_server.py</code>의 <code>process_1m_data_and_trade()</code> 함수 내 <strong>Case A, B, C, D 분기문</strong>을 확인하십시오. <code>price_delta_1m</code>과 <code>oi_delta_1m</code>의 부호(+/-) 판단이 백서와 일치하는지 대조해야 합니다.
+                        <br><strong>해결:</strong> <code>shinseon_server.py</code>의 <code>process_1m_data_and_trade()</code> 함수 내 <strong>Case A, B, C, D 분기문</strong>을 확인하십시오. <code>price_slope_1m</code>(EMA 기울기), <code>oi_delta_1m</code>, <code>long_liq vs short_liq</code> 3중 부호 판단이 백서와 일치하는지 대조해야 합니다.
                     </li>
                     <li style="margin-top: 15px;">
                         <strong>증상:</strong> 클라이언트와 AWS 서버 간 로그 동기화가 끊어짐
