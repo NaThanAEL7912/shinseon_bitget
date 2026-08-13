@@ -2510,6 +2510,10 @@ class ShinseonV35Engine:
                     
                     clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                     if clear_ok:
+                        # 0.000초 선제 락킹: 병렬 가드레일 감시 루프의 2중 알림 발송 100% 원천 차단
+                        self.exit_msg_sent = True
+                        self.is_position_active = False
+                        
                         # 2. 청산 체결 완료 1.0초 비동기 대기 (실체결 팩트 수신 동기화)
                         await asyncio.sleep(1.0)
                         if self.bot and hasattr(self.bot, "sync_bitget_real_position_status"):

@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.94",
+    "CURRENT_VERSION": "V5.95",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,13 +7,13 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 10000.0,
-            "oi": 0.7,
+            "liq": 400000.0,
+            "oi": 0.15,
             "sl": -1.0,
             "enabled": true
         },
         "europe": {
-            "liq": 6000000.0,
+            "liq": 60000.0,
             "oi": 0.15,
             "sl": -1.0,
             "enabled": true
