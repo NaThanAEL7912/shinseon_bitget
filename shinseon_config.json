@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.07",
+    "CURRENT_VERSION": "V6.08",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -63,7 +63,7 @@
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,
     "split_cooldown_seconds": 900.0,
-    "cooldown_seconds": 300.0,
+    "cooldown_seconds": 30.0,
     "profit_cooldown_seconds": 15.0,
     "telegram_enabled": true,
     "telegram_token": "8890976392:AAFkGFrep1b9N9P_EQpJY-yNYaMLcd2kEZk",
