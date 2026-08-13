@@ -2514,6 +2514,21 @@ class ShinseonV35Engine:
                             except Exception:
                                 pass
                                 
+                        # 2-B. 비트겟 체결 원장 API(fetch_my_trades) 직접 조회하여 100% 실체결 청산가 수신
+                        try:
+                            if self.bot and getattr(self.bot, "bitget_exchange", None):
+                                trades = await self.bot.bitget_exchange.fetch_my_trades('BTC/USDT:USDT', limit=2)
+                                if trades and len(trades) > 0:
+                                    last_t = trades[-1]
+                                    t_price = float(last_t.get('price', 0.0) or 0.0)
+                                    t_amount = float(last_t.get('amount', 0.0) or 0.0)
+                                    if t_price > 0.0:
+                                        self.last_actual_exit_price = t_price
+                                    if t_amount > 0.0:
+                                        self.last_actual_exit_qty = t_amount
+                        except Exception as tr_err:
+                            logger.error(f"비트겟 체결 원장 수신 예외: {tr_err}")
+
                         real_exit_price = getattr(self, "last_actual_exit_price", 0.0) or current_bitget_price
                         real_exit_qty = getattr(self, "last_actual_exit_qty", 0.0) or 0.001
                         
@@ -3115,6 +3130,20 @@ class ShinseonV35Engine:
                 signal_time = time.strftime("%Y-%m-%d %H:%M:%S")
 
             # 웹서버 청산 락다운 저장소 구축 및 추출
+            try:
+                if self.bot and getattr(self.bot, "bitget_exchange", None):
+                    trades = await self.bot.bitget_exchange.fetch_my_trades('BTC/USDT:USDT', limit=2)
+                    if trades and len(trades) > 0:
+                        last_t = trades[-1]
+                        t_price = float(last_t.get('price', 0.0) or 0.0)
+                        t_amount = float(last_t.get('amount', 0.0) or 0.0)
+                        if t_price > 0.0:
+                            self.last_actual_exit_price = t_price
+                        if t_amount > 0.0:
+                            self.last_actual_exit_qty = t_amount
+            except Exception as tr_err:
+                logger.error(f"비트겟 청산 체결 원장 수신 예외: {tr_err}")
+
             real_exit_price = getattr(self, "last_actual_exit_price", 0.0) or current_bitget_price
             real_exit_qty = getattr(self, "last_actual_exit_qty", 0.0) or getattr(self, "position_volume_btc", 0.0) or (float(getattr(self, "position_volume", 0)) / 1000.0 if getattr(self, "position_volume", 0) > 0 else 0.001)
             if real_exit_qty <= 0.0:
