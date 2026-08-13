@@ -2295,7 +2295,8 @@ class ShinseonV35Engine:
                 if first_write and getattr(self.bot, "dashboard", None):
                     self.bot.dashboard.add_log(f"📊 [CSV 레코더] {csv_filename} 상시 기록 개시 (1분/1초 듀얼 스피드 기어 가동)")
                 csv_path = os.path.join(BASE_DIR, "docs", "historical_data", csv_filename)
-                time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                raw_time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
+                time_str = f"=\"{raw_time_str}\""
                 
                 # 10대 한글 칼럼: 일시(KST),비트코인 시세($),1분 누적 청산($),1분 롱 청산($),1분 숏 청산($),청산 임계치($),1분 OI 속도(%),OI속도 임계치(%),타점 시그널,봇 구동 상태
                 clean_state = str(bot_state_val).replace(',', ' ')
@@ -2305,37 +2306,39 @@ class ShinseonV35Engine:
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
                         header_line = "일시(KST),비트코인 시세($),1분 누적 청산($),1분 롱 청산($),1분 숏 청산($),청산 임계치($),1분 OI 속도(%),OI속도 임계치(%),타점 시그널,봇 구동 상태\n"
-                        file_exists = os.path.exists(path) and os.path.getsize(path) > 0
                         
-                        if not file_exists:
-                            with open(path, "w", encoding="utf-8-sig") as f:
-                                f.write(header_line)
-                                f.write(content)
-                        else:
-                            # 기존 파일 헤더 교정 및 덮어쓰기 정화
-                            with open(path, "r", encoding="utf-8-sig", errors="ignore") as f:
-                                lines = f.readlines()
+                        has_bom = False
+                        if os.path.exists(path) and os.path.getsize(path) >= 3:
+                            with open(path, "rb") as f:
+                                if f.read(3) == b'\xef\xbb\xbf':
+                                    has_bom = True
+
+                        if not has_bom:
+                            existing_content = ""
+                            if os.path.exists(path):
+                                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                                    existing_content = f.read()
                             
-                            need_header_fix = not lines or (lines[0].strip() != header_line.strip())
-                            if need_header_fix:
-                                new_lines = [header_line]
-                                for l in lines:
-                                    if l.startswith('timestamp') or l.startswith('시간') or l.startswith('날짜') or l.startswith('일시'):
-                                        continue
-                                    parts = [p.strip() for p in l.strip().split(',')]
-                                    if len(parts) >= 10:
-                                        # 타임스탬프에 초가 없으면 :00 자동 보정
-                                        ts = parts[0]
-                                        if len(ts.split(':')) == 2:
-                                            ts = ts + ":00"
-                                        new_l = f"{ts},{parts[1]},{parts[2]},{parts[3]},{parts[4]},{parts[5]},{parts[6]},{parts[7]},{parts[8]},{parts[-1]}\n"
-                                        new_lines.append(new_l)
-                                new_lines.append(content)
-                                with open(path, "w", encoding="utf-8-sig") as f:
-                                    f.writelines(new_lines)
-                            else:
-                                with open(path, "a", encoding="utf-8-sig") as f:
-                                    f.write(content)
+                            lines = existing_content.splitlines()
+                            body_lines = []
+                            for l in lines:
+                                if not l.strip() or l.startswith('일시') or l.startswith('timestamp') or l.startswith('날짜'):
+                                    continue
+                                parts = [p.strip() for p in l.split(',')]
+                                if len(parts) >= 10:
+                                    ts = parts[0].replace('="', '').replace('"', '')
+                                    parts[0] = f"=\"{ts}\""
+                                    body_lines.append(','.join(parts))
+                            
+                            with open(path, "wb") as f:
+                                f.write(b'\xef\xbb\xbf')
+                                f.write(header_line.encode('utf-8'))
+                                for bl in body_lines:
+                                    f.write((bl + "\n").encode('utf-8'))
+                                f.write(content.encode('utf-8'))
+                        else:
+                            with open(path, "ab") as f:
+                                f.write(content.encode('utf-8'))
                     except Exception as e:
                         logger.error(f"CSV 레코더 쓰기 에러: {e}")
                         if getattr(self.bot, "dashboard", None):
