@@ -2030,8 +2030,12 @@ class ShinseonV35Engine:
                                 else:
                                     params = {'reduceOnly': True, 'marginMode': 'isolated', 'marginCoin': 'USDT'}
                                 order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
-                                self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC")
-                                logger.info(f"🚨 [TRADE] [전량 청산 성공] 비트겟 시장가 청산 완료 ({amount} BTC)")
+                                fill_exit_p = float(order.get('average', 0.0) or order.get('price', 0.0) or 0.0) if isinstance(order, dict) else 0.0
+                                if fill_exit_p > 0.0:
+                                    self.last_actual_exit_price = fill_exit_p
+                                self.last_actual_exit_qty = amount
+                                self.bot.ui_cb(0.0, 0, f"✅ [청산 성공] 주문 완료: {amount} BTC (실체결가: ${fill_exit_p:,.1f})")
+                                logger.info(f"🚨 [TRADE] [전량 청산 성공] 비트겟 시장가 청산 완료 ({amount} BTC, 체결가: ${fill_exit_p:,.1f})")
                             except Exception as e:
                                 self.bot.ui_cb(0.0, 0, f"❌ [청산 에러] 비트겟 API 예외 발생: {e}")
                                 logger.error(f"🚨 [TRADE] [청산 에러] 비트겟 API 예외: {e}")
@@ -2495,7 +2499,35 @@ class ShinseonV35Engine:
                         self.cooldown_timer_task.cancel()
                     self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cd, cd_label))
                     
-                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
+                    clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
+                    if clear_ok:
+                        # 1. 청산 체결 완료 1.0초 비동기 대기 (실체결 팩트 수신 동기화)
+                        await asyncio.sleep(1.0)
+                        if self.bot and hasattr(self.bot, "sync_bitget_real_position_status"):
+                            try:
+                                await self.bot.sync_bitget_real_position_status()
+                            except Exception:
+                                pass
+                                
+                        real_exit_price = getattr(self, "last_actual_exit_price", 0.0) or current_bitget_price
+                        real_exit_qty = getattr(self, "last_actual_exit_qty", 0.0) or 0.001
+                        
+                        exit_msg = build_telegram_trade_msg(
+                            title="🔄 [반대 시그널 청산 알림]",
+                            direction=self.entry_direction or "LONG",
+                            reason=self.exit_reason,
+                            signal_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            signal_qty=real_exit_qty,
+                            signal_price=binance_mid,
+                            actual_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            actual_qty=real_exit_qty,
+                            actual_price=real_exit_price,
+                            entry_price=real_entry_p,
+                            is_entry=False
+                        )
+                        if self.bot and self.bot.dashboard:
+                            self.bot.dashboard.send_telegram_notification(exit_msg)
+                        self.exit_msg_sent = True
                     return
                 else:
                     # [동일 방향 중복 신호 발생 ➡️ 2차/3차 추가 매수(물타기) 또는 눌림목 불타기 검증]
