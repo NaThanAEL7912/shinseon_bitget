@@ -2287,7 +2287,13 @@ class ShinseonV35Engine:
             try:
                 # [타점 시그널 (signal) 일원화: binance_ws_frame 단일 깃발 100% 직송 동기화]
                 if (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi):
-                    signal_val = binance_ws_frame.get('direction', 'NONE')
+                    raw_sig = binance_ws_frame.get('direction', 'NONE')
+                    if raw_sig == "LONG":
+                        signal_val = "🟢 LONG"
+                    elif raw_sig == "SHORT":
+                        signal_val = "🔴 SHORT"
+                    else:
+                        signal_val = "NONE"
                 else:
                     signal_val = "NONE"
 
