@@ -2479,9 +2479,15 @@ class ShinseonV35Engine:
                     
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
                     current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
-                    exit_pnl_pct = (current_bitget_price - self.entry_price) / self.entry_price if self.entry_direction == "LONG" else (self.entry_price - current_bitget_price) / self.entry_price
-                    target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if exit_pnl_pct < 0.0 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
-                    cd_label = "반대신호 손절 쿨타임" if exit_pnl_pct < 0.0 else "반대신호 익절/스위칭 쿨타임"
+                    # 진입 평단가 오염 방지: active_position_entry_price 보존값 최우선 사용
+                    real_entry_p = getattr(self, "active_position_entry_price", None) or getattr(self, "entry_price_1", None) or self.entry_price
+                    if real_entry_p <= 0.0:
+                        real_entry_p = current_bitget_price
+                    exit_pnl_pct = (current_bitget_price - real_entry_p) / real_entry_p if self.entry_direction == "LONG" else (real_entry_p - current_bitget_price) / real_entry_p
+                    
+                    # 수익률이 확실한 플러스(+0.01% 초과)가 아닌 모든 경우(0.00% 본절/수수료손실 및 마이너스 손실) 100% 300초 손절 쿨타임 철통 가동
+                    target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if exit_pnl_pct <= 0.0001 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
+                    cd_label = "반대신호 손절 쿨타임(300초)" if exit_pnl_pct <= 0.0001 else "반대신호 익절/스위칭 쿨타임(15초)"
                     self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
                     if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
                         self.cooldown_timer_task.cancel()
@@ -2587,6 +2593,7 @@ class ShinseonV35Engine:
                 self.entry_direction = direction
                 self.entry_price = expected_fill
                 self.entry_price_1 = expected_fill
+                self.active_position_entry_price = expected_fill
                 self.has_second_entry = False
                 self.peak_pnl_pct = 0.0
                 
@@ -3094,7 +3101,7 @@ class ShinseonV35Engine:
                         actual_time=actual_time if actual_time else signal_time,
                         actual_qty=actual_qty if actual_qty > 0 else signal_qty,
                         actual_price=actual_price if actual_price > 0 else signal_price,
-                        entry_price=self.entry_price,
+                        entry_price=getattr(self, "active_position_entry_price", None) or self.entry_price,
                         leverage=getattr(self, "leverage_level", 30) or 30,
                         is_entry=False
                     )

@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.83",
+    "CURRENT_VERSION": "V5.84",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -8,9 +8,9 @@
     "session_thresholds": {
         "asia": {
             "liq": 400000.0,
-            "oi": 0.12,
+            "oi": 0.15,
             "sl": -1.0,
-            "enabled": false
+            "enabled": true
         },
         "europe": {
             "liq": 600000.0,
@@ -26,15 +26,15 @@
         },
         "pacific": {
             "liq": 400000.0,
-            "oi": 0.12,
+            "oi": 0.15,
             "sl": -1.0,
-            "enabled": false
+            "enabled": true
         },
         "weekend_asia": {
             "liq": 200000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": false
+            "enabled": true
         },
         "weekend_europe": {
             "liq": 300000.0,
@@ -52,7 +52,7 @@
             "liq": 200000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": false
+            "enabled": true
         }
     },
     "leverage_level": 30,
