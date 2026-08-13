@@ -2497,17 +2497,16 @@ class ShinseonV35Engine:
                         real_entry_p = current_bitget_price
                     exit_pnl_pct = (current_bitget_price - real_entry_p) / real_entry_p if self.entry_direction == "LONG" else (real_entry_p - current_bitget_price) / real_entry_p
                     
-                    # 수익률이 확실한 플러스(+0.01% 초과)가 아닌 모든 경우(0.00% 본절/수수료손실 및 마이너스 손실) 100% 300초 손절 쿨타임 철통 가동
-                    target_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if exit_pnl_pct <= 0.0001 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
-                    cd_label = "반대신호 손절 쿨타임(300초)" if exit_pnl_pct <= 0.0001 else "반대신호 익절/스위칭 쿨타임(15초)"
-                    self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cd)
+                    # 1. [0.000초 선제 락킹]: 1초 딜레이 틈새 휩소 이중진입 방지용으로 우선 300초 안전 손절 쿨타임 선제 마킹!
+                    preemptive_cd = float(getattr(dashboard, "cooldown_seconds", 300.0))
+                    self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + preemptive_cd)
                     if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
                         self.cooldown_timer_task.cancel()
-                    self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cd, cd_label))
+                    self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(preemptive_cd, "반대신호 선제 쿨타임(300초)"))
                     
                     clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
                     if clear_ok:
-                        # 1. 청산 체결 완료 1.0초 비동기 대기 (실체결 팩트 수신 동기화)
+                        # 2. 청산 체결 완료 1.0초 비동기 대기 (실체결 팩트 수신 동기화)
                         await asyncio.sleep(1.0)
                         if self.bot and hasattr(self.bot, "sync_bitget_real_position_status"):
                             try:
@@ -2517,6 +2516,16 @@ class ShinseonV35Engine:
                                 
                         real_exit_price = getattr(self, "last_actual_exit_price", 0.0) or current_bitget_price
                         real_exit_qty = getattr(self, "last_actual_exit_qty", 0.0) or 0.001
+                        
+                        # 3. 비트겟 실체결 평단가/청산가 기반 100% 팩트 PnL 재판정 및 쿨타임 최종 확정
+                        confirmed_pnl_pct = (real_exit_price - real_entry_p) / real_entry_p if self.entry_direction == "LONG" else (real_entry_p - real_exit_price) / real_entry_p
+                        final_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if confirmed_pnl_pct <= 0.0001 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
+                        final_cd_label = "반대신호 손절 쿨타임(300초)" if confirmed_pnl_pct <= 0.0001 else "반대신호 익절/스위칭 쿨타임(15초)"
+                        
+                        self.cooldown_until_time = time.time() + final_cd
+                        if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
+                            self.cooldown_timer_task.cancel()
+                        self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(final_cd, final_cd_label))
                         
                         exit_msg = build_telegram_trade_msg(
                             title="🔄 [반대 시그널 청산 알림]",
