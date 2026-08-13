@@ -1053,17 +1053,17 @@ class BotCore:
                     else:
                         price_slope_1m = 0.0
 
-                    # [모델 4 최첨단 지수가중 기울기 ✕ OI속도 4대 저격 매트릭스]
-                    if price_slope_1m < 0 and oi_delta_1m < 0:
-                        direction = "LONG"    # Case A: 📉 EMA추세 하락 + OI감소 ➡️ 🟢 LONG 저점 저격
-                    elif price_slope_1m > 0 and oi_delta_1m < 0:
-                        direction = "SHORT"   # Case B: 📈 EMA추세 상승 + OI감소 ➡️ 🔴 SHORT 고점 저격
-                    elif price_slope_1m > 0 and oi_delta_1m > 0:
-                        direction = "LONG"    # Case C: 📈 EMA추세 상승 + OI증가 ➡️ 🟢 LONG 추세 탑승
-                    elif price_slope_1m < 0 and oi_delta_1m > 0:
-                        direction = "SHORT"   # Case D: 📉 EMA추세 하락 + OI증가 ➡️ 🔴 SHORT 추세 탑승
+                    # [V6.07]: 4대 저격 매트릭스 ✕ 롱/숏 청산 주도 비율(Dominant Liq Ratio) 2차 안전 방화벽
+                    if price_slope_1m < 0 and oi_delta_1m < 0 and long_liq >= short_liq:
+                        direction = "LONG"    # Case A: 📉 EMA하락 + OI감소 + 롱청산주도 ➡️ 🟢 LONG 저점 저격
+                    elif price_slope_1m > 0 and oi_delta_1m < 0 and short_liq >= long_liq:
+                        direction = "SHORT"   # Case B: 📈 EMA상승 + OI감소 + 숏청산주도 ➡️ 🔴 SHORT 고점 저격
+                    elif price_slope_1m > 0 and oi_delta_1m > 0 and short_liq >= long_liq:
+                        direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 🟢 LONG 추세 탑승
+                    elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq >= short_liq:
+                        direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 🔴 SHORT 추세 탑승
                     else:
-                        direction = "LONG" if price_slope_1m >= 0 else "SHORT"
+                        direction = None      # 휩쏘/혼조세/주도비율 불일치 시 100% NONE 기각!
                         
                     # v1.1 성능 격상: CVD 델타 산출 및 1분 큐 업데이트
                     cvd_delta = self.agg_buy_vol - self.agg_sell_vol
@@ -2367,17 +2367,17 @@ class ShinseonV35Engine:
         
         # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
         if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
-            # [모델 4]: 지수가중 추세 기울기(price_slope_1m) ✕ OI속도(oi_delta_1m) 4대 저격 매트릭스
-            if price_slope_1m < 0 and oi_delta_1m < 0:
-                direction = "LONG"    # Case A: 📉 EMA추세 하락 + OI감소 ➡️ 저점 LONG 저격!
-            elif price_slope_1m > 0 and oi_delta_1m < 0:
-                direction = "SHORT"   # Case B: 📈 EMA추세 상승 + OI감소 ➡️ 고점 SHORT 저격!
-            elif price_slope_1m > 0 and oi_delta_1m > 0:
-                direction = "LONG"    # Case C: 📈 EMA추세 상승 + OI증가 ➡️ 상승 추세 LONG 탑승!
-            elif price_slope_1m < 0 and oi_delta_1m > 0:
-                direction = "SHORT"   # Case D: 📉 EMA추세 하락 + OI증가 ➡️ 하강 추세 SHORT 탑승!
+            # [V6.07]: 지수가중 기울기 ✕ OI속도 ✕ 롱/숏 청산 주도 비율 2차 안전 방화벽
+            if price_slope_1m < 0 and oi_delta_1m < 0 and long_liq >= short_liq:
+                direction = "LONG"    # Case A: 📉 EMA하락 + OI감소 + 롱청산주도 ➡️ 저점 LONG 저격!
+            elif price_slope_1m > 0 and oi_delta_1m < 0 and short_liq >= long_liq:
+                direction = "SHORT"   # Case B: 📈 EMA상승 + OI감소 + 숏청산주도 ➡️ 고점 SHORT 저격!
+            elif price_slope_1m > 0 and oi_delta_1m > 0 and short_liq >= long_liq:
+                direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 상승 추세 LONG 탑승!
+            elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq >= short_liq:
+                direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 하강 추세 SHORT 탑승!
             else:
-                direction = None
+                direction = None      # 휩쏘/불일치 시 100% NONE 기각!
         else:
             direction = None  # 임계치 미달 시 기각 (Case 1-5, Case 1-6)
 
