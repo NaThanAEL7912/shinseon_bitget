@@ -2325,14 +2325,16 @@ class ShinseonV35Engine:
                 raw_time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 time_str = f"=\"{raw_time_str}\""
                 
-                # 10대 영문 표준 칼럼: Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),Signal,Bot_State
+                # 12대 영문 표준 칼럼: Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State
                 clean_state = str(bot_state_val).replace(',', ' ')
-                line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{signal_val},{clean_state}\n"
+                price_delta_val = binance_ws_frame.get('price_delta_1m', 0.0)
+                price_slope_val = binance_ws_frame.get('price_slope_1m', 0.0)
+                line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{price_delta_val:+.1f},{price_slope_val:+.4f},{signal_val},{clean_state}\n"
                 
                 def _write_csv(path, content):
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
-                        header_line = "Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),Signal,Bot_State\n"
+                        header_line = "Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State\n"
                         
                         file_exists = os.path.exists(path) and os.path.getsize(path) > 0
                         if not file_exists:
