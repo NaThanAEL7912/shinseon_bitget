@@ -1229,7 +1229,6 @@ class BotCore:
                         
                     import time
                     import os
-                    import json
                     
                     async def _do_bench():
                         t_signal = time.time() * 1000.0
@@ -1274,69 +1273,6 @@ class BotCore:
                     pass
 
         asyncio.create_task(run_background_latency_logger())
-        
-        # [실전 연동 6]: 1시간 주기 브라우저 자동 리로드 데몬 (크롬 메모리 누수 및 프리징 방지) (개발계획서_188_35)
-        async def run_periodic_browser_reloader():
-            reload_interval = 3600.0
-            last_reload_time = time.time()
-            
-            while self.is_running:
-                try:
-                    await asyncio.sleep(60.0) # 1분마다 주기 체크
-                    if not self.is_running:
-                        break
-                        
-                    current_time = time.time()
-                    if current_time - last_reload_time >= reload_interval:
-                        if self.v35_engine and not self.v35_engine.is_position_active and not self.v35_engine.exit_in_progress:
-                            if self.ui_cb:
-                                self.ui_cb(0.0, 1, "🔄 [RPA 복원] 브라우저 누수 방지용 3시간 주기 자동 페이지 새로고침(Reload)을 집행합니다.")
-                            
-                            async with self.cdp_lock:
-                                pw = None
-                                browser = None
-                                try:
-                                    raise NotImplementedError('Playwright removed for Bitget migration') # pw = await async_playwright().start()
-                                    browser = await asyncio.wait_for(
-                                        pw.chromium.connect_over_cdp("http://127.0.0.1:9224", timeout=5000), 
-                                        timeout=10.0
-                                    )
-                                    target_page = None
-                                    for context in browser.contexts:
-                                        for page in context.pages:
-                                            url = page.url
-                                            if "x.me" in url or "bitget" in url:
-                                                target_page = page
-                                                break
-                                        if target_page:
-                                            break
-                                            
-                                    if target_page:
-                                        await target_page.reload()
-                                        if self.ui_cb:
-                                            self.ui_cb(0.0, 1, "✅ [RPA 복원] 브라우저 페이지 새로고침 완료! BITGET 탭이 성공적으로 리로드되었습니다.")
-                                        last_reload_time = current_time
-                                    else:
-                                        if self.ui_cb:
-                                            self.ui_cb(0.0, 1, "⚠️ [RPA 복원] 크롬 브라우저에서 BITGET 탭을 찾을 수 없어 리로드를 건너뜁니다.")
-                                except Exception as e:
-                                    if self.ui_cb:
-                                        self.ui_cb(0.0, 1, f"⚠️ [RPA 복원] 브라우저 연결 실패 ({e}) ➡️ 크롬 브라우저 자동 재기동을 시도합니다.")
-                                    bat_path = os.path.join(BASE_DIR, "디버깅크롬_시작.bat")
-                                    if os.path.exists(bat_path):
-                                        subprocess.Popen(["cmd.exe", "/c", "디버깅크롬_시작.bat"], cwd=BASE_DIR)
-                                        if self.ui_cb:
-                                            self.ui_cb(0.0, 1, "🚀 [RPA 복원] 디버깅 크롬 브라우저 팝업 호출 완료!")
-                                        await asyncio.sleep(3.0)
-                                        last_reload_time = current_time
-                                finally:
-                                    if pw:
-                                        try: await pw.stop()
-                                        except: pass
-                except Exception as ex:
-                    logger.error(f"브라우저 리로더 루프 에러: {ex}")
-                    
-        asyncio.create_task(run_periodic_browser_reloader())
         
         # [실전 연동 1]: 바이낸스 공식 선물 실시간 청산 주문 WSS 백그라운드 수집 테스크 (2초 연결 타임아웃 제한 장착!)
         async def run_liquidation_wss():
