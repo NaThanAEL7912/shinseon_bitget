@@ -1025,19 +1025,41 @@ class BotCore:
                             long_liq = display_liq * 0.5
                             short_liq = display_liq * 0.5
                             
-                    # [SHINSEON_오더플로우_판단_백서.md 4대 저격 매트릭스 100% 정격 연동]
+                    # [SHINSEON_오더플로우_판단_백서.md 4대 저격 매트릭스 & 1분 기울기 추세 엔진 연동]
                     oi_delta_1m = display_oi
-                    price_1m_ago = self.price_history[0][1] if self.price_history else self.current_price
-                    price_delta_1m = self.current_price - price_1m_ago
                     
-                    if price_delta_1m < 0 and oi_delta_1m < 0:
-                        direction = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 🟢 LONG
-                    elif price_delta_1m > 0 and oi_delta_1m < 0:
-                        direction = "SHORT"   # Case B: 📈 가격상승 + OI감소 ➡️ 🔴 SHORT
-                    elif price_delta_1m > 0 and oi_delta_1m > 0:
-                        direction = "LONG"    # Case C: 📈 가격상승 + OI증가 ➡️ 🟢 LONG
-                    elif price_delta_1m < 0 and oi_delta_1m > 0:
-                        direction = "SHORT"   # Case D: 📉 가격하락 + OI증가 ➡️ 🔴 SHORT
+                    # 1. 60.0초(1분 전) 팩트 타임스탬프 시세 탐색 및 1분 기울기(Slope) 산출
+                    now_t = time.time()
+                    target_60s_ago = now_t - 60.0
+                    samples = [(t, p) for t, p in self.price_history if t >= target_60s_ago]
+                    if not samples:
+                        samples = [(now_t, self.current_price)]
+                    
+                    # 1분 전(60초 전) 팩트 시세
+                    price_60s_ago = samples[0][1] if samples else self.current_price
+                    price_delta_1m = self.current_price - price_60s_ago
+                    
+                    # 1분간 시세 추세 기울기 (Slope)
+                    n_samples = len(samples)
+                    if n_samples >= 2:
+                        sum_t = sum(x[0] for x in samples)
+                        sum_p = sum(x[1] for x in samples)
+                        sum_tp = sum(x[0] * x[1] for x in samples)
+                        sum_t2 = sum(x[0] ** 2 for x in samples)
+                        denom = (n_samples * sum_t2 - (sum_t ** 2))
+                        price_slope_1m = (n_samples * sum_tp - (sum_t * sum_p)) / denom if denom != 0 else 0.0
+                    else:
+                        price_slope_1m = 0.0
+                    
+                    # [4대 저격 매트릭스 ✕ 1분 추세 기울기(Slope) 듀얼 검증]
+                    if price_delta_1m < 0 and oi_delta_1m < 0 and price_slope_1m <= 0:
+                        direction = "LONG"    # Case A: 📉 1분간 가격하락 + OI감소 ➡️ 🟢 LONG 저점 저격
+                    elif price_delta_1m > 0 and oi_delta_1m < 0 and price_slope_1m >= 0:
+                        direction = "SHORT"   # Case B: 📈 1분간 가격상승 + OI감소 ➡️ 🔴 SHORT 고점 저격
+                    elif price_delta_1m > 0 and oi_delta_1m > 0 and price_slope_1m >= 0:
+                        direction = "LONG"    # Case C: 📈 1분간 가격상승 + OI증가 ➡️ 🟢 LONG 추세 탑승
+                    elif price_delta_1m < 0 and oi_delta_1m > 0 and price_slope_1m <= 0:
+                        direction = "SHORT"   # Case D: 📉 1분간 가격하락 + OI증가 ➡️ 🔴 SHORT 추세 탑승
                     else:
                         direction = "LONG" if price_delta_1m >= 0 else "SHORT"
                         
@@ -1065,6 +1087,7 @@ class BotCore:
                             'short_liq_usd': short_liq,
                             'oi_delta_1m': display_oi,
                             'price_delta_1m': price_delta_1m,
+                            'price_slope_1m': price_slope_1m,
                             'mid_price': self.current_price,
                             'direction': direction,
                             'session': current_session,
@@ -2335,19 +2358,20 @@ class ShinseonV35Engine:
         # 🎯 [V5.62] SHINSEON 황금 전성기 최적 오더플로우 저격 판정 엔진 (백서 100% 정격)
         # --------------------------------------------------------------------------
         price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
+        price_slope_1m = binance_ws_frame.get('price_slope_1m', 0.0)
         direction = None
         
         # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
         if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
-            # [1단계]: 가격 변동(price_delta_1m) ✕ OI속도(oi_delta_1m) 4대 저격 매트릭스
-            if price_delta_1m < 0 and oi_delta_1m < 0:
-                direction = "LONG"    # Case A: 📉 가격하락 + OI감소 ➡️ 저점 LONG 저격!
-            elif price_delta_1m > 0 and oi_delta_1m < 0:
-                direction = "SHORT"   # Case B: 📈 가격상승 + OI감소 ➡️ 고점 SHORT 저격!
-            elif price_delta_1m > 0 and oi_delta_1m > 0:
-                direction = "LONG"    # Case C: 📈 가격상승 + OI증가 ➡️ 상승 추세 LONG 탑승!
-            elif price_delta_1m < 0 and oi_delta_1m > 0:
-                direction = "SHORT"   # Case D: 📉 가격하락 + OI증가 ➡️ 하강 추세 SHORT 탑승!
+            # [1단계]: 가격 변동(price_delta_1m) ✕ OI속도(oi_delta_1m) ✕ 1분 추세 기울기(price_slope_1m) 듀얼 검증
+            if price_delta_1m < 0 and oi_delta_1m < 0 and price_slope_1m <= 0:
+                direction = "LONG"    # Case A: 📉 1분간 가격하락 + OI감소 ➡️ 저점 LONG 저격!
+            elif price_delta_1m > 0 and oi_delta_1m < 0 and price_slope_1m >= 0:
+                direction = "SHORT"   # Case B: 📈 1분간 가격상승 + OI감소 ➡️ 고점 SHORT 저격!
+            elif price_delta_1m > 0 and oi_delta_1m > 0 and price_slope_1m >= 0:
+                direction = "LONG"    # Case C: 📈 1분간 가격상승 + OI증가 ➡️ 상승 추세 LONG 탑승!
+            elif price_delta_1m < 0 and oi_delta_1m > 0 and price_slope_1m <= 0:
+                direction = "SHORT"   # Case D: 📉 1분간 가격하락 + OI증가 ➡️ 하강 추세 SHORT 탑승!
             else:
                 direction = None
         else:
