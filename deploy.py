@@ -39,24 +39,19 @@ def increment_version(version_str):
         pass
     return version_str + "_new"
 
-def update_master_app_version(new_version):
-    main_app_path = os.path.join(BASE_DIR, "shinseon_master_app.pyw")
-    if os.path.exists(main_app_path):
-        try:
-            with open(main_app_path, "r", encoding="utf-8") as f:
+def update_app_version(new_version):
+    targets = ["shinseon_client.pyw", "shinseon_server.py"]
+    for target in targets:
+        path = os.path.join(BASE_DIR, target)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
                 content = f.read()
             import re
             pattern = r"(self\.CURRENT_VERSION\s*=\s*[\"'])([^\"']*)([\"'])"
             new_content = re.sub(pattern, rf"\g<1>{new_version}\g<3>", content)
-            with open(main_app_path, "w", encoding="utf-8") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(new_content)
-            print(f"shinseon_master_app.pyw 내 self.CURRENT_VERSION을 {new_version}으로 자동 업데이트했습니다.")
-            return True
-        except Exception as e:
-            print(f"shinseon_master_app.pyw 버전 치환 실패: {e}")
-    else:
-        print("shinseon_master_app.pyw 파일을 찾을 수 없습니다.")
-    return False
+            print(f"{target} 버전 업데이트 완료: {new_version}")
 
 def run_cmd(cmd):
     print(f"실행 중: {cmd}")
@@ -105,39 +100,41 @@ def main():
         
     print(f"배포 예정 신규 버전: {new_version}")
     
-    update_master_app_version(new_version)
+    update_app_version(new_version)
     
     config_data["CURRENT_VERSION"] = new_version
     save_config(config_data)
     print("shinseon_config.json 내 버전 정보가 성공적으로 업데이트되었습니다.")
     
-    # [SHINSEON_BlueDragon] 배포용 폴더 구조 생성 및 파일 복사
-    target_deploy_dir = os.path.join(BASE_DIR, "SHINSEON_BlueDragon")
-    os.makedirs(target_deploy_dir, exist_ok=True)
-    os.makedirs(os.path.join(target_deploy_dir, "docs"), exist_ok=True)
-    
-    import shutil
     try:
-        shutil.copy2(os.path.join(BASE_DIR, "shinseon_master_app.pyw"), os.path.join(target_deploy_dir, "shinseon_master_app.pyw"))
-        shutil.copy2(os.path.join(BASE_DIR, "shinseon_config.json"), os.path.join(target_deploy_dir, "shinseon_config.json"))
+        files_to_deploy = [
+            "shinseon_server.py",
+            "shinseon_client.pyw",
+            "shinseon_updater.py",
+            "shinseon_config.json",
+            "client_config.json",
+            "server_config.json",
+            "core_logic.py",
+            "Start_Sejong.bat",
+            "신선_비트겟_클라이언트.bat"
+        ]
         
-        license_src = os.path.join(BASE_DIR, "docs", "license.json")
-        if os.path.exists(license_src):
-            shutil.copy2(license_src, os.path.join(target_deploy_dir, "docs", "license.json"))
-        print("🚀 [배포 준비] SHINSEON_BlueDragon 하위 폴더로 복사 완료!")
+        for f in files_to_deploy:
+            src = os.path.join(BASE_DIR, f)
+            if os.path.exists(src):
+                run_cmd(f"git add \"{f}\"")
+                
+        run_cmd("git add docs/")
+        print("🚀 [배포 준비] Git 스테이징 완료!")
     except Exception as copy_err:
-        print(f"배포 폴더 복사 중 오류 발생: {copy_err}")
-        sys.exit(1)
-        
-    if not run_cmd("git add SHINSEON_BlueDragon/"):
-        print("Git add 실패로 배포를 중단합니다.")
+        print(f"배포 준비 중 오류 발생: {copy_err}")
         sys.exit(1)
         
     commit_msg = f"Deploy version {new_version}"
     if not run_cmd(f'git commit -m "{commit_msg}"'):
         print("경고: Git commit에 변경점이 없거나 실패했습니다. 계속 푸시를 시도합니다.")
         
-    if not run_cmd("git push origin master"):
+    if not run_cmd("git push origin main"):
         print("GitHub 원격 전송(push)에 실패했습니다.")
         sys.exit(1)
         

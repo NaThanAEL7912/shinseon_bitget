@@ -1,89 +1,100 @@
-import sys
 import re
 
-file_path = r'C:\Working\AntiGravity\ShinSeon_Bitget\shinseon_master_app.pyw'
-with open(file_path, 'r', encoding='utf-8') as f:
-    content = f.read()
+with open('shinseon_client_stripped.pyw', 'r', encoding='utf-8') as f:
+    code = f.read()
 
-# find the do_position_sync function
-match = re.search(r'    async def do_position_sync\(self\):.*?        finally:\n            self\.btn_position_sync\.setEnabled\(True\)\n            self\.btn_position_sync\.setText\("🔄 포지션 동기화"\)\n', content, re.DOTALL)
-if match:
-    new_code = '''    async def do_position_sync(self):
-        try:
-            if not getattr(self.bot_core, 'bitget_exchange', None):
-                self.add_log("❌ [동기화 실패] CCXT Bitget 거래소 객체가 존재하지 않습니다.")
-                return
+# 1. Remove ccxt, aiohttp imports
+code = re.sub(r'import ccxt.*?\n', '', code)
+code = re.sub(r'import aiohttp.*?\n', '', code)
 
-            positions = await self.bot_core.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
-            
-            active_pos = None
-            for pos in positions:
-                contracts = float(pos.get('contracts', 0.0))
-                if contracts > 0:
-                    direction = "LONG" if pos.get('side', '').lower() == 'long' else "SHORT"
-                    entry_price = float(pos.get('entryPrice', 0.0))
-                    vol = int(round(contracts * 1000))
-                    pos_id = pos.get('id', '')
-                    active_pos = {
-                        "direction": direction,
-                        "entryPrice": entry_price,
-                        "positionIds": [pos_id] if pos_id else [],
-                        "volume": vol
-                    }
-                    break
-                    
-            if active_pos:
-                direction = active_pos["direction"]
-                entry_price = active_pos["entryPrice"]
-                pos_ids = active_pos.get("positionIds", [])
-                
-                if self.bot_core.v35_engine:
-                    if not self.bot_core.v35_engine.is_position_active or self.bot_core.v35_engine.entry_direction != direction:
-                        self.bot_core.v35_engine.peak_pnl_pct = 0.0
-                    self.bot_core.v35_engine.is_position_active = True
-                    self.bot_core.v35_engine.entry_direction = direction
-                    self.bot_core.v35_engine.entry_price = entry_price
-                    # [3차 방어선] pos_ids가 빈 목록이더라도 기존 엔진이 확보한 active_position_ids가 있으면 유지
-                    if pos_ids:
-                        self.bot_core.v35_engine.active_position_ids = pos_ids
-                    elif not self.bot_core.v35_engine.active_position_ids:
-                        self.bot_core.v35_engine.active_position_ids = []
-                    self.bot_core.v35_engine.position_volume = active_pos.get("volume", 1)
-                    
-                    # [신설]: 동기화 성공 시 자고 있던 가드레일 루프 즉시 자동 기상!
-                    if not getattr(self.bot_core.v35_engine, "is_guardrail_running", False):
-                        import asyncio
-                        asyncio.create_task(self.bot_core.v35_engine.manage_v35_exit_guardrail(direction))
-                        self.add_log(f"⚡ [가드레일 자동 기상] 동기화 성공! 자고 있던 출구 감시 루프가 즉시 기상하여 실시간 감시를 개시합니다. (방향: {direction})")
-                    
-                self.lbl_guardrail.setText(f"진입/청산 상태:\\n[{direction} 진입 완료] 단가: {entry_price:,.0f}")
-                self.add_log(f"✔ [동기화 완료] 열린 포지션 감지: {direction} @ {entry_price:,.1f} USD (ID 목록: {pos_ids})")
-            else:
-                if self.bot_core.v35_engine:
-                    self.bot_core.v35_engine.is_position_active = False
-                    self.bot_core.v35_engine.entry_price = 0.0
-                    self.bot_core.v35_engine.position_volume = 0
-                    self.bot_core.v35_engine.entry_direction = ""
-                    self.bot_core.v35_engine.is_half_exited = False
-                    self.bot_core.v35_engine.has_pyramided = False
-                    self.bot_core.v35_engine.has_second_entry = False
-                    self.bot_core.v35_engine.has_third_entry = False
-                    self.bot_core.v35_engine.has_smart_guarded = False
-                    self.bot_core.v35_engine.exit_in_progress = False
-                self.lbl_guardrail.setText("진입/청산 상태:\\n[100% 현금 대기 중]")
-                self.add_log("✔ [동기화 완료] 열려있는 포지션이 없습니다. (100% 현금)")
-            
-            self.add_log("🌓 [수동 리로드] BITGET 포지션 상태를 강제로 재동기화 완료하였습니다.")
-            
-        except Exception as e:
-            self.add_log(f"❌ [동기화 실패] 포지션 스캔 중 오류 발생: {e}")
-        finally:
-            self.btn_position_sync.setEnabled(True)
-            self.btn_position_sync.setText("🔄 포지션 동기화")
+# 2. Add CSV button logic
+csv_btn_code = '''
+        # CSV 다운로드 버튼 추가
+        self.btn_csv_download = QPushButton("📥 CSV 데이터 다운로드", right_widget)
+        self.btn_csv_download.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #DEBA9D, stop:1 #C5A07A);
+                color: #0F0E0E;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 11px;
+                border-radius: 4px;
+                border: 1px solid #A88869;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #E5C199, stop:1 #DEBA9D);
+            }
+        """)
+        self.btn_csv_download.clicked.connect(self.request_csv_download)
+        right_layout.addWidget(self.btn_csv_download)
 '''
-    content = content[:match.start()] + new_code + content[match.end():]
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(content)
-    print('Successfully patched do_position_sync')
-else:
-    print('Could not find the target block!')
+
+code = code.replace('right_layout.addStretch()', csv_btn_code + '\n        right_layout.addStretch()')
+
+# 3. Add Websocket Client logic and CSV handler
+ws_logic = '''
+    def request_csv_download(self):
+        if hasattr(self, 'ws') and self.ws:
+            import json
+            asyncio.create_task(self.ws.send(json.dumps({'type': 'csv_request'})))
+            self.add_log("[CSV] 서버에 데이터 다운로드를 요청했습니다.")
+
+    async def connect_websocket(self):
+        url = 'ws://13.192.187.244:8765'
+        while True:
+            try:
+                self.add_log(f"[Websocket] 일본 AWS 릴레이 서버 연결 시도: {url}")
+                async with websockets.connect(url) as ws:
+                    self.ws = ws
+                    self.add_log("[Websocket] 서버 연결 성공!")
+                    import json
+                    await self.ws.send(json.dumps({'type': 'auth', 'secret': 'SECRET_TOKEN_HERE'}))
+                    
+                    async for message in ws:
+                        data = json.loads(message)
+                        if data.get('type') == 'update':
+                            if 'price' in data:
+                                self.current_price = float(data['price'])
+                                self.lbl_price.setText(f"BTC/USDT 실시간 가격: {self.current_price:,.1f} USDT")
+                            if 'log' in data:
+                                self.add_log(data['log'])
+                            if 'liq' in data:
+                                self.bar_liq.setValue(int(data['liq']))
+                                self.bar_liq.setFormat(f"1분 누적 청산: ${int(data['liq']):,} / $2.0M")
+                        elif data.get('type') == 'csv_data':
+                            csv_content = data.get('content')
+                            with open('downloaded_data.csv', 'w', encoding='utf-8') as f:
+                                f.write(csv_content)
+                            self.add_log("[CSV] 데이터 다운로드 완료 및 저장 성공!")
+            except Exception as e:
+                self.add_log(f"[Websocket] 연결 오류: {e}. 3초 후 재시도...")
+                await asyncio.sleep(3)
+'''
+code = code.replace('def add_log(self, text):', ws_logic + '\n    def add_log(self, text):')
+
+# 4. Change config load
+code = code.replace('.env', 'client_config.json')
+
+# 5. Fix initialization in __main__
+main_block = '''
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    loop = QEventLoop(app)
+    asyncio.set_event_loop(loop)
+    
+    class DummyBot:
+        v35_engine = None
+        
+    dashboard = ShinseonDashboard(DummyBot())
+    dashboard.show()
+    
+    asyncio.create_task(dashboard.connect_websocket())
+    
+    with loop:
+        loop.run_forever()
+'''
+code = re.sub(r'if __name__ == "__main__":.*', main_block, code, flags=re.DOTALL)
+
+# Write to the final target file
+with open('shinseon_client.pyw', 'w', encoding='utf-8') as f:
+    f.write(code)
