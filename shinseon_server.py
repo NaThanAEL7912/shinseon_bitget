@@ -2436,8 +2436,9 @@ class ShinseonV35Engine:
                         return
                         
                     # [v2.55 황금 전성기 헌법 복원]: OI 부호(+/-) 상관없이 반대 신호 수신 즉시 기존 포지션 100% 전량 시장가 청산!
-                    logger.info(f"🚨 [TRADE] [v2.55 반대 시그널 포착] 보유 포지션({self.entry_direction})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
-                    self.exit_reason = f"반대 방향 진짜 자금 유입(OI>0 & 임계치돌파) 스위칭 감지 (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"
+                    saved_pos_dir = str(self.entry_direction or "LONG").upper()
+                    logger.info(f"🚨 [TRADE] [v2.55 반대 시그널 포착] 보유 포지션({saved_pos_dir})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
+                    self.exit_reason = f"반대 방향 진짜 자금 유입(OI>0 & 임계치돌파) 스위칭 감지 (보유: {saved_pos_dir} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"
                     self.exit_in_progress = True
                     
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
@@ -2446,7 +2447,7 @@ class ShinseonV35Engine:
                     real_entry_p = getattr(self, "active_position_entry_price", None) or getattr(self, "entry_price_1", None) or self.entry_price
                     if real_entry_p <= 0.0:
                         real_entry_p = current_bitget_price
-                    exit_pnl_pct = (current_bitget_price - real_entry_p) / real_entry_p if self.entry_direction == "LONG" else (real_entry_p - current_bitget_price) / real_entry_p
+                    exit_pnl_pct = (current_bitget_price - real_entry_p) / real_entry_p if saved_pos_dir == "LONG" else (real_entry_p - current_bitget_price) / real_entry_p
                     
                     # 1. [0.000초 선제 락킹]: 1초 딜레이 틈새 휩소 이중진입 방지용으로 우선 300초 안전 손절 쿨타임 선제 마킹!
                     preemptive_cd = float(getattr(dashboard, "cooldown_seconds", 300.0))
@@ -2488,7 +2489,7 @@ class ShinseonV35Engine:
                         real_exit_qty = getattr(self, "last_actual_exit_qty", 0.0) or 0.001
                         
                         # 3. 비트겟 실체결 평단가/청산가 기반 100% 팩트 PnL 재판정 및 쿨타임 최종 확정
-                        confirmed_pnl_pct = (real_exit_price - real_entry_p) / real_entry_p if self.entry_direction == "LONG" else (real_entry_p - real_exit_price) / real_entry_p
+                        confirmed_pnl_pct = (real_exit_price - real_entry_p) / real_entry_p if saved_pos_dir == "LONG" else (real_entry_p - real_exit_price) / real_entry_p
                         final_cd = float(getattr(dashboard, "cooldown_seconds", 300.0)) if confirmed_pnl_pct <= 0.0001 else float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
                         final_cd_label = "반대신호 손절 쿨타임(300초)" if confirmed_pnl_pct <= 0.0001 else "반대신호 익절/스위칭 쿨타임(15초)"
                         
@@ -2500,7 +2501,7 @@ class ShinseonV35Engine:
                         kst_time_str = get_kst_now_str()
                         exit_msg = build_telegram_trade_msg(
                             title="🔄 [반대 시그널 청산 알림]",
-                            direction=self.entry_direction or "LONG",
+                            direction=saved_pos_dir,
                             reason=self.exit_reason,
                             signal_time=kst_time_str,
                             signal_qty=real_exit_qty,
