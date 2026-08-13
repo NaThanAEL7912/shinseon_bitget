@@ -2288,10 +2288,8 @@ class ShinseonV35Engine:
                 # [타점 시그널 (signal) 일원화: binance_ws_frame 단일 깃발 100% 직송 동기화]
                 if (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi):
                     raw_sig = binance_ws_frame.get('direction', 'NONE')
-                    if raw_sig == "LONG":
-                        signal_val = "★ LONG"
-                    elif raw_sig == "SHORT":
-                        signal_val = "★ SHORT"
+                    if raw_sig in ["LONG", "SHORT"]:
+                        signal_val = raw_sig
                     else:
                         signal_val = "NONE"
                 else:
@@ -2304,22 +2302,22 @@ class ShinseonV35Engine:
                 raw_time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 time_str = f"=\"{raw_time_str}\""
                 
-                # 10대 한글 칼럼: 일시(KST),비트코인 시세($),1분 누적 청산($),1분 롱 청산($),1분 숏 청산($),청산 임계치($),1분 OI 속도(%),OI속도 임계치(%),타점 시그널,봇 구동 상태
+                # 10대 영문 표준 칼럼: Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),Signal,Bot_State
                 clean_state = str(bot_state_val).replace(',', ' ')
                 line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{signal_val},{clean_state}\n"
                 
                 def _write_csv(path, content):
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
-                        header_line = "일시(KST),비트코인 시세($),1분 누적 청산($),1분 롱 청산($),1분 숏 청산($),청산 임계치($),1분 OI 속도(%),OI속도 임계치(%),타점 시그널,봇 구동 상태\n"
+                        header_line = "Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),Signal,Bot_State\n"
                         
                         file_exists = os.path.exists(path) and os.path.getsize(path) > 0
                         if not file_exists:
-                            with open(path, "w", encoding="cp949", errors="ignore") as f:
+                            with open(path, "w", encoding="utf-8") as f:
                                 f.write(header_line)
                                 f.write(content)
                         else:
-                            with open(path, "a", encoding="cp949", errors="ignore") as f:
+                            with open(path, "a", encoding="utf-8") as f:
                                 f.write(content)
                     except Exception as e:
                         logger.error(f"CSV 레코더 쓰기 에러: {e}")
