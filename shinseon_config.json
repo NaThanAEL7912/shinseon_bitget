@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.86",
+    "CURRENT_VERSION": "V5.87",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,8 +7,8 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 400000.0,
-            "oi": 0.15,
+            "liq": 100000.0,
+            "oi": 0.007,
             "sl": -1.0,
             "enabled": true
         },
@@ -56,9 +56,9 @@
         }
     },
     "leverage_level": 30,
-    "betting_ratio": 1500.0,
-    "split_entry_1_ratio": 1000.0,
-    "split_entry_2_ratio": 500.0,
+    "betting_ratio": 750.0,
+    "split_entry_1_ratio": 500.0,
+    "split_entry_2_ratio": 250.0,
     "split_entry_2_trigger_pct": -0.3,
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,

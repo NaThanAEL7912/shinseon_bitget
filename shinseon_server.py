@@ -3023,15 +3023,13 @@ class ShinseonV35Engine:
         self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(final_cooldown_sec, reason_label))
 
         # --- [신설] 청산 알림 통합 발송 엔진 (누락 100% 방지 및 출구 슬리피지 계측) ---
-        if not getattr(self, "exit_msg_sent", False):
+        if not getattr(self, "exit_msg_sent", False) and not self.is_position_active:
             self.exit_msg_sent = True
             current_bitget_price = await self.get_live_bitget_price_internal()
             reason = getattr(self, "exit_reason", "") or "거래소 서버 사이드 스탑로스 체결 또는 수동 청산"
             
-            # 신호 정보 추출
+            # 신호 정보 추출 (유령 스탑로스 예약가 오역 원천 사멸)
             trigger_price = getattr(self, "last_exit_trigger_price", 0.0)
-            if trigger_price <= 0.0:
-                trigger_price = getattr(self, "last_placed_stop_price", self.entry_price)
             if trigger_price <= 0.0:
                 trigger_price = current_bitget_price
             signal_price = trigger_price
@@ -3045,14 +3043,14 @@ class ShinseonV35Engine:
             if signal_qty <= 0.0:
                 signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
                 
-            # 실제 체결 정보 추출 (js_dom_actual_trade 등에서 획득)
+            # 실제 체결 정보 추출 (실제 비트겟 시세 연동)
             actual_price = getattr(self, "last_actual_exit_price", 0.0)
             actual_time = getattr(self, "last_actual_exit_time", "")
             actual_qty = getattr(self, "last_actual_exit_qty", 0.0)
             if actual_qty <= 0.0:
                 actual_qty = float(getattr(self, "position_volume", 0)) / 1000.0
             if actual_price <= 0.0:
-                actual_price = signal_price if signal_price > 0.0 else current_bitget_price
+                actual_price = current_bitget_price
             if not actual_time:
                 actual_time = signal_time
 
