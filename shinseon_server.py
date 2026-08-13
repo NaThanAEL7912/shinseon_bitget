@@ -140,7 +140,8 @@ def build_telegram_trade_msg(title, direction, reason, signal_time="", signal_qt
     if is_entry:
         entry_p_val = actual_price if actual_price > 0 else sig_p_val
         entry_p_str = f"{entry_p_val:,.1f} USDT" if entry_p_val > 0 else sig_p_str
-        slip_usd = (entry_p_val - sig_p_val) if (direction == "LONG" and sig_p_val > 0) else (sig_p_val - entry_p_val) if sig_p_val > 0 else 0.0
+        # 진입 슬리피지: 유리한 체결이면 플러스(+), 불리하면 마이너스(-)
+        slip_usd = (sig_p_val - entry_p_val) if direction == "LONG" else (entry_p_val - sig_p_val)
         slip_pct = (slip_usd / sig_p_val * 100.0) if sig_p_val > 0 else 0.0
         
         msg = (
@@ -171,7 +172,8 @@ def build_telegram_trade_msg(title, direction, reason, signal_time="", signal_qt
         btc_vol = actual_qty if actual_qty > 0 else (signal_qty if signal_qty > 0 else 0.007)
         pnl_usdt = btc_vol * ent_p_val * pnl_pct if ent_p_val > 0 else 0.0
         
-        slip_usd = (sig_p_val - exit_p_val) if (direction == "LONG" and sig_p_val > 0) else (exit_p_val - sig_p_val) if sig_p_val > 0 else 0.0
+        # 청산 슬리피지: 유리한 체결이면 플러스(+), 불리하면 마이너스(-)
+        slip_usd = (exit_p_val - sig_p_val) if direction == "LONG" else (sig_p_val - exit_p_val)
         slip_pct = (slip_usd / sig_p_val * 100.0) if sig_p_val > 0 else 0.0
         
         msg = (
