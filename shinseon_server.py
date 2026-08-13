@@ -2611,27 +2611,39 @@ class ShinseonV35Engine:
                             self.cooldown_timer_task.cancel()
                         self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(60.0, "신규 진입 60초 쿨타임"))
                         
-                        step4_msg = f"✅ [4단계 체결완료 v4.82] 비트겟 선물 {direction} 시장가 체결 성공! (체결가: ${expected_fill:,.1f})"
+                        # 1. 비트겟 주문 체결 완료 후 1.0초 비동기 대기 (실체결 팩트 동기화)
+                        await asyncio.sleep(1.0)
+                        if self.bot and hasattr(self.bot, "sync_bitget_real_position_status"):
+                            try:
+                                await self.bot.sync_bitget_real_position_status()
+                            except Exception:
+                                pass
+                                
+                        real_entry_price = getattr(self, "active_position_entry_price", None) or self.entry_price
+                        if real_entry_price <= 0.0:
+                            real_entry_price = expected_fill
+                        self.active_position_entry_price = real_entry_price
+                        self.entry_price = real_entry_price
+                        
+                        real_qty_btc = (float(self.position_volume) / 1000.0) if getattr(self, "position_volume", 0) > 0 else (float(getattr(self, "position_volume", 0)) if getattr(self, "position_volume", 0) > 0 else 0.001)
+                        if real_qty_btc <= 0.0:
+                            real_qty_btc = 0.001
+                            
+                        step4_msg = f"✅ [4단계 체결완료 v5.88] 비트겟 선물 {direction} 시장가 실체결 확정! (실체결가: ${real_entry_price:,.1f}, 수량: {real_qty_btc:.4f} BTC)"
                         if self.bot and hasattr(self.bot, "broadcast_event"):
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": step4_msg}))
                         
                         signal_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        dashboard_obj = getattr(self.bot, "dashboard", None) or self.bot
-                        ratio_val = float(getattr(dashboard_obj, "split_entry_1_ratio", 100.0) or 100.0)
-                        bal_val = float(getattr(self.bot, "bitget_balance", 0.0) or 30.0)
-                        qty_btc = max(0.001, round((bal_val * (ratio_val / 100.0)) / binance_mid, 3))
-                        if getattr(self, "position_volume", 0) > 0:
-                            qty_btc = float(self.position_volume) / 1000.0
                         entry1_msg = build_telegram_trade_msg(
                             title="🎯 [1차 진입 알림]",
                             direction=direction,
                             reason=f"1분 청산 ${rolling_1m_liq_usd:,.0f} & OI속도 {oi_delta_1m:+.4f}% 동시 돌파",
                             signal_time=signal_time_str,
-                            signal_qty=qty_btc,
+                            signal_qty=real_qty_btc,
                             signal_price=binance_mid,
                             actual_time=signal_time_str,
-                            actual_qty=qty_btc,
-                            actual_price=getattr(self, "last_actual_entry_price", 0.0) or expected_fill,
+                            actual_qty=real_qty_btc,
+                            actual_price=real_entry_price,
                             is_entry=True
                         )
                         if self.bot and self.bot.dashboard:

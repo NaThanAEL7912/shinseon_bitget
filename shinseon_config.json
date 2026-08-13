@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V5.87",
+    "CURRENT_VERSION": "V5.88",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -8,7 +8,7 @@
     "session_thresholds": {
         "asia": {
             "liq": 100000.0,
-            "oi": 0.007,
+            "oi": 0.7,
             "sl": -1.0,
             "enabled": true
         },
