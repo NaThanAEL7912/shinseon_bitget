@@ -3000,6 +3000,20 @@ class ShinseonV35Engine:
 
 
             
+            # [V6.23 신설] 2시간 장기 방향성 대비 수익 중 전용 무위험 본전가드 (1시간~2시간 경과 & 수익 중일 때)
+            elapsed_minutes = (time.time() - getattr(self, "last_entry_time", time.time())) / 60.0
+            if elapsed_minutes >= 60.0 and not getattr(self, "has_time_breakeven_guarded", False) and pnl_pct >= 0.0005:
+                self.has_time_breakeven_guarded = True
+                new_sl_price = self.entry_price * (1.0 + 0.0005) if direction == "LONG" else self.entry_price * (1.0 - 0.0005)
+                self.last_placed_stop_price = new_sl_price
+                asyncio.create_task(self.place_bitget_tpsl_plan_orders(self.entry_price, direction, self.position_volume, is_smart_guard=True))
+                log_msg = f"🛡️ [2시간 무위험 본전가드 발동] 진입 후 {elapsed_minutes:.0f}분 경과 & 수익 중(PnL {pnl_pct*100:+.2f}%) 포착 ➡️ 손절선을 무위험 본전가({new_sl_price:,.1f})로 상향 배치 완료!"
+                logger.info(log_msg)
+                if self.bot and self.bot.dashboard:
+                    self.bot.dashboard.add_log(log_msg)
+                    tg_msg = f"<b>🛡️ [2시간 무위험 본전가드 알림]</b>\n방향: <b>{direction}</b>\n사유: <b>진입 후 {elapsed_minutes:.0f}분 경과 & 수익 중 포착 ➡️ 무위험 본전가 상향</b>\n새 스탑로스: <b>{new_sl_price:,.1f} USDT</b>"
+                    self.bot.dashboard.send_telegram_notification(tg_msg)
+            
             # [V5.40 신설] 중간 수익 보존 가드레일 (최소값 % 도달 시 가드값 % 스탑로스 자동 배치)
             mid_trig = float(getattr(self.bot, "mid_guard_trigger", 0.60)) / 100.0
             mid_off = float(getattr(self.bot, "mid_guard_offset", -0.10))
