@@ -2077,6 +2077,10 @@ class ShinseonV35Engine:
                         self.bot.ui_cb(0.0, 0, "🎯 [스탑 완료] 스탑로스 API 발주 (현재 모니터링 감지로 대체됨)")
                         
                     else:
+                        if side not in ["LONG", "SHORT"]:
+                            logger.error(f"❌ [진입 발주 기각] 유효하지 않은 진입 방향(side={side}) ➡️ 비트겟 발주 100% 차단")
+                            self.bot.ui_cb(0.0, 0, f"❌ [진입 발주 기각] 유효하지 않은 진입 방향(side={side}) ➡️ 비트겟 발주 100% 차단")
+                            return False
                         ccxt_side = 'buy' if side == 'LONG' else 'sell'
                         
                         if order_type == "ADD_PYRAMIDING":
@@ -2650,8 +2654,8 @@ class ShinseonV35Engine:
                             asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": rej_msg}))
                         return
                 
-            # 3단계 & 4단계: 발주 전송 및 체결 로그 송출
-            if not self.is_position_active and self.is_snipe_active and not self.exit_in_progress:
+            # 3단계 & 4단계: 발주 전송 및 체결 로그 송출 (오직 direction이 LONG 또는 SHORT일 때만 전격 실행!)
+            if direction and direction in ["LONG", "SHORT"] and not self.is_position_active and self.is_snipe_active and not self.exit_in_progress:
                 self.is_position_active = True
                 self.last_entry_time = time.time()
                 self.entry_direction = direction
