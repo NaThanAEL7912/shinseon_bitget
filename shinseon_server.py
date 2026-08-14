@@ -1811,6 +1811,10 @@ class ShinseonV35Engine:
             if not (api_key and secret_key and passphrase):
                 return
                 
+            # 1. UI 대시보드 연동 분할익절 비율 연산 (50% 등 v6.22)
+            split_close_pct = float(getattr(dashboard, "split_close_ratio", getattr(dashboard, "split_tp_ratio", 50.0))) / 100.0
+            tp_size_btc = max(0.0001, round(qty_btc * split_close_pct, 4))
+            
             url_base = "https://api.bitget.com"
             path_plan = "/api/v2/mix/order/place-tpsl-order"
             hold_side = "long" if direction == "LONG" else "short"
@@ -1822,6 +1826,7 @@ class ShinseonV35Engine:
                 "planType": "pos_profit",
                 "triggerPrice": str(round(tp_price, 1)),
                 "triggerType": "fill_price",
+                "size": str(tp_size_btc),
                 "holdSide": hold_side
             }
             
