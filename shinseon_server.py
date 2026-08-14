@@ -1740,6 +1740,112 @@ class ShinseonV35Engine:
         curr_val = getattr(getattr(self, "bot", None), "current_price", 0.0) or getattr(self, "current_price", 0.0)
         return float(curr_val) if curr_val > 0.0 else 65000.0
 
+    async def cancel_all_open_plan_orders(self):
+        """비트겟 거래소 내 미체결 스탑/익절 예약 플랜 주문 100% 전량 캔슬 정화"""
+        try:
+            ex_obj = getattr(self.bot, "bitget_exchange", None)
+            if ex_obj:
+                open_orders = await ex_obj.fetch_open_orders('BTC/USDT:USDT')
+                for o in open_orders:
+                    await ex_obj.cancel_order(o['id'], 'BTC/USDT:USDT')
+                logger.info("🧹 [서버사이드 정화 완료] 미체결 TP/SL 플랜 주문 100% 전량 취소 완료")
+        except Exception as e:
+            logger.error(f"비트겟 미체결 플랜 주문 정화 예외: {e}")
+
+    async def place_bitget_tpsl_plan_orders(self, entry_price, direction, qty_btc, is_smart_guard=False):
+        """
+        [V6.18 비트겟 거래소 서버사이드 듀얼 TP/SL 선주문 박기]
+        - 진입 즉시 TP (익절가) 및 SL (손절가 / 스마트 본전가드) 비트겟 거래소 플랜 주문 선제 배치
+        - 100% UI 대시보드 설정값 연동
+        """
+        try:
+            if not direction or direction not in ["LONG", "SHORT"] or entry_price <= 0.0 or qty_btc <= 0.0:
+                return
+                
+            dashboard = getattr(self.bot, "dashboard", None) or self.bot
+            if not dashboard:
+                return
+                
+            # 1. UI 대시보드 설정값 연동
+            tp_pct = float(getattr(dashboard, "profit_tp_pct", getattr(dashboard, "split_tp_pct", 0.3))) / 100.0
+            initial_sl_pct = float(getattr(dashboard, "initial_sl_pct", 0.3)) / 100.0
+            entry_sl_guard = float(getattr(dashboard, "entry_sl_guard", 0.1)) / 100.0
+            
+            # 2. 목표가 연산
+            if direction == "LONG":
+                tp_price = entry_price * (1.0 + tp_pct)
+                if is_smart_guard or getattr(self, "has_smart_guarded", False):
+                    sl_price = entry_price * (1.0 + entry_sl_guard)
+                else:
+                    sl_price = entry_price * (1.0 - initial_sl_pct)
+            else:
+                tp_price = entry_price * (1.0 - tp_pct)
+                if is_smart_guard or getattr(self, "has_smart_guarded", False):
+                    sl_price = entry_price * (1.0 - entry_sl_guard)
+                else:
+                    sl_price = entry_price * (1.0 + initial_sl_pct)
+                    
+            # 3. 비트겟 REST API로 TP & SL 미체결 플랜 주문 전송
+            env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
+            api_key = env_vars.get("BITGET_API_KEY", "")
+            secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+            passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+            if not (api_key and secret_key and passphrase):
+                return
+                
+            url_base = "https://api.bitget.com"
+            path_plan = "/api/v2/mix/order/place-plan-order"
+            close_side = "sell" if direction == "LONG" else "buy"
+            hold_side = "long" if direction == "LONG" else "short"
+            
+            tp_body = {
+                "symbol": "BTCUSDT",
+                "productType": "USDT-FUTURES",
+                "marginCoin": "USDT",
+                "planType": "profit_plan",
+                "triggerPrice": str(round(tp_price, 1)),
+                "triggerType": "fill_price",
+                "orderType": "market",
+                "size": str(round(qty_btc, 4)),
+                "side": close_side,
+                "holdSide": hold_side,
+                "reduceOnly": "true"
+            }
+            
+            sl_body = {
+                "symbol": "BTCUSDT",
+                "productType": "USDT-FUTURES",
+                "marginCoin": "USDT",
+                "planType": "loss_plan",
+                "triggerPrice": str(round(sl_price, 1)),
+                "triggerType": "fill_price",
+                "orderType": "market",
+                "size": str(round(qty_btc, 4)),
+                "side": close_side,
+                "holdSide": hold_side,
+                "reduceOnly": "true"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                for plan_name, b_dict in [("TP(익절)", tp_body), ("SL(손절)", sl_body)]:
+                    b_json = json.dumps(b_dict)
+                    ts = str(int(time.time() * 1000))
+                    msg = ts + "POST" + path_plan + b_json
+                    mac = hmac.new(secret_key.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256)
+                    sign = base64.b64encode(mac.digest()).decode('utf-8')
+                    headers = {
+                        'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign, 'ACCESS-TIMESTAMP': ts,
+                        'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                    }
+                    async with session.post(url_base + path_plan, headers=headers, data=b_json) as resp:
+                        res = await resp.json()
+                        if res.get("code") == "00000":
+                            logger.info(f"📌 [서버사이드 {plan_name} 선주문 성공] 목표가: ${b_dict['triggerPrice']} (수량: {qty_btc} BTC)")
+                        else:
+                            logger.warning(f"⚠️ [서버사이드 {plan_name} 선주문 응답]: {res.get('msg')} (코드: {res.get('code')})")
+        except Exception as err:
+            logger.error(f"비트겟 서버사이드 TP/SL 선주문 예외: {err}")
+
     async def execute_bitget_internal_packet(self, side, order_type, custom_ratio=0.5):
         if order_type in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
             if getattr(self, "is_split_entering", False):
@@ -2060,6 +2166,9 @@ class ShinseonV35Engine:
                             self.has_second_entry = False
                             self.has_third_entry = False
                             self.exit_in_progress = False
+                            
+                            # [V6.18 추가]: 청산 시 비트겟 거래소 내 남은 미체결 플랜 주문 100% 캔슬 정화!
+                            asyncio.create_task(self.cancel_all_open_plan_orders())
                             
                             profit_cd_sec = float(getattr(dashboard, "profit_cooldown_seconds", 15.0))
                             loss_cd_sec = float(getattr(dashboard, "cooldown_seconds", 300.0))
@@ -2704,6 +2813,9 @@ class ShinseonV35Engine:
                             'direction': direction,
                             'timestamp': time.time()
                         }
+                        
+                        # [V6.18 추가]: 비트겟 거래소 서버사이드 듀얼 TP/SL 선주문 박기 직송!
+                        asyncio.create_task(self.place_bitget_tpsl_plan_orders(real_entry_price, direction, real_qty_btc))
                             
                         step4_msg = f"✅ [4단계 체결완료 v5.90] 비트겟 선물 {direction} 시장가 실체결 확정! (실체결가: ${real_entry_price:,.1f}, 수량: {real_qty_btc:.4f} BTC)"
                         if self.bot and hasattr(self.bot, "broadcast_event"):
