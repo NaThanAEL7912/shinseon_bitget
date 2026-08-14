@@ -1773,9 +1773,20 @@ class ShinseonV35Engine:
             if not dashboard:
                 return
                 
-            # 1. UI 대시보드 설정값 연동
-            tp_pct = float(getattr(dashboard, "profit_tp_pct", getattr(dashboard, "split_tp_pct", 0.3))) / 100.0
-            initial_sl_pct = float(getattr(dashboard, "initial_sl_pct", 0.3)) / 100.0
+            # 1. UI 대시보드 및 세션별 실시간 설정값 정밀 읽기 (하드코딩 0% 정격 연동 v6.21)
+            sl_val = abs(getattr(self, "current_session_sl", -1.3))
+            tp_val = 1.50
+            if hasattr(self, "session_guardrails") and isinstance(self.session_guardrails, dict):
+                s_key = getattr(self, "current_session_key", "US_MAIN")
+                if s_key in self.session_guardrails:
+                    tp_val = float(self.session_guardrails[s_key].get("tp", 1.50))
+            elif hasattr(dashboard, "session_guardrails") and isinstance(dashboard.session_guardrails, dict):
+                s_key = getattr(dashboard, "current_session_key", "US_MAIN")
+                if s_key in dashboard.session_guardrails:
+                    tp_val = float(dashboard.session_guardrails[s_key].get("tp", 1.50))
+                    
+            initial_sl_pct = abs(sl_val) / 100.0
+            tp_pct = abs(tp_val) / 100.0
             entry_sl_guard = float(getattr(dashboard, "entry_sl_guard", 0.1)) / 100.0
             
             # 2. 목표가 연산
