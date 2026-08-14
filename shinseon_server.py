@@ -1502,7 +1502,9 @@ class BotCore:
                         self.v35_engine.position_volume = 0
                         self.v35_engine.entry_price = 0.0
                         self.v35_engine.entry_direction = ""
+                        asyncio.create_task(self.v35_engine.cancel_all_open_plan_orders())
                 else:
+                    was_inactive = not self.v35_engine.is_position_active
                     self.v35_engine.is_position_active = True
                     self.v35_engine.entry_direction = active_pos['side'].upper()
                     e_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
@@ -1513,6 +1515,11 @@ class BotCore:
                     if v_contracts > 0.0:
                         self.v35_engine.position_volume = v_contracts
                         self.v35_engine.position_volume_btc = v_contracts
+                        
+                    # [V6.19 폐하의 어명]: 모바일 앱/웹 수동 포지션 감지 시 자동 케어 듀얼 TP/SL 선주문 박기!
+                    if was_inactive and e_price > 0.0 and v_contracts > 0.0:
+                        logger.info(f"📱 [수동 진입 자동 케어 v6.19] 비트겟 수동 포지션 감지! ({active_pos['side'].upper()} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ TP/SL 선주문 자동 전송")
+                        asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, active_pos['side'].upper(), v_contracts))
         except Exception as e:
             pass
 

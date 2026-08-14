@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.18",
+    "CURRENT_VERSION": "V6.19",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -20,7 +20,7 @@
         },
         "us": {
             "liq": 800000.0,
-            "oi": 0.18,
+            "oi": 0.2,
             "sl": -1.3,
             "enabled": true
         },
