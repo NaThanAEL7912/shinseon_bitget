@@ -2234,15 +2234,17 @@ class ShinseonV35Engine:
         # [상시 1초 초고밀도 딥다이브 로깅 모드]
         # 폐하의 어명에 따라 듀얼 임계치 50% 조건을 폐지하고 무조건 1초 간격으로 상시 기록합니다.
         current_time = time.time()
+        current_second = int(current_time)
         
         should_write = False
         date_str = get_kst_now().strftime("%Y-%m-%d")
         if self.last_record_time == 0.0 or date_str != getattr(self, "last_record_date", ""):
             should_write = True
-        elif current_time - self.last_record_time >= 1.0:
+        elif getattr(self, "last_record_second", 0) != current_second:
             should_write = True
                 
         if should_write:
+            self.last_record_second = current_second
             first_write = (self.last_record_time == 0.0)
             self.last_record_date = date_str
             try:
@@ -2341,7 +2343,7 @@ class ShinseonV35Engine:
             if oi_delta_1m > 0:
                 if not getattr(self, "exit_in_progress", False):
                     self.exit_in_progress = True
-                    self.exit_reason = f"반대 방향 진짜 자금 유입(OI>0 & 임계치돌파) 스위칭 감지 (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"
+                    self.exit_reason = f"반대 세력 저격 신호 감지 (스위칭 청산) (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)"
                     self.last_exit_trigger_price = binance_mid
                     self.last_exit_signal_time = __import__("time").strftime("%Y-%m-%d %H:%M:%S")
                     self.last_exit_signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
@@ -2427,7 +2429,7 @@ class ShinseonV35Engine:
             
             # [포지션 보유 중 스위칭 / 추가매수 / 불타기 검증 엔진 (SHINSEON 원본 규격)]
             if self.is_position_active and not getattr(self, "exit_in_progress", False):
-                if direction != self.entry_direction:
+                if direction and direction in ["LONG", "SHORT"] and direction != self.entry_direction:
                     # [진입 60초 안전 락다운]: 진입 직후 60초 동안은 어떠한 반대 신호 청산도 100% 원천 차단!
                     elapsed_entry = time.time() - getattr(self, "last_entry_time", 0.0)
                     if elapsed_entry < 60.0:
@@ -2438,7 +2440,7 @@ class ShinseonV35Engine:
                     # [v2.55 황금 전성기 헌법 복원]: OI 부호(+/-) 상관없이 반대 신호 수신 즉시 기존 포지션 100% 전량 시장가 청산!
                     saved_pos_dir = str(self.entry_direction or "LONG").upper()
                     logger.info(f"🚨 [TRADE] [v2.55 반대 시그널 포착] 보유 포지션({saved_pos_dir})과 반대 신호({direction}) 도달! ➡️ 기존 포지션 전량 시장가 청산 집행")
-                    self.exit_reason = f"반대 방향 진짜 자금 유입(OI>0 & 임계치돌파) 스위칭 감지 (보유: {saved_pos_dir} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"
+                    self.exit_reason = f"반대 세력 저격 신호 감지 (스위칭 청산) (보유: {saved_pos_dir} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)"
                     self.exit_in_progress = True
                     
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
