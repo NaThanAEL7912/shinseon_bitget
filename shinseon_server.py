@@ -1801,36 +1801,27 @@ class ShinseonV35Engine:
                 return
                 
             url_base = "https://api.bitget.com"
-            path_plan = "/api/v2/mix/order/place-plan-order"
-            close_side = "sell" if direction == "LONG" else "buy"
+            path_plan = "/api/v2/mix/order/place-tpsl-order"
             hold_side = "long" if direction == "LONG" else "short"
             
             tp_body = {
                 "symbol": "BTCUSDT",
                 "productType": "USDT-FUTURES",
                 "marginCoin": "USDT",
-                "planType": "profit_plan",
+                "planType": "pos_profit",
                 "triggerPrice": str(round(tp_price, 1)),
                 "triggerType": "fill_price",
-                "orderType": "market",
-                "size": str(round(qty_btc, 4)),
-                "side": close_side,
-                "holdSide": hold_side,
-                "reduceOnly": "true"
+                "holdSide": hold_side
             }
             
             sl_body = {
                 "symbol": "BTCUSDT",
                 "productType": "USDT-FUTURES",
                 "marginCoin": "USDT",
-                "planType": "loss_plan",
+                "planType": "pos_loss",
                 "triggerPrice": str(round(sl_price, 1)),
                 "triggerType": "fill_price",
-                "orderType": "market",
-                "size": str(round(qty_btc, 4)),
-                "side": close_side,
-                "holdSide": hold_side,
-                "reduceOnly": "true"
+                "holdSide": hold_side
             }
             
             async with aiohttp.ClientSession() as session:
