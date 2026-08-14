@@ -2563,7 +2563,7 @@ class ShinseonV35Engine:
                             self.bot.dashboard.send_telegram_notification(exit_msg)
                         self.exit_msg_sent = True
                     return
-                else:
+                elif direction and direction in ["LONG", "SHORT"] and direction == self.entry_direction:
                     # [동일 방향 중복 신호 발생 ➡️ 2차/3차 추가 매수(물타기) 또는 눌림목 불타기 검증]
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
                     split_cooldown = float(getattr(dashboard, "split_cooldown_seconds", 900.0))
