@@ -1772,21 +1772,40 @@ class ShinseonV35Engine:
             if not dashboard:
                 return
                 
-            # 1. UI 대시보드 및 세션별 실시간 설정값 정밀 읽기 (하드코딩 0% 정격 연동 v6.21)
-            sl_val = abs(getattr(self, "current_session_sl", -1.3))
-            tp_val = 1.50
-            if hasattr(self, "session_guardrails") and isinstance(self.session_guardrails, dict):
-                s_key = getattr(self, "current_session_key", "US_MAIN")
-                if s_key in self.session_guardrails:
-                    tp_val = float(self.session_guardrails[s_key].get("tp", 1.50))
-            elif hasattr(dashboard, "session_guardrails") and isinstance(dashboard.session_guardrails, dict):
-                s_key = getattr(dashboard, "current_session_key", "US_MAIN")
-                if s_key in dashboard.session_guardrails:
-                    tp_val = float(dashboard.session_guardrails[s_key].get("tp", 1.50))
-                    
-            initial_sl_pct = abs(sl_val) / 100.0
+            # 1. UI 대시보드 및 세션별 실시간 설정값 정밀 동적 판정 (V6.40 8대 세션 100% 정합)
+            now_dt = datetime.datetime.now(pytz.timezone('Asia/Seoul'))
+            is_weekend = check_is_weekend_kst(now_dt)
+            hour_val = now_dt.hour
+            minute_val = now_dt.minute
+            if 9 <= hour_val < 16:
+                s_key = "WEEKEND_ASIA" if is_weekend else "ASIA"
+                s_thresh_key = "weekend_asia" if is_weekend else "asia"
+            elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                s_key = "WEEKEND_LONDON" if is_weekend else "LONDON"
+                s_thresh_key = "weekend_europe" if is_weekend else "europe"
+            elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                s_key = "WEEKEND_NY" if is_weekend else "NY"
+                s_thresh_key = "weekend_us" if is_weekend else "us"
+            else:
+                s_key = "WEEKEND_PACIFIC" if is_weekend else "PACIFIC"
+                s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+
+            # 세션 가드레일 설정 읽기
+            guardrails_dict = getattr(self, "session_guardrails", None) or getattr(dashboard, "session_guardrails", {}) or getattr(self.bot, "session_guardrails", {})
+            s_guard = guardrails_dict.get(s_key, {"trigger": 0.4, "trigger_2": 0.6, "guard": 0.1, "enabled": True}) if isinstance(guardrails_dict, dict) else {}
+            
+            # 1차 익절 TP PnL %
+            tp_val = float(s_guard.get("trigger", 0.40))
             tp_pct = abs(tp_val) / 100.0
-            entry_sl_guard = float(getattr(dashboard, "entry_sl_guard", 0.1)) / 100.0
+            
+            # 본전/버퍼가드 PnL %
+            entry_sl_guard = float(s_guard.get("guard", 0.10)) / 100.0
+            
+            # 세션별 손절 SL PnL %
+            thresh_dict = getattr(self, "session_thresholds", None) or getattr(dashboard, "session_thresholds", {}) or getattr(self.bot, "session_thresholds", {})
+            s_thresh = thresh_dict.get(s_thresh_key, {}) if isinstance(thresh_dict, dict) else {}
+            sl_val = float(s_thresh.get("sl", getattr(self, "current_session_sl", -1.0)))
+            initial_sl_pct = abs(sl_val) / 100.0
             
             # 2. 목표가 연산
             if direction == "LONG":
@@ -1810,9 +1829,9 @@ class ShinseonV35Engine:
             if not (api_key and secret_key and passphrase):
                 return
                 
-            # 1. UI 대시보드 연동 분할익절 비율 연산 (50% 등 v6.22)
-            split_close_pct = float(getattr(dashboard, "split_close_ratio", getattr(dashboard, "split_tp_ratio", 50.0))) / 100.0
-            tp_size_btc = max(0.0001, round(qty_btc * split_close_pct, 4))
+            # 1차 분할익절 수량 비율 연산 (50% 등 v6.40)
+            ratio_1 = float(getattr(self.bot, "half_exit_close_ratio", getattr(dashboard, "half_exit_close_ratio", 50.0))) / 100.0
+            tp_size_btc = max(0.0001, round(qty_btc * ratio_1, 4))
             
             url_base = "https://api.bitget.com"
             path_plan = "/api/v2/mix/order/place-tpsl-order"
@@ -3638,6 +3657,8 @@ class WsServer:
                                 self.bot_core.profit_cooldown_seconds = config_data["profit_cooldown_seconds"]
                             if "half_exit_close_ratio" in config_data:
                                 self.bot_core.half_exit_close_ratio = config_data["half_exit_close_ratio"]
+                            if "half_exit_close_ratio_2" in config_data:
+                                self.bot_core.half_exit_close_ratio_2 = config_data["half_exit_close_ratio_2"]
                             if "pyramiding_enabled" in config_data:
                                 self.bot_core.pyramiding_enabled = config_data["pyramiding_enabled"]
                             if "pyramiding_ratio" in config_data:
