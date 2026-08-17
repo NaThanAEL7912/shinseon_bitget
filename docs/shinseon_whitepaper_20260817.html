@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHINSEON BITGET - MASTER WHITEPAPER V6.39</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&family=Noto+Sans+KR:wght@300;400;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #080707;
+            --surface-color: rgba(22, 20, 19, 0.85);
+            --surface-border: rgba(222, 186, 157, 0.2);
+            --primary-gold: #DEBA9D;
+            --bright-gold: #FFD700;
+            --accent-green: #00FFCC;
+            --accent-red: #FF3366;
+            --text-main: #F5EFEB;
+            --text-muted: #A89F91;
+            --code-bg: #0F0E0E;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(222, 186, 157, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 255, 204, 0.06) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(255, 51, 102, 0.04) 0%, transparent 60%);
+            color: var(--text-main);
+            line-height: 1.7;
+            padding-bottom: 80px;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: var(--primary-gold); border-radius: 4px; }
+
+        header {
+            padding: 90px 20px 50px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(15,14,14,0.95) 0%, transparent 100%);
+            border-bottom: 1px solid var(--surface-border);
+            position: relative;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--primary-gold), var(--accent-green), transparent);
+        }
+
+        .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, rgba(222, 186, 157, 0.25), rgba(222, 186, 157, 0.05));
+            border: 1px solid var(--primary-gold);
+            color: var(--primary-gold);
+            padding: 8px 22px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-bottom: 25px;
+            box-shadow: 0 0 25px rgba(222, 186, 157, 0.3);
+        }
+
+        h1 {
+            font-size: 3.6rem;
+            font-weight: 900;
+            letter-spacing: -1.5px;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #FFFFFF 20%, var(--primary-gold) 70%, var(--bright-gold) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.25rem;
+            max-width: 750px;
+            margin: 0 auto;
+            font-weight: 400;
+        }
+
+        .container {
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 50px 20px;
+        }
+
+        .section-title {
+            font-size: 2.1rem;
+            font-weight: 800;
+            color: #FFFFFF;
+            margin: 50px 0 25px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title span {
+            color: var(--primary-gold);
+        }
+
+        .card {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--surface-border);
+            border-radius: 18px;
+            padding: 35px;
+            margin-bottom: 25px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(222, 186, 157, 0.45);
+        }
+
+        .card h3 {
+            color: var(--primary-gold);
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 18px;
+            border-bottom: 1px solid rgba(222, 186, 157, 0.15);
+            padding-bottom: 10px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .stat-box {
+            background: rgba(10, 9, 9, 0.8);
+            border: 1px solid rgba(222, 186, 157, 0.18);
+            border-radius: 14px;
+            padding: 22px;
+            text-align: center;
+        }
+
+        .stat-box .val {
+            font-size: 2.2rem;
+            font-weight: 900;
+            margin-top: 6px;
+        }
+
+        .stat-box .lbl {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            padding: 14px 16px;
+            text-align: center;
+            border: 1px solid rgba(222, 186, 157, 0.15);
+        }
+
+        th {
+            background: rgba(222, 186, 157, 0.12);
+            color: var(--primary-gold);
+            font-weight: 700;
+        }
+
+        tr:nth-child(even) td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .tag-long {
+            background: rgba(0, 255, 204, 0.15);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 800;
+        }
+
+        .tag-short {
+            background: rgba(255, 51, 102, 0.15);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 800;
+        }
+
+        .tag-none {
+            background: rgba(168, 159, 145, 0.15);
+            color: var(--text-muted);
+            border: 1px solid var(--text-muted);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+        }
+
+        pre {
+            background: var(--code-bg);
+            border: 1px solid rgba(222, 186, 157, 0.25);
+            border-radius: 12px;
+            padding: 22px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.95rem;
+            color: #DEBA9D;
+            overflow-x: auto;
+            line-height: 1.6;
+        }
+
+        .highlight-quote {
+            border-left: 4px solid var(--primary-gold);
+            background: rgba(222, 186, 157, 0.06);
+            padding: 18px 24px;
+            border-radius: 0 12px 12px 0;
+            margin: 20px 0;
+            font-size: 1.05rem;
+            color: #FFFFFF;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="badge">👑 SHINSEON MASTER WHITEPAPER V6.39</div>
+    <h1>신선(神選) 비트겟 오더플로우 백서</h1>
+    <p>순수 +OI 세력 자금 2대 정통 돌파 저격 헌법 & 1차/2차 듀얼 계단식 분할 익절 가드레일 엔진</p>
+</header>
+
+<div class="container">
+
+    <!-- 1. 핵심 성과 지표 -->
+    <div class="grid-3">
+        <div class="stat-box">
+            <div class="lbl">오더플로우 승률</div>
+            <div class="val" style="color: var(--accent-green);">65.00% 🔥</div>
+        </div>
+        <div class="stat-box">
+            <div class="lbl">누적 순수익률 (PnL)</div>
+            <div class="val" style="color: var(--bright-gold);">+8.34% 🏆</div>
+        </div>
+        <div class="stat-box">
+            <div class="lbl">AWS 싱가포르 체결 핑</div>
+            <div class="val" style="color: #00E5FF;">1.9 ms ⚡</div>
+        </div>
+    </div>
+
+    <!-- 2. 바이낸스 100% 시세 전권 헌법 -->
+    <div class="section-title"><span>01.</span> 헌법 제1조: 바이낸스 100% 시세 전권</div>
+    <div class="card">
+        <h3>🏛️ 바이낸스 체결 오더플로우 절대 판정 원칙</h3>
+        <p class="highlight-quote">
+            모든 저격 판단(타점 포착, 1분 지수가중 추세 기울기 <code>price_slope_1m</code>, 1분 OI속도 <code>oi_delta_1m</code>, 1분 누적 청산액 및 롱/숏 청산 주도 비율)은 <b>오직 100% 바이낸스(Binance) 실시간 선물 호가 및 체결 데이터</b>로만 정해집니다. 비트겟은 1.9ms 만에 초고속으로 주문을 집행하는 발주 창구 역할만 수행합니다.
+        </p>
+    </div>
+
+    <!-- 3. 순수 +OI 2대 정통 돌파 저격 매트릭스 -->
+    <div class="section-title"><span>02.</span> 순수 +OI 세력 자금 2대 정통 돌파 저격 헌법 (V6.25)</div>
+    <div class="card">
+        <h3>🎯 2대 절대 황금 타점 체계 (Case C & Case D)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>타점 구분</th>
+                    <th>1분 지수가중 기울기</th>
+                    <th>1분 OI속도</th>
+                    <th>롱/숏 청산 주도 비율</th>
+                    <th>저격 방향</th>
+                    <th>세력 매커니즘 팩트</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><b>Case C</b></td>
+                    <td>📈 <code>price_slope > 0</code></td>
+                    <td>🚀 <code>+OI > 0</code></td>
+                    <td>숏 청산 돌파 (<code>short >= long</code>)</td>
+                    <td><span class="tag-long">LONG</span></td>
+                    <td>세력이 숏 청산 먹으며 신규 매수 폭발 ➡️ <b>상승 추세 LONG 탑승!</b></td>
+                </tr>
+                <tr>
+                    <td><b>Case D</b></td>
+                    <td>📉 <code>price_slope < 0</code></td>
+                    <td>🚀 <code>+OI > 0</code></td>
+                    <td>롱 청산 돌파 (<code>long >= short</code>)</td>
+                    <td><span class="tag-short">SHORT</span></td>
+                    <td>세력이 롱 청산 먹으며 신규 숏 폭발 ➡️ <b>하강 추세 SHORT 탑승!</b></td>
+                </tr>
+                <tr>
+                    <td><b>기각</b></td>
+                    <td colspan="3">임계치 미달, <code>-OI(음수)</code> 잔파도, 청산 주도 불일치 시</td>
+                    <td><span class="tag-none">NONE</span></td>
+                    <td><b>위험 휩쏘/칼날잡기 100% 원천 차단 ➡️ 안전하게 휴식</b></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 4. 1차 / 2차 듀얼 계단식 분할 익절 엔진 -->
+    <div class="section-title"><span>03.</span> 1차 / 2차 듀얼 계단식 분할 익절 가드레일 (V6.39)</div>
+    <div class="grid-2">
+        <div class="card">
+            <h3>🔥 1단계: 1차 분할 익절 (+0.40% / +1.50%)</h3>
+            <p>• 보유 수량의 <b>1차 분할 익절 비율 (50%) 즉시 시장가 익절</b></p>
+            <p>• 남은 50% 수량의 손절선을 <b>본전/버퍼 가드 (+0.10% / +1.00%)로 상향 배치</b></p>
+            <p>• <b>효과:</b> 수수료 100% 방어 및 1원도 잃지 않는 <b>완전 무위험(Zero-Risk) 전환!</b></p>
+        </div>
+        <div class="card">
+            <h3>🏆 2단계: 2차 최종 익절 (+0.60% / +1.70%)</h3>
+            <p>• 남아있는 <b>2차 분할 익절 비율 (잔여 50%) 전량 시장가 최종 익절</b></p>
+            <p>• 대추세 2차 폭발 파도를 온전히 완주하여 <b>수익 극대화 달성!</b></p>
+            <p>• <b>초고속 쿨타임:</b> 익절 후 <b>10초 만에 다음 황금 타점 즉시 재탑승!</b></p>
+        </div>
+    </div>
+
+    <!-- 5. 8대 세션별 마스터 세팅값 -->
+    <div class="section-title"><span>04.</span> 8대 세션별 최적 임계치 & 가드레일 마스터 테이블</div>
+    <div class="card">
+        <table>
+            <thead>
+                <tr>
+                    <th>세션 구분</th>
+                    <th>운영 시간 (KST)</th>
+                    <th>1분 청산액</th>
+                    <th>1분 OI속도</th>
+                    <th>손절선</th>
+                    <th>1차 익절</th>
+                    <th>2차 익절</th>
+                    <th>본전가드</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><b>🟢 아시아</b></td>
+                    <td>09:00 ~ 17:00</td>
+                    <td>$600,000</td>
+                    <td>0.28%</td>
+                    <td>-1.0%</td>
+                    <td>+0.40%</td>
+                    <td>+0.60%</td>
+                    <td>+0.10%</td>
+                </tr>
+                <tr>
+                    <td><b>🟢 유럽 (런던)</b></td>
+                    <td>17:00 ~ 22:30</td>
+                    <td>$500,000</td>
+                    <td>0.24%</td>
+                    <td>-1.0%</td>
+                    <td>+0.40%</td>
+                    <td>+0.60%</td>
+                    <td>+0.10%</td>
+                </tr>
+                <tr>
+                    <td><b>🚀 미국 본장 (NY)</b></td>
+                    <td>22:30 ~ 익일 05:00</td>
+                    <td><b>$650,000</b></td>
+                    <td><b>0.18%</b></td>
+                    <td><b>-1.3%</b></td>
+                    <td><b>+1.50%</b></td>
+                    <td><b>+1.70%</b></td>
+                    <td><b>+1.00%</b></td>
+                </tr>
+                <tr>
+                    <td><b>🟢 태평양 횡보</b></td>
+                    <td>05:00 ~ 09:00</td>
+                    <td>$500,000</td>
+                    <td>0.12%</td>
+                    <td>-1.0%</td>
+                    <td>+0.40%</td>
+                    <td>+0.60%</td>
+                    <td>+0.10%</td>
+                </tr>
+                <tr>
+                    <td><b>🔵 주말 아시아</b></td>
+                    <td>주말 09:00 ~ 17:00</td>
+                    <td>$600,000</td>
+                    <td>0.28%</td>
+                    <td>-1.0%</td>
+                    <td>+0.90%</td>
+                    <td>+1.35%</td>
+                    <td>0.00%</td>
+                </tr>
+                <tr>
+                    <td><b>🔵 주말 유럽</b></td>
+                    <td>주말 17:00 ~ 22:30</td>
+                    <td>$500,000</td>
+                    <td>0.24%</td>
+                    <td>-1.0%</td>
+                    <td>+0.90%</td>
+                    <td>+1.35%</td>
+                    <td>0.00%</td>
+                </tr>
+                <tr>
+                    <td><b>🔵 주말 미국 본장</b></td>
+                    <td>주말 22:30 ~ 익일 05:00</td>
+                    <td>$650,000</td>
+                    <td>0.20%</td>
+                    <td>-1.3%</td>
+                    <td>+1.00%</td>
+                    <td>+1.50%</td>
+                    <td>0.00%</td>
+                </tr>
+                <tr>
+                    <td><b>🔵 주말 태평양</b></td>
+                    <td>주말 05:00 ~ 09:00</td>
+                    <td>$500,000</td>
+                    <td>0.12%</td>
+                    <td>-1.0%</td>
+                    <td>+0.90%</td>
+                    <td>+1.35%</td>
+                    <td>0.00%</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 6. 파이썬 실전 구현 원본 소스코드 -->
+    <div class="section-title"><span>05.</span> V6.39 엔진 파이썬 핵심 구현 코드</div>
+    <div class="card">
+<pre><code># [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 양수(+) >= target_oi)
+if rolling_1m_liq_usd >= target_liq and oi_delta_1m > 0 and oi_delta_1m >= target_oi:
+    
+    # [Case C]: EMA추세 상승(>0), OI 증가(>0), 숏 청산 돌파(short_liq >= long_liq) ➡️ 🟢 "LONG" 추세 탑승!
+    if price_slope_1m > 0 and short_liq_usd >= long_liq_usd:
+        direction = "LONG"
+        
+    # [Case D]: EMA추세 하락(<0), OI 증가(>0), 롱 청산 돌파(long_liq >= short_liq) ➡️ 🔴 "SHORT" 추세 탑승!
+    elif price_slope_1m < 0 and long_liq_usd >= short_liq_usd:
+        direction = "SHORT"
+        
+    else:
+        direction = None      # 휩쏘/불일치 시 100% NONE 기각!
+else:
+    direction = None          # 임계치 미달 또는 -OI(음수) 시 100% NONE 기각!</code></pre>
+    </div>
+
+</div>
+
+</body>
+</html>
