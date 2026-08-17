@@ -1094,17 +1094,13 @@ class BotCore:
                     else:
                         price_slope_1m = 0.0
 
-                    # [V6.07]: 4대 저격 매트릭스 ✕ 롱/숏 청산 주도 비율(Dominant Liq Ratio) 2차 안전 방화벽
-                    if price_slope_1m < 0 and oi_delta_1m < 0 and long_liq >= short_liq:
-                        direction = "LONG"    # Case A: 📉 EMA하락 + OI감소 + 롱청산주도 ➡️ 🟢 LONG 저점 저격
-                    elif price_slope_1m > 0 and oi_delta_1m < 0 and short_liq >= long_liq:
-                        direction = "SHORT"   # Case B: 📈 EMA상승 + OI감소 + 숏청산주도 ➡️ 🔴 SHORT 고점 저격
-                    elif price_slope_1m > 0 and oi_delta_1m > 0 and short_liq >= long_liq:
+                    # [V6.25]: 순수 +OI 세력 자금 유입 전용 2대 정통 돌파 저격 헌법 (Case A, B 영구 폐지)
+                    if price_slope_1m > 0 and oi_delta_1m > 0 and short_liq >= long_liq:
                         direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 🟢 LONG 추세 탑승
                     elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq >= short_liq:
                         direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 🔴 SHORT 추세 탑승
                     else:
-                        direction = None      # 휩쏘/혼조세/주도비율 불일치 시 100% NONE 기각!
+                        direction = None      # -OI(음수) 및 휩쏘/혼조세/주도비율 불일치 시 100% NONE 기각!
                         
                     # v1.1 성능 격상: CVD 델타 산출 및 1분 큐 업데이트
                     cvd_delta = self.agg_buy_vol - self.agg_sell_vol
@@ -2417,7 +2413,7 @@ class ShinseonV35Engine:
             self.last_record_date = date_str
             try:
                 # [타점 시그널 (signal) 일원화: binance_ws_frame 단일 깃발 100% 직송 동기화]
-                if (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi):
+                if (rolling_1m_liq_usd >= target_liq) and (oi_delta_1m > 0 and oi_delta_1m >= target_oi):
                     raw_sig = binance_ws_frame.get('direction', 'NONE')
                     if raw_sig in ["LONG", "SHORT"]:
                         signal_val = raw_sig
@@ -2465,27 +2461,23 @@ class ShinseonV35Engine:
                     self.bot.dashboard.add_log(f"❌ [CSV 레코더 쓰기 에러] {e}")
 
         # --------------------------------------------------------------------------
-        # 🎯 [V5.62] SHINSEON 황금 전성기 최적 오더플로우 저격 판정 엔진 (백서 100% 정격)
+        # 🎯 [V6.25] SHINSEON 순수 +OI 세력 자금 유입 전용 판정 엔진 (Case A, B 영구 폐지)
         # --------------------------------------------------------------------------
         price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
         price_slope_1m = binance_ws_frame.get('price_slope_1m', 0.0)
         direction = None
         
-        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 >= target_oi)
-        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
-            # [V6.07]: 지수가중 기울기 ✕ OI속도 ✕ 롱/숏 청산 주도 비율 2차 안전 방화벽
-            if price_slope_1m < 0 and oi_delta_1m < 0 and long_liq_usd >= short_liq_usd:
-                direction = "LONG"    # Case A: 📉 EMA하락 + OI감소 + 롱청산주도 ➡️ 저점 LONG 저격!
-            elif price_slope_1m > 0 and oi_delta_1m < 0 and short_liq_usd >= long_liq_usd:
-                direction = "SHORT"   # Case B: 📈 EMA상승 + OI감소 + 숏청산주도 ➡️ 고점 SHORT 저격!
-            elif price_slope_1m > 0 and oi_delta_1m > 0 and short_liq_usd >= long_liq_usd:
+        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 양수(+) >= target_oi)
+        if rolling_1m_liq_usd >= target_liq and oi_delta_1m > 0 and oi_delta_1m >= target_oi:
+            # [V6.25]: 2대 정통 순추세 돌파 저격 헌법 (Case C 롱 & Case D 숏)
+            if price_slope_1m > 0 and short_liq_usd >= long_liq_usd:
                 direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 상승 추세 LONG 탑승!
-            elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq_usd >= short_liq_usd:
+            elif price_slope_1m < 0 and long_liq_usd >= short_liq_usd:
                 direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 하강 추세 SHORT 탑승!
             else:
                 direction = None      # 휩쏘/불일치 시 100% NONE 기각!
         else:
-            direction = None  # 임계치 미달 시 기각 (Case 1-5, Case 1-6)
+            direction = None  # 임계치 미달 또는 -OI(음수) 시 100% NONE 기각!
 
         # --------------------------------------------------------------------------
         # 🚨 [2단계]: 실전 집행 및 포지션 보유 중 반대 청산 감시 (60초 안전 락다운 포함)
@@ -2507,8 +2499,8 @@ class ShinseonV35Engine:
                     is_opposite = True
             
         if self.is_position_active and is_opposite:
-            # OI > 0 (진짜 자금 유입) 조건 충족 시에만 진짜 스위칭 청산 발동! (Case 2-3, Case 3-3)
-            if oi_delta_1m > 0:
+            # OI > 0 and oi_delta_1m >= target_oi (진짜 자금 유입) 조건 충족 시에만 진짜 스위칭 청산 발동! (Case 2-3, Case 3-3)
+            if oi_delta_1m > 0 and oi_delta_1m >= target_oi:
                 if not getattr(self, "exit_in_progress", False):
                     self.exit_in_progress = True
                     self.exit_reason = f"반대 세력 저격 신호 감지 (스위칭 청산) (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)"
@@ -2591,8 +2583,8 @@ class ShinseonV35Engine:
         if getattr(self, "exit_in_progress", False):
             return
 
-        # 1단계: 동적 레이더 임계치 검증
-        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
+        # 1단계: 동적 레이더 임계치 검증 (순수 +OI 세력 자금 유입 전용 v6.25)
+        if rolling_1m_liq_usd >= target_liq and oi_delta_1m > 0 and oi_delta_1m >= target_oi:
             now_t_chk = time.time()
             
             # [포지션 보유 중 스위칭 / 추가매수 / 불타기 검증 엔진 (SHINSEON 원본 규격)]
