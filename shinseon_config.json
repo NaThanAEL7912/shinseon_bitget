@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.25",
+    "CURRENT_VERSION": "V6.39",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,49 +7,49 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 400000.0,
-            "oi": 0.15,
+            "liq": 600000.0,
+            "oi": 0.28,
             "sl": -1.0,
             "enabled": true
         },
         "europe": {
             "liq": 500000.0,
-            "oi": 0.15,
+            "oi": 0.24,
             "sl": -1.0,
             "enabled": true
         },
         "us": {
-            "liq": 800000.0,
-            "oi": 0.2,
+            "liq": 650000.0,
+            "oi": 0.18,
             "sl": -1.3,
             "enabled": true
         },
         "pacific": {
-            "liq": 400000.0,
+            "liq": 500000.0,
             "oi": 0.12,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_asia": {
-            "liq": 200000.0,
-            "oi": 0.12,
+            "liq": 600000.0,
+            "oi": 0.28,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_europe": {
-            "liq": 300000.0,
-            "oi": 0.15,
+            "liq": 500000.0,
+            "oi": 0.24,
             "sl": -1.0,
             "enabled": true
         },
         "weekend_us": {
-            "liq": 500000.0,
-            "oi": 0.18,
+            "liq": 650000.0,
+            "oi": 0.2,
             "sl": -1.3,
             "enabled": true
         },
         "weekend_pacific": {
-            "liq": 200000.0,
+            "liq": 500000.0,
             "oi": 0.12,
             "sl": -1.0,
             "enabled": true
@@ -63,15 +63,15 @@
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,
     "split_cooldown_seconds": 900.0,
-    "cooldown_seconds": 300.0,
-    "profit_cooldown_seconds": 15.0,
+    "cooldown_seconds": 30.0,
+    "profit_cooldown_seconds": 10.0,
     "telegram_enabled": true,
     "telegram_token": "8890976392:AAFkGFrep1b9N9P_EQpJY-yNYaMLcd2kEZk",
     "telegram_chat_id": "8279848058",
     "sound_enabled": true,
     "half_exit_enabled": true,
     "half_exit_trigger_pct": 0.6,
-    "half_exit_close_ratio": 50.0,
+    "half_exit_close_ratio": 100.0,
     "entry_sl_guard_pct": 0.0,
     "session_guardrails": {
         "ASIA": {
@@ -80,12 +80,12 @@
             "enabled": true
         },
         "LONDON": {
-            "trigger": 1.0,
-            "guard": -0.15,
+            "trigger": 0.4,
+            "guard": 0.0,
             "enabled": true
         },
         "NY": {
-            "trigger": 1.0,
+            "trigger": 1.5,
             "guard": 0.0,
             "enabled": true
         },
@@ -95,28 +95,28 @@
             "enabled": true
         },
         "WEEKEND_ASIA": {
-            "trigger": 0.4,
+            "trigger": 0.9,
             "guard": 0.0,
             "enabled": true
         },
         "WEEKEND_LONDON": {
             "trigger": 0.9,
-            "guard": -0.15,
+            "guard": 0.0,
             "enabled": true
         },
         "WEEKEND_NY": {
-            "trigger": 0.9,
-            "guard": -0.25,
+            "trigger": 1.0,
+            "guard": 0.0,
             "enabled": true
         },
         "WEEKEND_PACIFIC": {
             "trigger": 0.9,
-            "guard": -0.25,
+            "guard": 0.0,
             "enabled": true
         }
     },
     "pyramiding_enabled": true,
     "pyramiding_ratio": 30.0,
     "mid_guard_trigger": 0.6,
-    "mid_guard_offset": 0.0
+    "mid_guard_offset": 0.2
 }

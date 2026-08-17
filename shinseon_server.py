@@ -769,6 +769,7 @@ class BotCore:
         self.cooldown_seconds = 60.0
         self.profit_cooldown_seconds = 15.0
         self.half_exit_close_ratio = 50.0
+        self.half_exit_close_ratio_2 = 50.0
         self.pyramiding_enabled = True
         self.pyramiding_ratio = 30.0
         self.mid_guard_trigger = 0.60
@@ -803,6 +804,7 @@ class BotCore:
                 self.cooldown_seconds = cfg.get("cooldown_seconds", self.cooldown_seconds)
                 self.profit_cooldown_seconds = cfg.get("profit_cooldown_seconds", self.profit_cooldown_seconds)
                 self.half_exit_close_ratio = cfg.get("half_exit_close_ratio", self.half_exit_close_ratio)
+                self.half_exit_close_ratio_2 = cfg.get("half_exit_close_ratio_2", self.half_exit_close_ratio_2)
                 self.pyramiding_enabled = cfg.get("pyramiding_enabled", self.pyramiding_enabled)
                 self.pyramiding_ratio = cfg.get("pyramiding_ratio", self.pyramiding_ratio)
                 self.mid_guard_trigger = cfg.get("mid_guard_trigger", self.mid_guard_trigger)
@@ -1559,6 +1561,7 @@ class ShinseonV35Engine:
         self.last_exit_trigger_price = 0.0
         self.is_guardrail_running = False
         self.is_half_exited = False
+        self.is_full_exited = False
         self.has_smart_guarded = False
         self.has_pyramided = False
         
@@ -1878,10 +1881,12 @@ class ShinseonV35Engine:
     async def _execute_bitget_internal_packet_impl(self, side, order_type, custom_ratio=0.5):
         if side in ["LONG", "SHORT"] and order_type not in ["ADD_100_PERCENT", "ADD_THIRD_ENTRY", "ADD_PYRAMIDING"]:
             self.is_half_exited = False
+            self.is_full_exited = False
             self.has_smart_guarded = False
             self.has_pyramided = False
         if side == "CLEAR" and not order_type.startswith("PARTIAL_CLOSE") and order_type != "50_PERCENT_CLOSE":
             self.is_half_exited = False
+            self.is_full_exited = False
             self.has_smart_guarded = False
             self.has_pyramided = False
         if side == "CLEAR":
@@ -2985,13 +2990,12 @@ class ShinseonV35Engine:
                 logger.error(f"가드레일 세션 판정 오류: {e}")
             
             dash_obj = getattr(self.bot, "dashboard", None) or self.bot
-            s_guardrails = (getattr(self, "session_guardrails", None) or getattr(dash_obj, "session_guardrails", {})).get(s_key, {"trigger": 0.9, "guard": -0.25, "enabled": True})
-            half_exit_trigger = s_guardrails["trigger"] / 100.0
-            entry_sl_guard = s_guardrails["guard"]
+            s_guardrails = (getattr(self, "session_guardrails", None) or getattr(dash_obj, "session_guardrails", {})).get(s_key, {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True})
+            half_exit_trigger = float(s_guardrails.get("trigger", 0.4)) / 100.0
+            half_exit_trigger_2 = float(s_guardrails.get("trigger_2", half_exit_trigger * 1.5 if half_exit_trigger > 0 else 0.8)) / 100.0
+            entry_sl_guard = float(s_guardrails.get("guard", 0.0))
             half_exit_enabled = s_guardrails.get("enabled", True)
 
-
-            
             # [V6.24 수술] 2시간(120분) 경과 & PnL +0.30% 이상일 때만 전용 무위험 본전가드 발동
             elapsed_minutes = (time.time() - getattr(self, "last_entry_time", time.time())) / 60.0
             if elapsed_minutes >= 120.0 and not getattr(self, "has_time_breakeven_guarded", False) and pnl_pct >= 0.0030:
@@ -3022,17 +3026,29 @@ class ShinseonV35Engine:
                     self.bot.dashboard.send_telegram_notification(tg_msg)
 
             if half_exit_enabled:
+                # [1차 분할 익절 집행]
                 if not getattr(self, "is_half_exited", False) and pnl_pct >= half_exit_trigger:
                     self.is_half_exited = True
                     self.awaiting_pullback_pyramid = True
-                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE"))
+                    ratio_1 = float(getattr(self.bot, "half_exit_close_ratio", 50.0)) / 100.0
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="50_PERCENT_CLOSE", custom_ratio=ratio_1))
                     
                     # 텔레그램 알림은 비트겟 API execute_bitget_internal_packet 00000 성공 체결 후 직송 발송됨 (V5.59)
-                    
                     await asyncio.sleep(1.0)
                     new_sl_price = self.entry_price * (1.0 + (entry_sl_guard / 100.0)) if direction == "LONG" else self.entry_price * (1.0 - (entry_sl_guard / 100.0))
                     self.last_placed_stop_price = new_sl_price
                     asyncio.create_task(self.execute_bitget_internal_packet(side="STOP_LOSS", order_type=str(round(new_sl_price, 1))))
+
+                # [2차 최종 분할 익절 집행]
+                if getattr(self, "is_half_exited", False) and not getattr(self, "is_full_exited", False) and pnl_pct >= half_exit_trigger_2:
+                    self.is_full_exited = True
+                    log_msg = f"🏆 [2차 최종 분할익절 달성] 수익률({pnl_pct*100:+.2f}%) >= 2차 목표가({half_exit_trigger_2*100:.2f}%) 도달 ➡️ 잔여 포지션 전량 최종 익절 청산!"
+                    logger.info(log_msg)
+                    if self.bot and getattr(self.bot, "dashboard", None):
+                        self.bot.dashboard.add_log(log_msg)
+                        tg_msg = f"<b>🏆 [2차 최종 분할익절 청산 완수]</b>\n방향: <b>{direction}</b>\n사유: <b>2차 목표가({half_exit_trigger_2*100:.2f}%) 도달 ➡️ 잔여 포지션 전량 최종 익절</b>\n수익률: <b>{pnl_pct*100:+.2f}%</b>"
+                        self.bot.dashboard.send_telegram_notification(tg_msg)
+                    asyncio.create_task(self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED"))
             else:
                 if pnl_pct >= half_exit_trigger and not getattr(self, "has_smart_guarded", False):
                     self.has_smart_guarded = True

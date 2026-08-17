@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.25"
+        self.CURRENT_VERSION = "V6.39"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -586,14 +586,14 @@ class ShinseonDashboard(QMainWindow):
             "weekend_pacific": {"liq": 50000.0, "oi": 0.09, "sl": -0.3}
         }
         self.session_guardrails = {
-            "ASIA": {"trigger": 0.4, "guard": 0.0, "enabled": True},
-            "LONDON": {"trigger": 0.9, "guard": -0.15, "enabled": False},
-            "NY": {"trigger": 0.9, "guard": -0.25, "enabled": False},
-            "PACIFIC": {"trigger": 0.9, "guard": -0.25, "enabled": True},
-            "WEEKEND_ASIA": {"trigger": 0.4, "guard": 0.0, "enabled": True},
-            "WEEKEND_LONDON": {"trigger": 0.9, "guard": -0.15, "enabled": False},
-            "WEEKEND_NY": {"trigger": 0.9, "guard": -0.25, "enabled": False},
-            "WEEKEND_PACIFIC": {"trigger": 0.9, "guard": -0.25, "enabled": True}
+            "ASIA": {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True},
+            "LONDON": {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True},
+            "NY": {"trigger": 1.5, "trigger_2": 1.7, "guard": 0.0, "enabled": True},
+            "PACIFIC": {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True},
+            "WEEKEND_ASIA": {"trigger": 0.9, "trigger_2": 1.2, "guard": 0.0, "enabled": True},
+            "WEEKEND_LONDON": {"trigger": 0.9, "trigger_2": 1.2, "guard": 0.0, "enabled": True},
+            "WEEKEND_NY": {"trigger": 1.0, "trigger_2": 1.3, "guard": 0.0, "enabled": True},
+            "WEEKEND_PACIFIC": {"trigger": 0.9, "trigger_2": 1.2, "guard": 0.0, "enabled": True}
         }
         self.pyramiding_enabled = True
         self.pyramiding_ratio = 30.0
@@ -612,6 +612,7 @@ class ShinseonDashboard(QMainWindow):
         self.half_exit_enabled = True
         self.half_exit_trigger_pct = 0.6
         self.half_exit_close_ratio = 50.0
+        self.half_exit_close_ratio_2 = 50.0
         self.entry_sl_guard_pct = 0.0
         
         self.init_ui()
@@ -1745,6 +1746,7 @@ class ShinseonDashboard(QMainWindow):
                     "cooldown_seconds": getattr(self, "cooldown_seconds", 60.0),
                     "profit_cooldown_seconds": getattr(self, "profit_cooldown_seconds", 15.0),
                     "half_exit_close_ratio": getattr(self, "half_exit_close_ratio", 50.0),
+                    "half_exit_close_ratio_2": getattr(self, "half_exit_close_ratio_2", 50.0),
                     "pyramiding_enabled": getattr(self, "pyramiding_enabled", True),
                     "pyramiding_ratio": getattr(self, "pyramiding_ratio", 30.0),
                     "mid_guard_trigger": getattr(self, "mid_guard_trigger", 0.60),
@@ -1791,6 +1793,7 @@ class ShinseonDashboard(QMainWindow):
                 "half_exit_enabled": self.half_exit_enabled,
                 "half_exit_trigger_pct": self.half_exit_trigger_pct,
                 "half_exit_close_ratio": self.half_exit_close_ratio,
+                "half_exit_close_ratio_2": getattr(self, "half_exit_close_ratio_2", 50.0),
                 "entry_sl_guard_pct": self.entry_sl_guard_pct,
                 "session_guardrails": self.session_guardrails,
                 "pyramiding_enabled": self.pyramiding_enabled,
@@ -1848,6 +1851,7 @@ class ShinseonDashboard(QMainWindow):
                 self.half_exit_enabled = config_data.get("half_exit_enabled", True)
                 self.half_exit_trigger_pct = config_data.get("half_exit_trigger_pct", 0.6)
                 self.half_exit_close_ratio = config_data.get("half_exit_close_ratio", 50.0)
+                self.half_exit_close_ratio_2 = config_data.get("half_exit_close_ratio_2", 50.0)
                 self.entry_sl_guard_pct = config_data.get("entry_sl_guard_pct", 0.0)
                 
                 loaded_guardrails = config_data.get("session_guardrails", {})
@@ -3505,21 +3509,25 @@ class ShinseonConfigDialog(QDialog):
         guardrail_layout.setSpacing(12)
         guardrail_layout.setContentsMargins(15, 15, 15, 15)
         
-        # 세션별 가드레일 설정 헤더 (Row 0)
+        # 세션별 가드레일 설정 헤더 (Row 0: 5개 컬럼)
         lbl_sess = QLabel("세션")
         lbl_sess.setAlignment(Qt.AlignCenter)
-        lbl_trig = QLabel("분할익절 임계값 (PnL %)")
-        lbl_trig.setAlignment(Qt.AlignCenter)
+        lbl_trig1 = QLabel("1차 익절 PnL (%)")
+        lbl_trig1.setAlignment(Qt.AlignCenter)
+        lbl_trig2 = QLabel("2차 익절 PnL (%)")
+        lbl_trig2.setAlignment(Qt.AlignCenter)
         lbl_grd = QLabel("본전/버퍼 가드 (PnL %)")
         lbl_grd.setAlignment(Qt.AlignCenter)
         lbl_en = QLabel("분할익절 가동")
         lbl_en.setAlignment(Qt.AlignCenter)
         guardrail_layout.addWidget(lbl_sess, 0, 0)
-        guardrail_layout.addWidget(lbl_trig, 0, 1)
-        guardrail_layout.addWidget(lbl_grd, 0, 2)
-        guardrail_layout.addWidget(lbl_en, 0, 3)
+        guardrail_layout.addWidget(lbl_trig1, 0, 1)
+        guardrail_layout.addWidget(lbl_trig2, 0, 2)
+        guardrail_layout.addWidget(lbl_grd, 0, 3)
+        guardrail_layout.addWidget(lbl_en, 0, 4)
         
         self.edit_guard_trigger = {}
+        self.edit_guard_trigger_2 = {}
         self.edit_guard_limit = {}
         self.chk_guard_enabled = {}
         
@@ -3534,14 +3542,19 @@ class ShinseonConfigDialog(QDialog):
             lbl_sname.setAlignment(Qt.AlignCenter)
             guardrail_layout.addWidget(lbl_sname, idx, 0)
             
-            e_trig = QLineEdit()
-            e_trig.setAlignment(Qt.AlignCenter)
-            guardrail_layout.addWidget(e_trig, idx, 1)
-            self.edit_guard_trigger[s_key] = e_trig
+            e_trig1 = QLineEdit()
+            e_trig1.setAlignment(Qt.AlignCenter)
+            guardrail_layout.addWidget(e_trig1, idx, 1)
+            self.edit_guard_trigger[s_key] = e_trig1
+            
+            e_trig2 = QLineEdit()
+            e_trig2.setAlignment(Qt.AlignCenter)
+            guardrail_layout.addWidget(e_trig2, idx, 2)
+            self.edit_guard_trigger_2[s_key] = e_trig2
             
             e_limit = QLineEdit()
             e_limit.setAlignment(Qt.AlignCenter)
-            guardrail_layout.addWidget(e_limit, idx, 2)
+            guardrail_layout.addWidget(e_limit, idx, 3)
             self.edit_guard_limit[s_key] = e_limit
 
             c_en = QCheckBox()
@@ -3551,19 +3564,19 @@ class ShinseonConfigDialog(QDialog):
             layout_en.addWidget(c_en)
             w_en = QWidget()
             w_en.setLayout(layout_en)
-            guardrail_layout.addWidget(w_en, idx, 3)
+            guardrail_layout.addWidget(w_en, idx, 4)
             self.chk_guard_enabled[s_key] = c_en
 
         # Row 5: 구분선 QFrame
         line_frame_grd = QFrame()
         line_frame_grd.setFrameShape(QFrame.HLine)
         line_frame_grd.setFrameShadow(QFrame.Sunken)
-        guardrail_layout.addWidget(line_frame_grd, 5, 0, 1, 4)
+        guardrail_layout.addWidget(line_frame_grd, 5, 0, 1, 5)
 
         # Row 6: QLabel("주말") 파란색 타이틀 헤더
         lbl_wknd_title_grd = QLabel("주말")
         lbl_wknd_title_grd.setStyleSheet("color: #55aaff; font-weight: bold; font-size: 14px;")
-        guardrail_layout.addWidget(lbl_wknd_title_grd, 6, 0, 1, 4)
+        guardrail_layout.addWidget(lbl_wknd_title_grd, 6, 0, 1, 5)
 
         weekend_guardrails = [
             ("WEEKEND_ASIA", "주말 아시아"),
@@ -3576,14 +3589,19 @@ class ShinseonConfigDialog(QDialog):
             lbl_sname.setAlignment(Qt.AlignCenter)
             guardrail_layout.addWidget(lbl_sname, idx, 0)
             
-            e_trig = QLineEdit()
-            e_trig.setAlignment(Qt.AlignCenter)
-            guardrail_layout.addWidget(e_trig, idx, 1)
-            self.edit_guard_trigger[s_key] = e_trig
+            e_trig1 = QLineEdit()
+            e_trig1.setAlignment(Qt.AlignCenter)
+            guardrail_layout.addWidget(e_trig1, idx, 1)
+            self.edit_guard_trigger[s_key] = e_trig1
+            
+            e_trig2 = QLineEdit()
+            e_trig2.setAlignment(Qt.AlignCenter)
+            guardrail_layout.addWidget(e_trig2, idx, 2)
+            self.edit_guard_trigger_2[s_key] = e_trig2
             
             e_limit = QLineEdit()
             e_limit.setAlignment(Qt.AlignCenter)
-            guardrail_layout.addWidget(e_limit, idx, 2)
+            guardrail_layout.addWidget(e_limit, idx, 3)
             self.edit_guard_limit[s_key] = e_limit
 
             c_en = QCheckBox()
@@ -3593,12 +3611,19 @@ class ShinseonConfigDialog(QDialog):
             layout_en.addWidget(c_en)
             w_en = QWidget()
             w_en.setLayout(layout_en)
-            guardrail_layout.addWidget(w_en, idx, 3)
+            guardrail_layout.addWidget(w_en, idx, 4)
             self.chk_guard_enabled[s_key] = c_en
 
-        guardrail_layout.addWidget(QLabel("분할 익절 청산 비율 (%):"), 11, 0)
-        self.edit_half_exit_ratio = QLineEdit()
-        guardrail_layout.addWidget(self.edit_half_exit_ratio, 11, 1, 1, 2)
+        # Row 11: 1차 / 2차 분할 익절 비율 (%)
+        guardrail_layout.addWidget(QLabel("1차 분할 익절 비율 (%):"), 11, 0)
+        self.edit_half_exit_ratio_1 = QLineEdit()
+        self.edit_half_exit_ratio_1.setAlignment(Qt.AlignCenter)
+        guardrail_layout.addWidget(self.edit_half_exit_ratio_1, 11, 1)
+
+        guardrail_layout.addWidget(QLabel("2차 분할 익절 비율 (%):"), 11, 2)
+        self.edit_half_exit_ratio_2 = QLineEdit()
+        self.edit_half_exit_ratio_2.setAlignment(Qt.AlignCenter)
+        guardrail_layout.addWidget(self.edit_half_exit_ratio_2, 11, 3)
         
         # 불타기
         self.chk_pyramiding_enabled = QCheckBox("추세 추종 불타기(Pyramiding) 가동")
@@ -3679,13 +3704,17 @@ class ShinseonConfigDialog(QDialog):
         self.edit_telegram_token.setText(self.parent.telegram_token)
         self.edit_telegram_chat_id.setText(self.parent.telegram_chat_id)
 
-        self.edit_half_exit_ratio.setText(f"{self.parent.half_exit_close_ratio:.1f}")
+        self.edit_half_exit_ratio_1.setText(f"{getattr(self.parent, 'half_exit_close_ratio', 50.0):.1f}")
+        self.edit_half_exit_ratio_2.setText(f"{getattr(self.parent, 'half_exit_close_ratio_2', 50.0):.1f}")
         
         all_guardrail_keys = ["ASIA", "LONDON", "NY", "PACIFIC", "WEEKEND_ASIA", "WEEKEND_LONDON", "WEEKEND_NY", "WEEKEND_PACIFIC"]
         for s_key in all_guardrail_keys:
-            data = getattr(self.parent, "session_guardrails", {}).get(s_key, {"trigger": 0.5, "guard": 0.0, "enabled": True})
-            self.edit_guard_trigger[s_key].setText(f"{data['trigger']:.2f}")
-            self.edit_guard_limit[s_key].setText(f"{data['guard']:.2f}")
+            data = getattr(self.parent, "session_guardrails", {}).get(s_key, {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True})
+            trig_1 = float(data.get("trigger", 0.4))
+            trig_2 = float(data.get("trigger_2", trig_1 * 1.5 if trig_1 > 0 else 0.8))
+            self.edit_guard_trigger[s_key].setText(f"{trig_1:.2f}")
+            self.edit_guard_trigger_2[s_key].setText(f"{trig_2:.2f}")
+            self.edit_guard_limit[s_key].setText(f"{float(data.get('guard', 0.0)):.2f}")
             self.chk_guard_enabled[s_key].setChecked(data.get('enabled', True))
             
         self.chk_pyramiding_enabled.setChecked(getattr(self.parent, "pyramiding_enabled", True))
@@ -3745,15 +3774,17 @@ class ShinseonConfigDialog(QDialog):
             self.parent.telegram_token = self.edit_telegram_token.text().strip()
             self.parent.telegram_chat_id = self.edit_telegram_chat_id.text().strip()
 
-            half_exit_ratio_val = float(self.edit_half_exit_ratio.text().strip())
+            ratio_1_val = float(self.edit_half_exit_ratio_1.text().strip())
+            ratio_2_val = float(self.edit_half_exit_ratio_2.text().strip())
             
             new_guardrails = {}
             all_guardrail_keys = ["ASIA", "LONDON", "NY", "PACIFIC", "WEEKEND_ASIA", "WEEKEND_LONDON", "WEEKEND_NY", "WEEKEND_PACIFIC"]
             for s_key in all_guardrail_keys:
                 trig_val = float(self.edit_guard_trigger[s_key].text().strip())
+                trig_2_val = float(self.edit_guard_trigger_2[s_key].text().strip())
                 grd_val = float(self.edit_guard_limit[s_key].text().strip())
                 en_val = self.chk_guard_enabled[s_key].isChecked()
-                new_guardrails[s_key] = {"trigger": trig_val, "guard": grd_val, "enabled": en_val}
+                new_guardrails[s_key] = {"trigger": trig_val, "trigger_2": trig_2_val, "guard": grd_val, "enabled": en_val}
             
             pyra_enabled = self.chk_pyramiding_enabled.isChecked()
             pyra_ratio = float(self.edit_pyramiding_ratio.text().strip())
@@ -3761,7 +3792,8 @@ class ShinseonConfigDialog(QDialog):
             mid_trig_val = float(self.edit_mid_guard_trigger.text().strip())
             mid_off_val = float(self.edit_mid_guard_offset.text().strip())
 
-            self.parent.half_exit_close_ratio = half_exit_ratio_val
+            self.parent.half_exit_close_ratio = ratio_1_val
+            self.parent.half_exit_close_ratio_2 = ratio_2_val
             self.parent.session_guardrails = new_guardrails
             self.parent.pyramiding_enabled = pyra_enabled
             self.parent.pyramiding_ratio = pyra_ratio
@@ -3770,7 +3802,7 @@ class ShinseonConfigDialog(QDialog):
             
             # 설정 파일 저장
             self.parent.save_shinseon_config()
-            self.parent.add_log("⚙ [설정 변경] 세션별 임계치 및 트레이딩 핵심 파라미터 설정을 적용 및 저장했습니다.")
+            self.parent.add_log("⚙ [설정 변경] 1차/2차 듀얼 분할 익절 및 세션별 가드레일 설정을 적용 및 저장했습니다.")
             self.parent.sync_leverage_to_exchange()
             self.accept()
             QApplication.processEvents()
@@ -3808,21 +3840,23 @@ class ShinseonConfigDialog(QDialog):
             fields["sl"].setText(f"{data['sl']:.1f}")
 
         self.edit_leverage.setText("30")
-        self.edit_half_exit_ratio.setText("50.0")
+        self.edit_half_exit_ratio_1.setText("50.0")
+        self.edit_half_exit_ratio_2.setText("50.0")
         
         default_guardrails = {
-            "ASIA": {"trigger": 0.4, "guard": 0.0, "enabled": True},
-            "LONDON": {"trigger": 0.9, "guard": -0.15, "enabled": False},
-            "NY": {"trigger": 0.9, "guard": -0.25, "enabled": False},
-            "PACIFIC": {"trigger": 0.9, "guard": -0.25, "enabled": True},
-            "WEEKEND_ASIA": {"trigger": 0.4, "guard": 0.0, "enabled": True},
-            "WEEKEND_LONDON": {"trigger": 0.9, "guard": -0.15, "enabled": False},
-            "WEEKEND_NY": {"trigger": 0.9, "guard": -0.25, "enabled": False},
-            "WEEKEND_PACIFIC": {"trigger": 0.9, "guard": -0.25, "enabled": True}
+            "ASIA": {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True},
+            "LONDON": {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True},
+            "NY": {"trigger": 1.5, "trigger_2": 1.7, "guard": 0.0, "enabled": True},
+            "PACIFIC": {"trigger": 0.4, "trigger_2": 0.8, "guard": 0.0, "enabled": True},
+            "WEEKEND_ASIA": {"trigger": 0.9, "trigger_2": 1.2, "guard": 0.0, "enabled": True},
+            "WEEKEND_LONDON": {"trigger": 0.9, "trigger_2": 1.2, "guard": 0.0, "enabled": True},
+            "WEEKEND_NY": {"trigger": 1.0, "trigger_2": 1.3, "guard": 0.0, "enabled": True},
+            "WEEKEND_PACIFIC": {"trigger": 0.9, "trigger_2": 1.2, "guard": 0.0, "enabled": True}
         }
         all_guardrail_keys = ["ASIA", "LONDON", "NY", "PACIFIC", "WEEKEND_ASIA", "WEEKEND_LONDON", "WEEKEND_NY", "WEEKEND_PACIFIC"]
         for s_key in all_guardrail_keys:
             self.edit_guard_trigger[s_key].setText(f"{default_guardrails[s_key]['trigger']:.2f}")
+            self.edit_guard_trigger_2[s_key].setText(f"{default_guardrails[s_key]['trigger_2']:.2f}")
             self.edit_guard_limit[s_key].setText(f"{default_guardrails[s_key]['guard']:.2f}")
             self.chk_guard_enabled[s_key].setChecked(default_guardrails[s_key]['enabled'])
             
