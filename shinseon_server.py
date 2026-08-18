@@ -1252,8 +1252,29 @@ class BotCore:
                             status_msg = f"⚠ [{direction_active} 위기 @ {entry:,.1f}] ROE: {roe_pct:+.2f}%{usdt_str}\n(손절 데드라인 임박: {target_sl:+.2f}%)"
 
                         if custom_stop_active:
-                            stop_label = "익절" if custom_stop_offset > 0 else "손절"
-                            status_msg += f"\n(🛡 스마트 스탑 가드: {custom_stop_offset:+.2f}% ROE {stop_label} 감시 중)"
+                            pnl_at_set = float(getattr(self.v35_engine, "custom_stop_set_roe", getattr(self.v35_engine, "custom_stop_set_pnl", roe_pct)))
+                            offset_val = float(custom_stop_offset)
+                            live_roe_val = round(roe_pct, 2)
+                            
+                            # 방향성 판정: 설정시점 대비 하방이탈(수익보존/손절) or 상방돌파(목표익절)
+                            if offset_val < pnl_at_set:
+                                is_smart_trig = (live_roe_val <= offset_val)
+                                stop_label = "수익보존/손절"
+                                cond_str = "이하"
+                            else:
+                                is_smart_trig = (live_roe_val >= offset_val)
+                                stop_label = "목표익절"
+                                cond_str = "이상"
+                                
+                            status_msg += f"\n(🛡 스마트 스탑 가드: {offset_val:+.2f}% ROE {stop_label} 감시 중)"
+                            
+                            # [텔레메트리 1초 이중 안전망 즉각 청산 집행]
+                            if is_smart_trig and getattr(self.v35_engine, "is_position_active", False):
+                                self.v35_engine.custom_stop_active = False
+                                ratio = float(getattr(self.v35_engine, "custom_stop_close_ratio", 100.0))
+                                order_type = f"PARTIAL_CLOSE_{int(ratio)}" if ratio < 100.0 else "FORCE_MARKET_UNCAPPED"
+                                logger.info(f"🚨 [텔레메트리 이중안전망 발동] 실시간 ROE({live_roe_val:+.2f}%)가 스마트 스탑 오프셋({offset_val:+.2f}% ROE) {cond_str} 도달! ({ratio:.0f}% {stop_label} 즉시 청산 집행)")
+                                asyncio.create_task(self.v35_engine.execute_bitget_internal_packet(side="CLEAR", order_type=order_type, custom_ratio=ratio/100.0))
 
                     elif self.v35_engine.is_snipe_active:
                         if not is_session_enabled:
@@ -3040,8 +3061,8 @@ class ShinseonV35Engine:
                 # --------------------------------------------------------------------------
                 if getattr(self, "custom_stop_active", False):
                     leverage_val = getattr(self, "leverage", 30) or 30
-                    offset_val = getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", -6.0))
-                    pnl_at_set = getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val))
+                    offset_val = float(getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", 1.0)))
+                    pnl_at_set = float(getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val)))
                     live_roe = pnl_pct * 100.0 * leverage_val
                     live_roe_rounded = round(live_roe, 2)
 
@@ -3054,7 +3075,7 @@ class ShinseonV35Engine:
                         # 2. 설정 오프셋이 설정 시점 ROE 이상인 경우 ➡️ 상방 목표익절/반등 모드
                         is_triggered = (live_roe_rounded >= offset_val)
                         cond_str = "이상"
-                        stop_label = "상승/반등익절"
+                        stop_label = "목표익절"
 
                     if is_triggered:
                         self.custom_stop_active = False
@@ -3696,17 +3717,29 @@ class WsServer:
                             v35.custom_stop_offset_pct = offset_val
                             v35.custom_stop_offset_roe = offset_val
                             v35.custom_stop_close_ratio = ratio
-                            # [정공법 완치] 이전 포지션 진입가 잔재 수식이 아닌, 실시간 0.01초 루프에서 측정된 생생한 최신 ROE로 동기화
-                            live_pnl_pct = getattr(v35, "last_live_pnl_pct", 0.0)
-                            lev_val = getattr(v35, "leverage", 30) or 30
-                            live_roe = round(live_pnl_pct * lev_val, 2)
-                            v35.custom_stop_set_pnl = live_roe
-                            v35.custom_stop_set_roe = live_roe
+                            
+                            # [정공법 완치] 실시간 포지션 방향 및 진입가 기준 정확한 실시간 ROE 측정
+                            entry_dir = getattr(v35, "entry_direction", None) or getattr(v35, "position_side", "LONG") or "LONG"
+                            entry_price = float(getattr(v35, "entry_price", 0.0) or 0.0)
+                            calc_price = float(getattr(self.bot_core, "current_price", 0.0) or entry_price)
+                            lev_val = float(getattr(v35, "leverage", 30) or 30)
+                            
+                            if entry_price > 0.0 and calc_price > 0.0:
+                                if entry_dir == "LONG":
+                                    live_roe = ((calc_price - entry_price) / entry_price) * 100.0 * lev_val
+                                else:
+                                    live_roe = ((entry_price - calc_price) / entry_price) * 100.0 * lev_val
+                            else:
+                                live_roe = 0.0
+                                
+                            live_roe_rounded = round(live_roe, 2)
+                            v35.custom_stop_set_pnl = live_roe_rounded
+                            v35.custom_stop_set_roe = live_roe_rounded
                             
                             # [서버 전담 실행 엔진 강제 가동] 스마트 스탑 설정 시 감시 루프가 안 돌고 있으면 즉시 팝업 구동
                             if active and v35.is_position_active and not getattr(v35, "is_guardrail_running", False):
                                 asyncio.create_task(v35.manage_v35_exit_guardrail(entry_dir))
-                                logger.info("🚀 [웹서버] 스마트 스탑 전담 실시간 감시 엔진 루프 팝업 구동 완료!")
+                                logger.info(f"🚀 [웹서버] 스마트 스탑 전담 실시간 감시 엔진 루프 팝업 구동 완료! (설정시점 ROE: {live_roe_rounded:+.2f}%, 오프셋: {offset_val:+.2f}%)")
 
                         act_str = f"📡 [웹서버 수신] 🛡️ 스마트 스탑 설정값 수신 완료 (오프셋: {offset_val:+.2f}%, 청산비율: {ratio:.0f}%) ➡️ 웹서버 24시간 실시간 감시 개시!" if active else "📡 [웹서버 수신] 🧹 스마트 스탑 웹서버 감시 해제 완료"
                         await self.broadcast_event("EVT_RESPONSE_LOG", {"message": act_str})

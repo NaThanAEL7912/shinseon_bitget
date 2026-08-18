@@ -1556,24 +1556,24 @@ class ShinseonV35Engine:
                 continue
 
             # [v2.80/v2.96/v3.62/v3.77] ?ㅼ떆媛??좉????몃찓紐⑤━ ?ㅻ쭏??PnL ?ㅽ봽???ㅽ깙 媛먯떆 (?곷????꾩튂 湲곕컲 ???諛⑺뼢??Engine)
+            # [v2.80/v2.96/v3.62/v3.77/V6.54] 실시간 스마트 스탑 ROE 오프셋 감시 (상대/절대 방향성 완벽 엔진)
             if getattr(self, "custom_stop_active", False):
-                offset_val = getattr(self, "custom_stop_offset_pct", -0.2)
-                pnl_at_set = getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0)
-                live_pnl = pnl_pct * 100.0
+                leverage_val = getattr(self, "leverage", 30) or 30
+                offset_val = float(getattr(self, "custom_stop_offset_roe", getattr(self, "custom_stop_offset_pct", 1.0)))
+                pnl_at_set = float(getattr(self, "custom_stop_set_roe", getattr(self, "custom_stop_set_pnl", pnl_pct * 100.0 * leverage_val)))
+                live_roe = pnl_pct * 100.0 * leverage_val
+                live_roe_rounded = round(live_roe, 2)
 
                 if offset_val < pnl_at_set:
-                    # ?ㅼ젙媛믪씠 ?꾩옱 PnL蹂대떎 ?꾨옒 ?∽툘 ?섎갑 ?섎씫/蹂댁〈/?먯젅 紐⑤뱶
-                    is_triggered = (live_pnl <= offset_val)
-                    cond_str = "?댄븯"
-                    stop_label = "?먯젅/蹂댁〈"
+                    # 설정값이 현재 ROE보다 아래 -> 하방 수익보존/손절 모드
+                    is_triggered = (live_roe_rounded <= offset_val)
+                    cond_str = "이하"
+                    stop_label = "수익보존/손절"
                 else:
-                    # ?ㅼ젙媛믪씠 ?꾩옱 PnL蹂대떎 ???∽툘 ?곷갑 ?곸듅/諛섎벑/?듭젅 紐⑤뱶
-                    is_triggered = (live_pnl >= offset_val)
-                    cond_str = "?댁긽"
-                    stop_label = "?곸듅/諛섎벑?듭젅"
-
-                if is_triggered:
-                    self.custom_stop_active = False
+                    # 설정값이 현재 ROE보다 위 -> 상방 목표익절/반등 모드
+                    is_triggered = (live_roe_rounded >= offset_val)
+                    cond_str = "이상"
+                    stop_label = "목표익절"
                     ratio = float(getattr(self, "custom_stop_close_ratio", 100.0))
                     if ratio < 100.0:
                         order_type = f"PARTIAL_CLOSE_{int(ratio)}"
