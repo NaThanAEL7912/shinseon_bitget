@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.56",
+    "CURRENT_VERSION": "V6.57",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -186,8 +186,8 @@
             "enabled": true
         },
         "NY": {
-            "trigger": 1.5,
-            "trigger_2": 1.7,
+            "trigger": 1.2,
+            "trigger_2": 1.5,
             "guard": 1.0,
             "enabled": true
         },

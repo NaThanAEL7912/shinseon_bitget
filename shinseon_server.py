@@ -2184,8 +2184,6 @@ class ShinseonV35Engine:
                         ratio_factor = custom_ratio if custom_ratio > 0.0 else 0.5
 
                         if order_type.startswith("PARTIAL_CLOSE") or order_type == "50_PERCENT_CLOSE":
-                            close_side = "buy" if pos_side in ["short", "close_short"] else "sell"
-                            hold_side_val = "short" if pos_side in ["short", "close_short"] else "long"
                             total_contracts = float(active_pos['contracts'])
                             if total_contracts <= 0.0001:
                                 amount = total_contracts
@@ -2195,28 +2193,69 @@ class ShinseonV35Engine:
                                 if amount < 0.0001:
                                     amount = 0.0001
                             pct_lbl = int(round(ratio_factor * 100))
-                            self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 API 직송] 수량: {amount} BTC (방향: {pos_side.upper()})")
+                            self.bot.ui_cb(0.0, 0, f"🎯 [{pct_lbl}% 청산 v2 API 직송] 수량: {amount} BTC (방향: {pos_side.upper()})")
                             try:
-                                if active_pos.get('info', {}).get('posMode') == 'hedge_mode' or active_pos.get('hedged', True):
-                                    params = {'tradeSide': 'close', 'holdSide': hold_side_val, 'marginMode': 'isolated', 'marginCoin': 'USDT'}
-                                else:
-                                    params = {'reduceOnly': True, 'marginMode': 'isolated', 'marginCoin': 'USDT'}
-                                order = await exchange.create_order(symbol, 'market', close_side, amount, params=params)
-                                fill_exit_p = float(order.get('average', 0.0) or order.get('price', 0.0) or 0.0) if isinstance(order, dict) else 0.0
-                                self.bot.ui_cb(0.0, 0, f"✅ [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료 (체결가: ${fill_exit_p:,.1f})")
-                                logger.info(f"🚨 [TRADE] [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료 (체결가: ${fill_exit_p:,.1f})")
-                                self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
-                                if order_type != "50_PERCENT_CLOSE":
-                                    self.is_half_exited = True
-                                self.is_manual_half_exited = True
-                                
-                                # [텔레그램 후발송]
-                                current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
-                                entry_p_show = getattr(self, "entry_price", 0.0)
-                                side_show = str(getattr(self, "entry_direction", pos_side.upper()))
-                                msg = f"🎯 [{pct_lbl}% 분할익절 알림]\n방향: {side_show}\n사유: 수익률 도달 ({pct_lbl}% 익절 실행 완료)\n평단가: {entry_p_show:,.1f} USDT\n현재가: {current_bitget_price:,.1f} USDT"
-                                send_telegram_msg(msg)
-                                return True
+                                env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
+                                ex_obj = getattr(self.bot, "bitget_exchange", None)
+                                api_key = env_vars.get("BITGET_API_KEY") or env_vars.get("bitget_api_key") or env_vars.get("api_key") or getattr(ex_obj, "apiKey", "")
+                                secret_key = env_vars.get("BITGET_SECRET_KEY") or env_vars.get("bitget_secret_key") or env_vars.get("secret_key") or getattr(ex_obj, "secret", "")
+                                passphrase = env_vars.get("BITGET_PASSPHRASE") or env_vars.get("bitget_passphrase") or env_vars.get("passphrase") or getattr(ex_obj, "password", "")
+
+                                # [비트겟 V2 헤지모드 절대규격]
+                                # LONG 청산 ➡️ side="buy", tradeSide="close", holdSide="long"
+                                # SHORT 청산 ➡️ side="sell", tradeSide="close", holdSide="short"
+                                req_side = "buy" if pos_side in ["long", "open_long"] else "sell"
+                                hold_side_val = "long" if pos_side in ["long", "open_long"] else "short"
+
+                                url_base = "https://api.bitget.com"
+                                path_order = "/api/v2/mix/order/place-order"
+                                body_dict = {
+                                    "symbol": "BTCUSDT",
+                                    "productType": "USDT-FUTURES",
+                                    "marginMode": "isolated",
+                                    "marginCoin": "USDT",
+                                    "size": str(amount),
+                                    "side": req_side,
+                                    "orderType": "market",
+                                    "tradeSide": "close",
+                                    "holdSide": hold_side_val
+                                }
+                                body_json = json.dumps(body_dict)
+                                timestamp = str(int(time.time() * 1000))
+                                message = timestamp + "POST" + path_order + body_json
+                                mac = hmac.new(secret_key.encode('utf-8'), message.encode('utf-8'), hashlib.sha256)
+                                sign = base64.b64encode(mac.digest()).decode('utf-8')
+
+                                headers = {
+                                    'ACCESS-KEY': api_key,
+                                    'ACCESS-SIGN': sign,
+                                    'ACCESS-TIMESTAMP': timestamp,
+                                    'ACCESS-PASSPHRASE': passphrase,
+                                    'Content-Type': 'application/json',
+                                    'locale': 'en-US'
+                                }
+                                async with aiohttp.ClientSession() as session:
+                                    async with session.post(url_base + path_order, headers=headers, data=body_json) as resp:
+                                        res = await resp.json()
+                                        if res.get("code") == "00000":
+                                            self.bot.ui_cb(0.0, 0, f"✅ [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료")
+                                            logger.info(f"🚨 [TRADE] [{pct_lbl}% 청산 성공] 비트겟 {amount} BTC 시장가 청산 완료")
+                                            self.position_volume = max(0, self.position_volume - int(round(amount * 1000)))
+                                            if order_type != "50_PERCENT_CLOSE":
+                                                self.is_half_exited = True
+                                            self.is_manual_half_exited = True
+
+                                            # [텔레그램 후발송] 비트겟 00000 성공 체결 팩트 확인 후 발송
+                                            current_bitget_price = getattr(self.bot, "current_price", self.entry_price)
+                                            entry_p_show = getattr(self, "entry_price", 0.0)
+                                            side_show = str(getattr(self, "entry_direction", pos_side.upper()))
+                                            msg = f"🎯 [{pct_lbl}% 분할익절 알림]\n방향: {side_show}\n사유: 수익률 도달 ({pct_lbl}% 익절 실행 완료)\n평단가: {entry_p_show:,.1f} USDT\n현재가: {current_bitget_price:,.1f} USDT"
+                                            send_telegram_msg(msg)
+                                            return True
+                                        else:
+                                            self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 실패] {res.get('msg', '알 수 없음')} (코드: {res.get('code')})")
+                                            logger.error(f"🚨 [TRADE] [{pct_lbl}% 청산 실패] {res.get('msg')} (코드: {res.get('code')})")
+                                            return False
                             except Exception as pe:
                                 self.bot.ui_cb(0.0, 0, f"❌ [{pct_lbl}% 청산 예외]: {pe}")
                                 logger.error(f"🚨 [TRADE] [{pct_lbl}% 청산 예외]: {pe}")
