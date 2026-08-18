@@ -2288,6 +2288,22 @@ class ShinseonV35Engine:
                             return False
                         ccxt_side = 'buy' if side == 'LONG' else 'sell'
                         
+                        now_dt = get_kst_now()
+                        is_weekend = check_is_weekend_kst(now_dt)
+                        hour_val = now_dt.hour
+                        minute_val = now_dt.minute
+                        if 9 <= hour_val < 16:
+                            s_thresh_key = "weekend_asia" if is_weekend else "asia"
+                        elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                            s_thresh_key = "weekend_europe" if is_weekend else "europe"
+                        elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                            s_thresh_key = "weekend_us" if is_weekend else "us"
+                        else:
+                            s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+                            
+                        tr_configs = getattr(self, "session_trading_configs", None) or getattr(dashboard, "session_trading_configs", {}) or {}
+                        s_tr = tr_configs.get(s_thresh_key, {})
+                        
                         if order_type == "ADD_PYRAMIDING":
                             p_vol = getattr(self, "position_volume", 0) / 1000.0
                             pyra_ratio = getattr(dashboard, "pyramiding_ratio", 30.0) / 100.0
@@ -2295,16 +2311,16 @@ class ShinseonV35Engine:
                             amount = original_vol * pyra_ratio
                         else:
                             if order_type == "ADD_THIRD_ENTRY":
-                                ratio = dashboard.split_entry_3_ratio
+                                ratio = float(s_tr.get("split_entry_3_ratio", getattr(dashboard, "split_entry_3_ratio", 0.0)))
                             elif order_type == "ADD_100_PERCENT":
-                                ratio = dashboard.split_entry_2_ratio
+                                ratio = float(s_tr.get("split_entry_2_ratio", getattr(dashboard, "split_entry_2_ratio", 150.0)))
                             else:
-                                ratio = dashboard.split_entry_1_ratio
+                                ratio = float(s_tr.get("split_entry_1_ratio", getattr(dashboard, "split_entry_1_ratio", 300.0)))
                                 
                             if ratio <= 0.0:
                                 return False
                                 
-                            lev = float(getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0))) or 30.0
+                            lev = float(s_tr.get("leverage", getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0)))) or 30.0
                             bitget_bal = float(getattr(self.bot, "bitget_balance", 0.0) or 0.0)
                             if bitget_bal <= 0.0:
                                 try:

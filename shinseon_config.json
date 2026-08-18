@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.49",
+    "CURRENT_VERSION": "V6.50",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -53,6 +53,104 @@
             "oi": 0.12,
             "sl": -1.0,
             "enabled": false
+        }
+    },
+    "session_trading_configs": {
+        "asia": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "europe": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "us": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "pacific": {
+            "leverage": 30,
+            "betting_ratio": 200.0,
+            "split_entry_1_ratio": 100.0,
+            "split_entry_2_ratio": 100.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "weekend_asia": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "weekend_europe": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "weekend_us": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
+        },
+        "weekend_pacific": {
+            "leverage": 30,
+            "betting_ratio": 450.0,
+            "split_entry_1_ratio": 300.0,
+            "split_entry_2_ratio": 150.0,
+            "split_entry_2_trigger_pct": -0.3,
+            "split_entry_3_ratio": 0.0,
+            "split_entry_3_trigger_pct": 0.0,
+            "split_cooldown_seconds": 900.0,
+            "cooldown_seconds": 30.0,
+            "profit_cooldown_seconds": 10.0
         }
     },
     "leverage_level": 30,
