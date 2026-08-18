@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.55"
+        self.CURRENT_VERSION = "V6.56"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1205,14 +1205,14 @@ class ShinseonDashboard(QMainWindow):
         right_layout.addWidget(self.btn_close_50)
         
         # BITGET 수동 제어판 (스마트 스탑 가드)
-        self.lbl_stoploss_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 스마트 스탑 가드 제어판</b>", right_widget)
+        self.lbl_stoploss_title = QLabel("<b style='color:#FFFFFF; font-size: 11px;'>■ [BITGET] 스마트 스탑 가드 제어판 (PNL %)</b>", right_widget)
         right_layout.addWidget(self.lbl_stoploss_title)
 
         offset_layout = QHBoxLayout()
         offset_layout.setContentsMargins(0, 0, 0, 0)
         offset_layout.setSpacing(4)
 
-        lbl_offset = QLabel("오프셋(%):", right_widget)
+        lbl_offset = QLabel("오프셋(PNL%):", right_widget)
         lbl_offset.setStyleSheet("color: #DEBA9D; font-size: 11px; font-weight: bold;")
 
         self.edit_stoploss_offset = QLineEdit("6.0", right_widget)
@@ -2513,11 +2513,12 @@ class ShinseonDashboard(QMainWindow):
                     asyncio.ensure_future(self.ws.send(packet))
                 except Exception:
                     pass
-                self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}%, {ratio_val:.0f}%) 전송 완료")
+                self.add_log(f"📡 [서버 릴레이] AWS 서버에 스마트 스탑 감시 오프셋({offset_val:+.2f}% PNL, {ratio_val:.0f}%) 전송 완료")
 
             if hasattr(self, "bot_core") and self.bot_core and hasattr(self.bot_core, "v35_engine") and self.bot_core.v35_engine:
                 self.bot_core.v35_engine.custom_stop_active = True
                 self.bot_core.v35_engine.custom_stop_offset_pct = offset_val
+                self.bot_core.v35_engine.custom_stop_offset_pnl = offset_val
                 self.bot_core.v35_engine.custom_stop_close_ratio = ratio_val
 
             # UI 가동 상태(ON) 업데이트
@@ -2539,7 +2540,7 @@ class ShinseonDashboard(QMainWindow):
                 }
             """)
 
-            self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 포지션에 오프셋 {offset_val:+.2f}%, 청산비율 {ratio_val:.0f}% 감시 가드가 작동되었습니다!")
+            self.add_log(f"✅ [스마트 스탑 가동 완료] 비트겟 포지션에 PNL {offset_val:+.2f}%, 청산비율 {ratio_val:.0f}% 감시 가드가 작동되었습니다!")
         except Exception as e:
             self.add_log(f"❌ [스마트 스탑 설정 오류] 사유: {e}")
 
