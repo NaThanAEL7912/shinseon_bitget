@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.43"
+        self.CURRENT_VERSION = "V6.44"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -3277,16 +3277,15 @@ class ShinseonConfigDialog(QDialog):
         # QTabWidget 생성
         self.tabs = QTabWidget()
         
-        # 1번 탭: 세션별 설정 (8대 세션 독립 배팅 비중 완비 v6.43)
+        # 1번 탭: 세션별 설정 (순수 4대 컬럼)
         self.tab_session = QWidget()
         session_layout = QGridLayout(self.tab_session)
         session_layout.setSpacing(6)
         session_layout.setContentsMargins(10, 10, 10, 10)
 
-        # 7대 컬럼 헤더
+        # 4대 컬럼 헤더
         headers = [
-            "세션 구분", "1분 청산액 ($)", "1분 OI속도 (%)", "최초 손절선 (%)",
-            "1차 매수 비중 (%)", "2차 매수 비중 (%)", "총 배팅 비중 (%)"
+            "세션 구분", "1분 청산액 ($)", "1분 OI속도 (%)", "최초 손절선 (%)"
         ]
         for c_idx, h_text in enumerate(headers):
             lbl = QLabel(h_text)
@@ -3302,19 +3301,6 @@ class ShinseonConfigDialog(QDialog):
             ("pacific", "태평양 횡보")
         ]
 
-        def _make_session_betting_updater(s_k):
-            def _update():
-                f = self.session_fields.get(s_k)
-                if not f:
-                    return
-                try:
-                    e1 = float(f["entry_1"].text().strip() or 0.0)
-                    e2 = float(f["entry_2"].text().strip() or 0.0)
-                    f["betting"].setText(f"{e1 + e2:.1f}")
-                except Exception:
-                    pass
-            return _update
-
         for idx, (s_key, s_name) in enumerate(weekday_sessions, start=1):
             chk_sname = QCheckBox(s_name)
             chk_sname.setStyleSheet("font-weight: bold;")
@@ -3323,41 +3309,28 @@ class ShinseonConfigDialog(QDialog):
             edit_liq = QLineEdit()
             edit_oi = QLineEdit()
             edit_sl = QLineEdit()
-            edit_entry_1 = QLineEdit()
-            edit_entry_2 = QLineEdit()
-            edit_betting = QLineEdit()
             
-            for ed in [edit_liq, edit_oi, edit_sl, edit_entry_1, edit_entry_2, edit_betting]:
+            for ed in [edit_liq, edit_oi, edit_sl]:
                 ed.setAlignment(Qt.AlignCenter)
-                
-            edit_betting.setReadOnly(True)
-            edit_betting.setStyleSheet("background-color: #1A1817; color: #00E676; font-weight: bold; border: 1px solid rgba(222, 186, 157, 0.2);")
             
             session_layout.addWidget(edit_liq, idx, 1)
             session_layout.addWidget(edit_oi, idx, 2)
             session_layout.addWidget(edit_sl, idx, 3)
-            session_layout.addWidget(edit_entry_1, idx, 4)
-            session_layout.addWidget(edit_entry_2, idx, 5)
-            session_layout.addWidget(edit_betting, idx, 6)
             
             self.session_fields[s_key] = {
-                "chk": chk_sname, "liq": edit_liq, "oi": edit_oi, "sl": edit_sl,
-                "entry_1": edit_entry_1, "entry_2": edit_entry_2, "betting": edit_betting
+                "chk": chk_sname, "liq": edit_liq, "oi": edit_oi, "sl": edit_sl
             }
-            
-            edit_entry_1.textChanged.connect(_make_session_betting_updater(s_key))
-            edit_entry_2.textChanged.connect(_make_session_betting_updater(s_key))
 
         # Row 5: 구분선 QFrame
         line_frame_sess = QFrame()
         line_frame_sess.setFrameShape(QFrame.HLine)
         line_frame_sess.setFrameShadow(QFrame.Sunken)
-        session_layout.addWidget(line_frame_sess, 5, 0, 1, 7)
+        session_layout.addWidget(line_frame_sess, 5, 0, 1, 4)
 
         # Row 6: QLabel("주말") 파란색 타이틀 헤더
         lbl_wknd_title_sess = QLabel("주말 세션")
         lbl_wknd_title_sess.setStyleSheet("color: #55aaff; font-weight: bold; font-size: 13px;")
-        session_layout.addWidget(lbl_wknd_title_sess, 6, 0, 1, 7)
+        session_layout.addWidget(lbl_wknd_title_sess, 6, 0, 1, 4)
 
         weekend_sessions = [
             ("weekend_asia", "주말 아시아"),
@@ -3374,30 +3347,17 @@ class ShinseonConfigDialog(QDialog):
             edit_liq = QLineEdit()
             edit_oi = QLineEdit()
             edit_sl = QLineEdit()
-            edit_entry_1 = QLineEdit()
-            edit_entry_2 = QLineEdit()
-            edit_betting = QLineEdit()
             
-            for ed in [edit_liq, edit_oi, edit_sl, edit_entry_1, edit_entry_2, edit_betting]:
+            for ed in [edit_liq, edit_oi, edit_sl]:
                 ed.setAlignment(Qt.AlignCenter)
-                
-            edit_betting.setReadOnly(True)
-            edit_betting.setStyleSheet("background-color: #1A1817; color: #00E676; font-weight: bold; border: 1px solid rgba(222, 186, 157, 0.2);")
             
             session_layout.addWidget(edit_liq, idx, 1)
             session_layout.addWidget(edit_oi, idx, 2)
             session_layout.addWidget(edit_sl, idx, 3)
-            session_layout.addWidget(edit_entry_1, idx, 4)
-            session_layout.addWidget(edit_entry_2, idx, 5)
-            session_layout.addWidget(edit_betting, idx, 6)
             
             self.session_fields[s_key] = {
-                "chk": chk_sname, "liq": edit_liq, "oi": edit_oi, "sl": edit_sl,
-                "entry_1": edit_entry_1, "entry_2": edit_entry_2, "betting": edit_betting
+                "chk": chk_sname, "liq": edit_liq, "oi": edit_oi, "sl": edit_sl
             }
-            
-            edit_entry_1.textChanged.connect(_make_session_betting_updater(s_key))
-            edit_entry_2.textChanged.connect(_make_session_betting_updater(s_key))
 
         session_layout.setRowStretch(11, 1)
         self.tabs.addTab(self.tab_session, "세션별 설정")
@@ -3752,18 +3712,13 @@ class ShinseonConfigDialog(QDialog):
         if not self.parent:
             return
         
-        # 세션별 데이터 로드 (8대 세션 독립 배팅 비중 완비 v6.43)
+        # 세션별 데이터 로드 (4대 컬럼)
         for s_key, fields in self.session_fields.items():
-            data = self.parent.session_thresholds.get(s_key, {"liq": 100000.0, "oi": 0.05, "sl": -1.3, "enabled": True, "entry_1": 800.0, "entry_2": 400.0, "betting": 1200.0})
+            data = self.parent.session_thresholds.get(s_key, {"liq": 100000.0, "oi": 0.05, "sl": -1.3, "enabled": True})
             fields["chk"].setChecked(data.get("enabled", True))
             fields["liq"].setText(f"{int(data.get('liq', 100000)):,}")
             fields["oi"].setText(f"{float(data.get('oi', 0.05)):.4f}")
             fields["sl"].setText(f"{float(data.get('sl', -1.0)):.1f}")
-            e1 = float(data.get("entry_1", self.parent.split_entry_1_ratio or 800.0))
-            e2 = float(data.get("entry_2", self.parent.split_entry_2_ratio or 400.0))
-            fields["entry_1"].setText(f"{e1:.1f}")
-            fields["entry_2"].setText(f"{e2:.1f}")
-            fields["betting"].setText(f"{e1 + e2:.1f}")
 
         # 세션별 트레이딩 핵심 설정 로드 (8대 세션 독립 매트릭스)
         tr_configs = getattr(self.parent, "session_trading_configs", {}) or {}
@@ -3834,24 +3789,18 @@ class ShinseonConfigDialog(QDialog):
             return
             
         try:
-            # 세션별 값 파싱 및 검증 (8대 세션 독립 배팅 비중 완비 v6.43)
+            # 세션별 값 파싱 및 검증 (4대 컬럼)
             new_thresholds = {}
             for s_key, fields in self.session_fields.items():
                 liq_val = float(fields["liq"].text().replace(",", "").strip())
                 oi_val = float(fields["oi"].text().strip())
                 sl_val = float(fields["sl"].text().strip())
                 chk_val = fields["chk"].isChecked()
-                entry_1_val = float(fields["entry_1"].text().strip())
-                entry_2_val = float(fields["entry_2"].text().strip())
-                betting_val = entry_1_val + entry_2_val
                 new_thresholds[s_key] = {
                     "liq": liq_val,
                     "oi": oi_val,
                     "sl": sl_val,
-                    "enabled": chk_val,
-                    "entry_1": entry_1_val,
-                    "entry_2": entry_2_val,
-                    "betting": betting_val
+                    "enabled": chk_val
                 }
             
             # 세션별 트레이딩 핵심 설정 파싱 (8대 세션 독립 매트릭스)
@@ -3944,25 +3893,22 @@ class ShinseonConfigDialog(QDialog):
     def restore_defaults(self):
         # 하드코딩된 기본값 복원 (8대 세션 독립 배팅 비중 및 핵심 설정 포함 v6.43)
         default_thresholds = {
-            "asia": {"liq": 100000.0, "oi": 0.12, "sl": -0.5, "entry_1": 800.0, "entry_2": 400.0, "betting": 1200.0, "enabled": True},
-            "europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5, "entry_1": 1000.0, "entry_2": 500.0, "betting": 1500.0, "enabled": True},
-            "us": {"liq": 300000.0, "oi": 0.20, "sl": -1.3, "entry_1": 1500.0, "entry_2": 750.0, "betting": 2250.0, "enabled": True},
-            "pacific": {"liq": 50000.0, "oi": 0.09, "sl": -0.3, "entry_1": 600.0, "entry_2": 300.0, "betting": 900.0, "enabled": True},
-            "weekend_asia": {"liq": 100000.0, "oi": 0.12, "sl": -0.5, "entry_1": 800.0, "entry_2": 400.0, "betting": 1200.0, "enabled": True},
-            "weekend_europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5, "entry_1": 1000.0, "entry_2": 500.0, "betting": 1500.0, "enabled": True},
-            "weekend_us": {"liq": 300000.0, "oi": 0.20, "sl": -1.3, "entry_1": 1500.0, "entry_2": 750.0, "betting": 2250.0, "enabled": True},
-            "weekend_pacific": {"liq": 50000.0, "oi": 0.09, "sl": -0.3, "entry_1": 600.0, "entry_2": 300.0, "betting": 900.0, "enabled": True}
+            "asia": {"liq": 600000.0, "oi": 0.28, "sl": -1.0, "enabled": True},
+            "europe": {"liq": 500000.0, "oi": 0.24, "sl": -1.0, "enabled": True},
+            "us": {"liq": 650000.0, "oi": 0.18, "sl": -1.3, "enabled": True},
+            "pacific": {"liq": 500000.0, "oi": 0.12, "sl": -1.0, "enabled": False},
+            "weekend_asia": {"liq": 600000.0, "oi": 0.28, "sl": -1.0, "enabled": True},
+            "weekend_europe": {"liq": 500000.0, "oi": 0.24, "sl": -1.0, "enabled": True},
+            "weekend_us": {"liq": 650000.0, "oi": 0.20, "sl": -1.3, "enabled": True},
+            "weekend_pacific": {"liq": 500000.0, "oi": 0.12, "sl": -1.0, "enabled": False}
         }
         
         for s_key, fields in self.session_fields.items():
-            data = default_thresholds.get(s_key, {"liq": 100000.0, "oi": 0.05, "sl": -1.3, "entry_1": 800.0, "entry_2": 400.0, "betting": 1200.0, "enabled": True})
+            data = default_thresholds.get(s_key, {"liq": 100000.0, "oi": 0.05, "sl": -1.3, "enabled": True})
             fields["chk"].setChecked(data.get("enabled", True))
             fields["liq"].setText(f"{int(data['liq']):,}")
             fields["oi"].setText(f"{data['oi']:.4f}")
             fields["sl"].setText(f"{data['sl']:.1f}")
-            fields["entry_1"].setText(f"{data['entry_1']:.1f}")
-            fields["entry_2"].setText(f"{data['entry_2']:.1f}")
-            fields["betting"].setText(f"{data['betting']:.1f}")
 
         default_tr_configs = {
             "asia": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
