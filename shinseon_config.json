@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.42",
+    "CURRENT_VERSION": "V6.43",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -28,7 +28,7 @@
             "liq": 500000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": true
+            "enabled": false
         },
         "weekend_asia": {
             "liq": 600000.0,
@@ -52,13 +52,13 @@
             "liq": 500000.0,
             "oi": 0.12,
             "sl": -1.0,
-            "enabled": true
+            "enabled": false
         }
     },
     "leverage_level": 30,
-    "betting_ratio": 1200.0,
-    "split_entry_1_ratio": 800.0,
-    "split_entry_2_ratio": 400.0,
+    "betting_ratio": 600.0,
+    "split_entry_1_ratio": 400.0,
+    "split_entry_2_ratio": 200.0,
     "split_entry_2_trigger_pct": -0.3,
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,

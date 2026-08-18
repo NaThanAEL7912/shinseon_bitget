@@ -2026,12 +2026,27 @@ class ShinseonV35Engine:
                     original_vol = p_vol * 2 if self.is_half_exited else p_vol
                     volume = (original_vol * pyra_ratio)
                 else:
-                    if order_type == "ADD_THIRD_ENTRY":
-                        ratio = dashboard.split_entry_3_ratio
-                    elif order_type == "ADD_100_PERCENT":
-                        ratio = dashboard.split_entry_2_ratio
+                    now_dt = get_kst_now()
+                    is_weekend = check_is_weekend_kst(now_dt)
+                    h_val = now_dt.hour
+                    m_val = now_dt.minute
+                    if 9 <= h_val < 16:
+                        s_thresh_key = "weekend_asia" if is_weekend else "asia"
+                    elif 16 <= h_val < 22 or (h_val == 22 and m_val < 30):
+                        s_thresh_key = "weekend_europe" if is_weekend else "europe"
+                    elif (h_val == 22 and m_val >= 30) or h_val >= 23 or h_val < 5:
+                        s_thresh_key = "weekend_us" if is_weekend else "us"
                     else:
-                        ratio = dashboard.split_entry_1_ratio
+                        s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+
+                    s_thresh = (getattr(self, "session_thresholds", None) or getattr(dashboard, "session_thresholds", {})).get(s_thresh_key, {})
+                    
+                    if order_type == "ADD_THIRD_ENTRY":
+                        ratio = float(s_thresh.get("entry_3", getattr(dashboard, "split_entry_3_ratio", 0.0)))
+                    elif order_type == "ADD_100_PERCENT":
+                        ratio = float(s_thresh.get("entry_2", getattr(dashboard, "split_entry_2_ratio", 400.0)))
+                    else:
+                        ratio = float(s_thresh.get("entry_1", getattr(dashboard, "split_entry_1_ratio", 800.0)))
                         
                     if ratio <= 0.0:
                         return
@@ -2274,12 +2289,27 @@ class ShinseonV35Engine:
                             original_vol = p_vol * 2 if self.is_half_exited else p_vol
                             amount = original_vol * pyra_ratio
                         else:
-                            if order_type == "ADD_THIRD_ENTRY":
-                                ratio = dashboard.split_entry_3_ratio
-                            elif order_type == "ADD_100_PERCENT":
-                                ratio = dashboard.split_entry_2_ratio
+                            now_dt = get_kst_now()
+                            is_weekend = check_is_weekend_kst(now_dt)
+                            h_val = now_dt.hour
+                            m_val = now_dt.minute
+                            if 9 <= h_val < 16:
+                                s_thresh_key = "weekend_asia" if is_weekend else "asia"
+                            elif 16 <= h_val < 22 or (h_val == 22 and m_val < 30):
+                                s_thresh_key = "weekend_europe" if is_weekend else "europe"
+                            elif (h_val == 22 and m_val >= 30) or h_val >= 23 or h_val < 5:
+                                s_thresh_key = "weekend_us" if is_weekend else "us"
                             else:
-                                ratio = dashboard.split_entry_1_ratio
+                                s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+
+                            s_thresh = (getattr(self, "session_thresholds", None) or getattr(dashboard, "session_thresholds", {})).get(s_thresh_key, {})
+                            
+                            if order_type == "ADD_THIRD_ENTRY":
+                                ratio = float(s_thresh.get("entry_3", getattr(dashboard, "split_entry_3_ratio", 0.0)))
+                            elif order_type == "ADD_100_PERCENT":
+                                ratio = float(s_thresh.get("entry_2", getattr(dashboard, "split_entry_2_ratio", 400.0)))
+                            else:
+                                ratio = float(s_thresh.get("entry_1", getattr(dashboard, "split_entry_1_ratio", 800.0)))
                                 
                             if ratio <= 0.0:
                                 return False
