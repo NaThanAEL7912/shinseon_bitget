@@ -1608,6 +1608,7 @@ class ShinseonV35Engine:
         self.is_full_exited = False
         self.has_smart_guarded = False
         self.has_pyramided = False
+        self.session_trading_configs = getattr(bot_core, "session_trading_configs", {})
         
         # 1초 가변 CSV 레코더 상태 변수
         self.last_record_time = 0.0

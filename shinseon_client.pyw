@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.48"
+        self.CURRENT_VERSION = "V6.49"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1735,6 +1735,7 @@ class ShinseonDashboard(QMainWindow):
                     "bitget_passphrase": getattr(self, "bitget_passphrase", getattr(getattr(self, "v35_engine", None), "passphrase", "")),
                     "session_thresholds": getattr(self, "session_thresholds", {}),
                     "session_guardrails": getattr(self, "session_guardrails", {}),
+                    "session_trading_configs": getattr(self, "session_trading_configs", {}),
                     "leverage_level": getattr(self, "leverage_level", 30),
                     "betting_ratio": getattr(self, "betting_ratio", 400.0),
                     "split_entry_1_ratio": getattr(self, "split_entry_1_ratio", 250.0),
@@ -1751,8 +1752,6 @@ class ShinseonDashboard(QMainWindow):
                     "pyramiding_ratio": getattr(self, "pyramiding_ratio", 30.0),
                     "mid_guard_trigger": getattr(self, "mid_guard_trigger", 0.60),
                     "mid_guard_offset": getattr(self, "mid_guard_offset", -0.10),
-                    "session_guardrails": getattr(self, "session_guardrails", {}),
-                    "session_thresholds": getattr(self, "session_thresholds", {}),
                     "manual_threshold": self.chk_manual_threshold.isChecked(),
                     "target_liq": self.edit_target_liq.text(),
                     "target_oi": self.edit_target_oi.text(),
@@ -1776,6 +1775,7 @@ class ShinseonDashboard(QMainWindow):
                 "target_oi": self.edit_target_oi.text(),
                 "target_slippage": self.edit_target_slippage.text(),
                 "session_thresholds": self.session_thresholds,
+                "session_trading_configs": getattr(self, "session_trading_configs", {}),
                 "leverage_level": self.leverage_level,
                 "betting_ratio": self.betting_ratio,
                 "split_entry_1_ratio": self.split_entry_1_ratio,
@@ -1832,6 +1832,7 @@ class ShinseonDashboard(QMainWindow):
                 
                 # 신규 설정 변수 복구
                 self.session_thresholds = config_data.get("session_thresholds", self.session_thresholds)
+                self.session_trading_configs = config_data.get("session_trading_configs", getattr(self, "session_trading_configs", {}))
                 self.leverage_level = config_data.get("leverage_level", self.leverage_level)
                 self.betting_ratio = config_data.get("betting_ratio", self.betting_ratio)
                 self.split_entry_1_ratio = config_data.get("split_entry_1_ratio", 250.0)
