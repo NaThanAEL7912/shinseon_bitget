@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.44"
+        self.CURRENT_VERSION = "V6.45"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -3205,7 +3205,7 @@ class ShinseonConfigDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("⚙ 세션 / 트레이딩 핵심 설정")
-        self.resize(860, 540)
+        self.resize(940, 560)
         self.setModal(True)
         
         # 메인 윈도우와 정합되는 임페리얼 다크 골드 QSS 테마 적용
@@ -3418,15 +3418,34 @@ class ShinseonConfigDialog(QDialog):
         ]
         
         def _populate_tr_matrix(layout_obj, col_specs):
+            layout_obj.setVerticalSpacing(8)
+            layout_obj.setHorizontalSpacing(10)
+            
             lbl_title = QLabel("파라미터 항목")
             lbl_title.setAlignment(Qt.AlignCenter)
-            lbl_title.setStyleSheet("color: #DEBA9D; font-weight: bold;")
+            lbl_title.setStyleSheet("""
+                background-color: #1E1C1B;
+                color: #DEBA9D;
+                font-weight: bold;
+                font-size: 11px;
+                border: 1px solid rgba(222, 186, 157, 0.35);
+                border-radius: 4px;
+                padding: 5px;
+            """)
             layout_obj.addWidget(lbl_title, 0, 0)
             
             for c_idx, (s_key, s_name) in enumerate(col_specs, start=1):
                 lbl_col = QLabel(s_name)
                 lbl_col.setAlignment(Qt.AlignCenter)
-                lbl_col.setStyleSheet("color: #DEBA9D; font-weight: bold;")
+                lbl_col.setStyleSheet("""
+                    background-color: #1E1C1B;
+                    color: #DEBA9D;
+                    font-weight: bold;
+                    font-size: 11px;
+                    border: 1px solid rgba(222, 186, 157, 0.35);
+                    border-radius: 4px;
+                    padding: 5px;
+                """)
                 layout_obj.addWidget(lbl_col, 0, c_idx)
                 
                 f_map = {}
@@ -3447,6 +3466,8 @@ class ShinseonConfigDialog(QDialog):
             for r_idx, (_, r_name) in enumerate(row_defs, start=1):
                 lbl_row = QLabel(r_name)
                 layout_obj.addWidget(lbl_row, r_idx, 0)
+                
+            layout_obj.setRowStretch(len(row_defs) + 1, 1)
                 
         _populate_tr_matrix(tr_weekday_layout, weekday_cols)
         _populate_tr_matrix(tr_weekend_layout, weekend_cols)
