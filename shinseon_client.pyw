@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.45"
+        self.CURRENT_VERSION = "V6.48"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1602,7 +1602,7 @@ class ShinseonDashboard(QMainWindow):
                             p_stat = payload.get('poison_status', '정상 가동 중')
                             long_l = float(payload.get('long_liq', 0.0))
                             short_l = float(payload.get('short_liq', 0.0))
-                            exp_dir = payload.get('expected_dir', 'LONG')
+                            exp_dir = payload.get('expected_dir', None)
 
                             liq_wss_connected = payload.get('liq_wss_connected', True)
                             has_real_force = payload.get('has_real_force', False)
@@ -2842,31 +2842,58 @@ class ShinseonDashboard(QMainWindow):
                     }
                 """)
             
-        # [과부하 박멸 2]: QLabel 힌트 스타일시트 캐싱 가드
-        if getattr(self, "_last_applied_hint_dir", None) != expected_dir:
+        # [과부하 박멸 2]: QLabel 힌트 스타일시트 캐싱 가드 (LONG, SHORT, HOLD, 대기 4대 정밀 상태)
+        if getattr(self, "_last_applied_hint_dir", "UNSET") != expected_dir:
             self._last_applied_hint_dir = expected_dir
             if expected_dir == "LONG":
-                self.lbl_hint.setText("[ 타점 포착 시 진입: LONG 🟢 ]")
+                self.lbl_hint.setText("[ 🟢 타점 포착 시 진입: LONG ]")
                 self.lbl_hint.setStyleSheet("""
                     QLabel {
-                        background-color: rgba(82, 172, 98, 0.5);
+                        background-color: rgba(82, 172, 98, 0.45);
                         border: 1px solid #52AC62;
                         border-radius: 4px;
-                        color: #FFFFFF;
-                        font-family: 'Consolas';
+                        color: #00FFCC;
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                """)
+            elif expected_dir == "SHORT":
+                self.lbl_hint.setText("[ 🔴 타점 포착 시 진입: SHORT ]")
+                self.lbl_hint.setStyleSheet("""
+                    QLabel {
+                        background-color: rgba(172, 90, 82, 0.45);
+                        border: 1px solid #AC5A52;
+                        border-radius: 4px;
+                        color: #FF6666;
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                """)
+            elif expected_dir and str(expected_dir).startswith("HOLD_"):
+                side = "LONG" if "LONG" in str(expected_dir) else "SHORT"
+                self.lbl_hint.setText(f"[ 🛡️ {side} 포지션 보유 중 (가드레일 케어 가동) ]")
+                self.lbl_hint.setStyleSheet("""
+                    QLabel {
+                        background-color: rgba(50, 45, 40, 0.7);
+                        border: 1px solid #DEBA9D;
+                        border-radius: 4px;
+                        color: #00E676;
+                        font-family: 'Consolas', 'Segoe UI';
                         font-size: 12px;
                         font-weight: bold;
                     }
                 """)
             else:
-                self.lbl_hint.setText("[ 타점 포착 시 진입: SHORT 🔴 ]")
+                self.lbl_hint.setText("[ ⏳ 타점 탐색 대기 중 (조건 미충족) ]")
                 self.lbl_hint.setStyleSheet("""
                     QLabel {
-                        background-color: rgba(172, 90, 82, 0.5);
-                        border: 1px solid #AC5A52;
+                        background-color: rgba(26, 24, 23, 0.8);
+                        border: 1px solid rgba(222, 186, 157, 0.25);
                         border-radius: 4px;
-                        color: #FFFFFF;
-                        font-family: 'Consolas';
+                        color: #DEBA9D;
+                        font-family: 'Consolas', 'Segoe UI';
                         font-size: 12px;
                         font-weight: bold;
                     }

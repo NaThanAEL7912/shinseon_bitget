@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.45",
+    "CURRENT_VERSION": "V6.48",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,15 +7,15 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 600000.0,
+            "liq": 250000.0,
             "oi": 0.28,
-            "sl": -1.0,
+            "sl": -0.6,
             "enabled": true
         },
         "europe": {
-            "liq": 500000.0,
+            "liq": 600000.0,
             "oi": 0.24,
-            "sl": -1.0,
+            "sl": -0.8,
             "enabled": true
         },
         "us": {
@@ -56,9 +56,9 @@
         }
     },
     "leverage_level": 30,
-    "betting_ratio": 600.0,
-    "split_entry_1_ratio": 400.0,
-    "split_entry_2_ratio": 200.0,
+    "betting_ratio": 450.0,
+    "split_entry_1_ratio": 300.0,
+    "split_entry_2_ratio": 150.0,
     "split_entry_2_trigger_pct": -0.3,
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,
@@ -76,15 +76,15 @@
     "entry_sl_guard_pct": 0.0,
     "session_guardrails": {
         "ASIA": {
-            "trigger": 0.4,
-            "trigger_2": 0.6,
-            "guard": 0.1,
+            "trigger": 0.8,
+            "trigger_2": 1.2,
+            "guard": 0.5,
             "enabled": true
         },
         "LONDON": {
-            "trigger": 0.4,
-            "trigger_2": 0.6,
-            "guard": 0.1,
+            "trigger": 1.0,
+            "trigger_2": 1.2,
+            "guard": 0.5,
             "enabled": true
         },
         "NY": {

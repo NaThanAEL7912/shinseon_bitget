@@ -1283,7 +1283,7 @@ class BotCore:
                         target_oi=target_oi,
                         long_liq=long_liq,
                         short_liq=short_liq,
-                        expected_dir=direction,
+                        expected_dir=f"HOLD_{direction_active}" if (self.v35_engine and self.v35_engine.is_position_active) else direction,
                         has_real_force=has_real_force,
                         liq_wss_connected=liq_wss_connected,
                         custom_stop_active=custom_stop_active,
