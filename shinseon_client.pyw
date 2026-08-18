@@ -3402,62 +3402,99 @@ class ShinseonConfigDialog(QDialog):
         session_layout.setRowStretch(11, 1)
         self.tabs.addTab(self.tab_session, "세션별 설정")
 
-        # 2번 탭: 트레이딩 핵심 설정
+        # 2번 탭: 트레이딩 핵심 설정 (세션별 4대 다중 컬럼 매트릭스 UI)
         self.tab_trading = QWidget()
-        trading_layout = QGridLayout(self.tab_trading)
-        trading_layout.setSpacing(12)
-        trading_layout.setContentsMargins(15, 15, 15, 15)
-
-        trading_layout.addWidget(QLabel("포지션 레버리지 배수 (1 ~ 150배):"), 0, 0)
-        self.edit_leverage = QLineEdit()
-        trading_layout.addWidget(self.edit_leverage, 0, 1)
-
-        trading_layout.addWidget(QLabel("현금 자산 대비 배팅 비중 (%):"), 1, 0)
-        self.edit_betting = QLineEdit()
-        self.edit_betting.setReadOnly(True)
-        self.edit_betting.setStyleSheet("background-color: #1A1817; color: #DEBA9D; border: 1px solid rgba(222, 186, 157, 0.15);")
-        trading_layout.addWidget(self.edit_betting, 1, 1)
-
-        trading_layout.addWidget(QLabel("1차 매수 비중 (%):"), 2, 0)
-        self.edit_split_entry_1 = QLineEdit()
-        trading_layout.addWidget(self.edit_split_entry_1, 2, 1)
-
-        trading_layout.addWidget(QLabel("2차 매수 비중 (%):"), 3, 0)
-        self.edit_split_entry_2 = QLineEdit()
-        trading_layout.addWidget(self.edit_split_entry_2, 3, 1)
-
-        trading_layout.addWidget(QLabel("2차 진입 하락폭 (1차 대비 %):"), 4, 0)
-        self.edit_split_trigger = QLineEdit()
-        trading_layout.addWidget(self.edit_split_trigger, 4, 1)
-
-        trading_layout.addWidget(QLabel("3차 매수 비중 (%):"), 5, 0)
-        self.edit_split_entry_3 = QLineEdit()
-        trading_layout.addWidget(self.edit_split_entry_3, 5, 1)
-
-        trading_layout.addWidget(QLabel("3차 진입 하락폭 (1차 대비 %):"), 6, 0)
-        self.edit_split_trigger_3 = QLineEdit()
-        trading_layout.addWidget(self.edit_split_trigger_3, 6, 1)
-
-        trading_layout.addWidget(QLabel("추가 매수 후 진입 제한 시간 (초):"), 7, 0)
-        self.edit_split_cooldown = QLineEdit()
-        trading_layout.addWidget(self.edit_split_cooldown, 7, 1)
-
-        trading_layout.addWidget(QLabel("손절 후 진입 제한 시간 (초):"), 8, 0)
-        self.edit_cooldown = QLineEdit()
-        trading_layout.addWidget(self.edit_cooldown, 8, 1)
+        tab_trading_vbox = QVBoxLayout(self.tab_trading)
+        tab_trading_vbox.setContentsMargins(10, 10, 10, 10)
+        tab_trading_vbox.setSpacing(8)
         
-        trading_layout.addWidget(QLabel("익절 후 진입 제한 시간 (초):"), 9, 0)
-        self.edit_profit_cooldown = QLineEdit()
-        trading_layout.addWidget(self.edit_profit_cooldown, 9, 1)
+        self.trading_subtabs = QTabWidget()
+        self.trading_subtabs.setStyleSheet("""
+            QTabBar::tab {
+                padding: 6px 14px;
+                font-size: 11px;
+            }
+        """)
         
-        # 실시간 비중 자동 계산 및 반영 커넥션
-        self.edit_split_entry_1.textChanged.connect(self.update_total_betting_ratio)
-        self.edit_split_entry_2.textChanged.connect(self.update_total_betting_ratio)
-        self.edit_split_entry_3.textChanged.connect(self.update_total_betting_ratio)
+        # 1) 평일 4대 세션 서브탭
+        self.subtab_tr_weekday = QWidget()
+        tr_weekday_layout = QGridLayout(self.subtab_tr_weekday)
+        tr_weekday_layout.setSpacing(6)
+        tr_weekday_layout.setContentsMargins(10, 10, 10, 10)
         
-        # 하단 여백 채우기
-        trading_layout.setRowStretch(10, 1)
-
+        # 2) 주말 4대 세션 서브탭
+        self.subtab_tr_weekend = QWidget()
+        tr_weekend_layout = QGridLayout(self.subtab_tr_weekend)
+        tr_weekend_layout.setSpacing(6)
+        tr_weekend_layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.trading_fields = {}
+        
+        row_defs = [
+            ("lev", "⚡ 포지션 레버리지 (1~150배)"),
+            ("bet", "💰 총 배팅 비중 (%) (자동합산)"),
+            ("s1", "🥇 1차 매수 비중 (%)"),
+            ("s2", "🥈 2차 매수 비중 (%)"),
+            ("t2", "📉 2차 진입 하락폭 (1차 대비 %)"),
+            ("s3", "🥉 3차 매수 비중 (%)"),
+            ("t3", "📉 3차 진입 하락폭 (1차 대비 %)"),
+            ("split_cd", "⏳ 추가 매수 후 진입제한 (초)"),
+            ("sl_cd", "🛡️ 손절 후 진입제한 (초)"),
+            ("tp_cd", "🎯 익절 후 진입제한 (초)")
+        ]
+        
+        weekday_cols = [
+            ("asia", "아시아 (09~16)"),
+            ("europe", "유럽 (16~22:30)"),
+            ("us", "미국 본장 (22:30~05)"),
+            ("pacific", "태평양 (05~09)")
+        ]
+        
+        weekend_cols = [
+            ("weekend_asia", "주말 아시아"),
+            ("weekend_europe", "주말 유럽"),
+            ("weekend_us", "주말 미국 본장"),
+            ("weekend_pacific", "주말 태평양")
+        ]
+        
+        def _populate_tr_matrix(layout_obj, col_specs):
+            lbl_title = QLabel("파라미터 항목")
+            lbl_title.setAlignment(Qt.AlignCenter)
+            lbl_title.setStyleSheet("color: #DEBA9D; font-weight: bold;")
+            layout_obj.addWidget(lbl_title, 0, 0)
+            
+            for c_idx, (s_key, s_name) in enumerate(col_specs, start=1):
+                lbl_col = QLabel(s_name)
+                lbl_col.setAlignment(Qt.AlignCenter)
+                lbl_col.setStyleSheet("color: #DEBA9D; font-weight: bold;")
+                layout_obj.addWidget(lbl_col, 0, c_idx)
+                
+                f_map = {}
+                for r_idx, (f_key, _) in enumerate(row_defs, start=1):
+                    edit = QLineEdit()
+                    edit.setAlignment(Qt.AlignCenter)
+                    if f_key == "bet":
+                        edit.setReadOnly(True)
+                        edit.setStyleSheet("background-color: #1A1817; color: #00E676; font-weight: bold; border: 1px solid rgba(222, 186, 157, 0.2);")
+                    layout_obj.addWidget(edit, r_idx, c_idx)
+                    f_map[f_key] = edit
+                    
+                self.trading_fields[s_key] = f_map
+                f_map["s1"].textChanged.connect(lambda _, k=s_key: self.update_session_betting_ratio(k))
+                f_map["s2"].textChanged.connect(lambda _, k=s_key: self.update_session_betting_ratio(k))
+                f_map["s3"].textChanged.connect(lambda _, k=s_key: self.update_session_betting_ratio(k))
+                
+            for r_idx, (_, r_name) in enumerate(row_defs, start=1):
+                lbl_row = QLabel(r_name)
+                layout_obj.addWidget(lbl_row, r_idx, 0)
+                
+        _populate_tr_matrix(tr_weekday_layout, weekday_cols)
+        _populate_tr_matrix(tr_weekend_layout, weekend_cols)
+        
+        self.trading_subtabs.addTab(self.subtab_tr_weekday, "📅 평일 4대 세션 설정")
+        self.trading_subtabs.addTab(self.subtab_tr_weekend, "🏖️ 주말 4대 세션 설정")
+        
+        tab_trading_vbox.addWidget(self.trading_subtabs)
         self.tabs.addTab(self.tab_trading, "트레이딩 핵심 설정")
 
         # 3번 탭: 알림 설정 (개발계획서_178, 기획서_217 개혁)
@@ -3728,17 +3765,30 @@ class ShinseonConfigDialog(QDialog):
             fields["entry_2"].setText(f"{e2:.1f}")
             fields["betting"].setText(f"{e1 + e2:.1f}")
 
-        # 트레이딩 핵심 데이터 로드
-        self.edit_leverage.setText(str(self.parent.leverage_level))
-        self.edit_split_entry_1.setText(f"{self.parent.split_entry_1_ratio:.1f}")
-        self.edit_split_entry_2.setText(f"{self.parent.split_entry_2_ratio:.1f}")
-        self.edit_split_trigger.setText(f"{self.parent.split_entry_2_trigger_pct:.2f}")
-        self.edit_split_entry_3.setText(f"{self.parent.split_entry_3_ratio:.1f}")
-        self.edit_split_trigger_3.setText(f"{self.parent.split_entry_3_trigger_pct:.2f}")
-        self.edit_split_cooldown.setText(f"{self.parent.split_cooldown_seconds:.1f}")
-        self.edit_cooldown.setText(f"{self.parent.cooldown_seconds:.1f}")
-        self.edit_profit_cooldown.setText(f"{self.parent.profit_cooldown_seconds:.1f}")
-        self.update_total_betting_ratio()
+        # 세션별 트레이딩 핵심 설정 로드 (8대 세션 독립 매트릭스)
+        tr_configs = getattr(self.parent, "session_trading_configs", {}) or {}
+        for s_key, f in self.trading_fields.items():
+            cfg = tr_configs.get(s_key, {})
+            lev = cfg.get("leverage", getattr(self.parent, "leverage_level", 30))
+            s1 = cfg.get("split_entry_1_ratio", getattr(self.parent, "split_entry_1_ratio", 400.0))
+            s2 = cfg.get("split_entry_2_ratio", getattr(self.parent, "split_entry_2_ratio", 200.0))
+            t2 = cfg.get("split_entry_2_trigger_pct", getattr(self.parent, "split_entry_2_trigger_pct", -0.3))
+            s3 = cfg.get("split_entry_3_ratio", getattr(self.parent, "split_entry_3_ratio", 0.0))
+            t3 = cfg.get("split_entry_3_trigger_pct", getattr(self.parent, "split_entry_3_trigger_pct", 0.0))
+            split_cd = cfg.get("split_cooldown_seconds", getattr(self.parent, "split_cooldown_seconds", 900.0))
+            sl_cd = cfg.get("cooldown_seconds", getattr(self.parent, "cooldown_seconds", 30.0))
+            tp_cd = cfg.get("profit_cooldown_seconds", getattr(self.parent, "profit_cooldown_seconds", 10.0))
+            
+            f["lev"].setText(str(lev))
+            f["s1"].setText(f"{float(s1):.1f}")
+            f["s2"].setText(f"{float(s2):.1f}")
+            f["t2"].setText(f"{float(t2):.2f}")
+            f["s3"].setText(f"{float(s3):.1f}")
+            f["t3"].setText(f"{float(t3):.2f}")
+            f["split_cd"].setText(f"{float(split_cd):.1f}")
+            f["sl_cd"].setText(f"{float(sl_cd):.1f}")
+            f["tp_cd"].setText(f"{float(tp_cd):.1f}")
+            self.update_session_betting_ratio(s_key)
 
         # 텔레그램 및 알림 사운드 데이터 로드 (개발계획서_178)
         self.chk_telegram_enabled.setChecked(self.parent.telegram_enabled)
@@ -3766,6 +3816,18 @@ class ShinseonConfigDialog(QDialog):
         self.edit_mid_guard_offset.setText(f"{getattr(self.parent, 'mid_guard_offset', -0.10):.2f}")
 
 
+    def update_session_betting_ratio(self, s_key):
+        if s_key not in self.trading_fields:
+            return
+        f = self.trading_fields[s_key]
+        try:
+            val1 = float(f["s1"].text().strip() or 0.0)
+            val2 = float(f["s2"].text().strip() or 0.0)
+            val3 = float(f["s3"].text().strip() or 0.0)
+            f["bet"].setText(f"{val1 + val2 + val3:.1f}")
+        except ValueError:
+            f["bet"].setText("0.0")
+
     def apply_and_save(self):
         if not self.parent:
             self.accept()
@@ -3792,34 +3854,50 @@ class ShinseonConfigDialog(QDialog):
                     "betting": betting_val
                 }
             
-            # 레버리지 및 배팅비중 파싱
-            lev_val = int(self.edit_leverage.text().strip())
-            bet_val = float(self.edit_betting.text().strip())
-            split_entry_1_val = float(self.edit_split_entry_1.text().strip())
-            split_entry_2_val = float(self.edit_split_entry_2.text().strip())
-            split_trigger_val = float(self.edit_split_trigger.text().strip())
-            split_entry_3_val = float(self.edit_split_entry_3.text().strip())
-            split_trigger_3_val = float(self.edit_split_trigger_3.text().strip())
-            split_cooldown_val = float(self.edit_split_cooldown.text().strip())
-            cooldown_val = float(self.edit_cooldown.text().strip())
-            profit_cooldown_val = float(self.edit_profit_cooldown.text().strip())
+            # 세션별 트레이딩 핵심 설정 파싱 (8대 세션 독립 매트릭스)
+            new_trading_configs = {}
+            for s_key, f in self.trading_fields.items():
+                lev_val = int(f["lev"].text().strip())
+                if not (1 <= lev_val <= 150):
+                    raise ValueError(f"[{s_key}] 레버리지는 1배에서 최대 150배 범위여야 합니다.")
+                s1_val = float(f["s1"].text().strip())
+                s2_val = float(f["s2"].text().strip())
+                t2_val = float(f["t2"].text().strip())
+                s3_val = float(f["s3"].text().strip())
+                t3_val = float(f["t3"].text().strip())
+                split_cd_val = float(f["split_cd"].text().strip())
+                sl_cd_val = float(f["sl_cd"].text().strip())
+                tp_cd_val = float(f["tp_cd"].text().strip())
+                bet_val = s1_val + s2_val + s3_val
+                new_trading_configs[s_key] = {
+                    "leverage": lev_val,
+                    "betting_ratio": bet_val,
+                    "split_entry_1_ratio": s1_val,
+                    "split_entry_2_ratio": s2_val,
+                    "split_entry_2_trigger_pct": t2_val,
+                    "split_entry_3_ratio": s3_val,
+                    "split_entry_3_trigger_pct": t3_val,
+                    "split_cooldown_seconds": split_cd_val,
+                    "cooldown_seconds": sl_cd_val,
+                    "profit_cooldown_seconds": tp_cd_val
+                }
+            self.parent.session_trading_configs = new_trading_configs
             
-            # 범위 제한 (레버리지는 1~150배)
-            if not (1 <= lev_val <= 150):
-                raise ValueError("레버리지는 1배에서 최대 150배 범위여야 합니다.")
-                
+            # 아시아 세션 기준 기본 변수 동기화
+            asia_tr = new_trading_configs.get("asia", {})
+            self.parent.leverage_level = asia_tr.get("leverage", 30)
+            self.parent.betting_ratio = asia_tr.get("betting_ratio", 600.0)
+            self.parent.split_entry_1_ratio = asia_tr.get("split_entry_1_ratio", 400.0)
+            self.parent.split_entry_2_ratio = asia_tr.get("split_entry_2_ratio", 200.0)
+            self.parent.split_entry_2_trigger_pct = asia_tr.get("split_entry_2_trigger_pct", -0.3)
+            self.parent.split_entry_3_ratio = asia_tr.get("split_entry_3_ratio", 0.0)
+            self.parent.split_entry_3_trigger_pct = asia_tr.get("split_entry_3_trigger_pct", 0.0)
+            self.parent.split_cooldown_seconds = asia_tr.get("split_cooldown_seconds", 900.0)
+            self.parent.cooldown_seconds = asia_tr.get("cooldown_seconds", 30.0)
+            self.parent.profit_cooldown_seconds = asia_tr.get("profit_cooldown_seconds", 10.0)
+            
             # 부모 윈도우에 반영
             self.parent.session_thresholds = new_thresholds
-            self.parent.leverage_level = lev_val
-            self.parent.betting_ratio = bet_val
-            self.parent.split_entry_1_ratio = split_entry_1_val
-            self.parent.split_entry_2_ratio = split_entry_2_val
-            self.parent.split_entry_2_trigger_pct = split_trigger_val
-            self.parent.split_entry_3_ratio = split_entry_3_val
-            self.parent.split_entry_3_trigger_pct = split_trigger_3_val
-            self.parent.split_cooldown_seconds = split_cooldown_val
-            self.parent.cooldown_seconds = cooldown_val
-            self.parent.profit_cooldown_seconds = profit_cooldown_val
             
             # 텔레그램 및 알림 사운드 설정 반영 (개발계획서_178)
             self.parent.telegram_enabled = self.chk_telegram_enabled.isChecked()
@@ -3855,7 +3933,7 @@ class ShinseonConfigDialog(QDialog):
             
             # 설정 파일 저장
             self.parent.save_shinseon_config()
-            self.parent.add_log("⚙ [설정 변경] 1차/2차 듀얼 분할 익절 및 세션별 가드레일 설정을 적용 및 저장했습니다.")
+            self.parent.add_log("⚙ [설정 변경] 세션별 트레이딩 핵심 설정(레버리지·배팅비중·쿨타임)을 적용 및 저장했습니다.")
             self.parent.sync_leverage_to_exchange()
             self.accept()
             QApplication.processEvents()
@@ -3863,17 +3941,8 @@ class ShinseonConfigDialog(QDialog):
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "입력 에러", f"설정 값 파싱 실패: {e}\n모든 필드에 정확한 숫자를 입력해 주십시오.")
 
-    def update_total_betting_ratio(self):
-        try:
-            val1 = float(self.edit_split_entry_1.text().strip() or 0.0)
-            val2 = float(self.edit_split_entry_2.text().strip() or 0.0)
-            val3 = float(self.edit_split_entry_3.text().strip() or 0.0)
-            self.edit_betting.setText(f"{val1 + val2 + val3:.1f}")
-        except ValueError:
-            self.edit_betting.setText("0.0")
-
     def restore_defaults(self):
-        # 하드코딩된 기본값 복원 (8대 세션 독립 배팅 비중 포함 v6.43)
+        # 하드코딩된 기본값 복원 (8대 세션 독립 배팅 비중 및 핵심 설정 포함 v6.43)
         default_thresholds = {
             "asia": {"liq": 100000.0, "oi": 0.12, "sl": -0.5, "entry_1": 800.0, "entry_2": 400.0, "betting": 1200.0, "enabled": True},
             "europe": {"liq": 100000.0, "oi": 0.15, "sl": -0.5, "entry_1": 1000.0, "entry_2": 500.0, "betting": 1500.0, "enabled": True},
@@ -3895,7 +3964,29 @@ class ShinseonConfigDialog(QDialog):
             fields["entry_2"].setText(f"{data['entry_2']:.1f}")
             fields["betting"].setText(f"{data['betting']:.1f}")
 
-        self.edit_leverage.setText("30")
+        default_tr_configs = {
+            "asia": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "europe": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "us": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "pacific": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "weekend_asia": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "weekend_europe": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "weekend_us": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0},
+            "weekend_pacific": {"leverage": 30, "betting_ratio": 600.0, "split_entry_1_ratio": 400.0, "split_entry_2_ratio": 200.0, "split_entry_2_trigger_pct": -0.3, "split_entry_3_ratio": 0.0, "split_entry_3_trigger_pct": 0.0, "split_cooldown_seconds": 900.0, "cooldown_seconds": 30.0, "profit_cooldown_seconds": 10.0}
+        }
+        for s_key, f in self.trading_fields.items():
+            cfg = default_tr_configs.get(s_key, {})
+            f["lev"].setText(str(cfg.get("leverage", 30)))
+            f["s1"].setText(f"{cfg.get('split_entry_1_ratio', 400.0):.1f}")
+            f["s2"].setText(f"{cfg.get('split_entry_2_ratio', 200.0):.1f}")
+            f["t2"].setText(f"{cfg.get('split_entry_2_trigger_pct', -0.3):.2f}")
+            f["s3"].setText(f"{cfg.get('split_entry_3_ratio', 0.0):.1f}")
+            f["t3"].setText(f"{cfg.get('split_entry_3_trigger_pct', 0.0):.2f}")
+            f["split_cd"].setText(f"{cfg.get('split_cooldown_seconds', 900.0):.1f}")
+            f["sl_cd"].setText(f"{cfg.get('cooldown_seconds', 30.0):.1f}")
+            f["tp_cd"].setText(f"{cfg.get('profit_cooldown_seconds', 10.0):.1f}")
+            self.update_session_betting_ratio(s_key)
+
         self.edit_half_exit_ratio_1.setText("50.0")
         self.edit_half_exit_ratio_2.setText("50.0")
         

@@ -816,6 +816,7 @@ class BotCore:
         self.pyramiding_ratio = 30.0
         self.mid_guard_trigger = 0.60
         self.mid_guard_offset = -0.10
+        self.session_trading_configs = {}
 
         # 저장된 shinseon_config.json 있으면 즉시 자동 로드
         try:
@@ -825,6 +826,7 @@ class BotCore:
                     cfg = json.load(f)
                 self.session_thresholds = cfg.get("session_thresholds", self.session_thresholds)
                 self.session_guardrails = cfg.get("session_guardrails", self.session_guardrails)
+                self.session_trading_configs = cfg.get("session_trading_configs", self.session_trading_configs)
                 self.manual_threshold = cfg.get("manual_threshold", self.manual_threshold)
                 self.target_liq = cfg.get("target_liq", self.target_liq)
                 self.target_oi = cfg.get("target_oi", self.target_oi)
@@ -2020,37 +2022,39 @@ class ShinseonV35Engine:
                     
                 dashboard = getattr(self.bot, "dashboard", None) or self.bot
                 
+                # 실시간 세션 키 계산 (KST 기준)
+                now_dt = get_kst_now()
+                is_weekend = check_is_weekend_kst(now_dt)
+                hour_val = now_dt.hour
+                minute_val = now_dt.minute
+                if 9 <= hour_val < 16:
+                    s_thresh_key = "weekend_asia" if is_weekend else "asia"
+                elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                    s_thresh_key = "weekend_europe" if is_weekend else "europe"
+                elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                    s_thresh_key = "weekend_us" if is_weekend else "us"
+                else:
+                    s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+                    
+                tr_configs = getattr(self, "session_trading_configs", None) or getattr(dashboard, "session_trading_configs", {}) or {}
+                s_tr = tr_configs.get(s_thresh_key, {})
+                
                 if order_type == "ADD_PYRAMIDING":
                     p_vol = getattr(self, "position_volume", 0)
                     pyra_ratio = getattr(dashboard, "pyramiding_ratio", 30.0) / 100.0
                     original_vol = p_vol * 2 if self.is_half_exited else p_vol
                     volume = (original_vol * pyra_ratio)
                 else:
-                    now_dt = get_kst_now()
-                    is_weekend = check_is_weekend_kst(now_dt)
-                    h_val = now_dt.hour
-                    m_val = now_dt.minute
-                    if 9 <= h_val < 16:
-                        s_thresh_key = "weekend_asia" if is_weekend else "asia"
-                    elif 16 <= h_val < 22 or (h_val == 22 and m_val < 30):
-                        s_thresh_key = "weekend_europe" if is_weekend else "europe"
-                    elif (h_val == 22 and m_val >= 30) or h_val >= 23 or h_val < 5:
-                        s_thresh_key = "weekend_us" if is_weekend else "us"
-                    else:
-                        s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
-
-                    s_thresh = (getattr(self, "session_thresholds", None) or getattr(dashboard, "session_thresholds", {})).get(s_thresh_key, {})
-                    
                     if order_type == "ADD_THIRD_ENTRY":
-                        ratio = float(s_thresh.get("entry_3", getattr(dashboard, "split_entry_3_ratio", 0.0)))
+                        ratio = float(s_tr.get("split_entry_3_ratio", getattr(dashboard, "split_entry_3_ratio", 0.0)))
                     elif order_type == "ADD_100_PERCENT":
-                        ratio = float(s_thresh.get("entry_2", getattr(dashboard, "split_entry_2_ratio", 400.0)))
+                        ratio = float(s_tr.get("split_entry_2_ratio", getattr(dashboard, "split_entry_2_ratio", 200.0)))
                     else:
-                        ratio = float(s_thresh.get("entry_1", getattr(dashboard, "split_entry_1_ratio", 800.0)))
+                        ratio = float(s_tr.get("split_entry_1_ratio", getattr(dashboard, "split_entry_1_ratio", 400.0)))
                         
                     if ratio <= 0.0:
                         return
-                    lev = float(getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0))) or 30.0
+                    lev = float(s_tr.get("leverage", getattr(dashboard, "leverage_level", getattr(self, "leverage_level", 30.0)))) or 30.0
                     p_target = bitget_bal * (ratio / 100.0)
                     btc_vol = max(0.001, round(p_target / current_price, 3))
                     volume = int(round(btc_vol * 1000))
@@ -2289,27 +2293,12 @@ class ShinseonV35Engine:
                             original_vol = p_vol * 2 if self.is_half_exited else p_vol
                             amount = original_vol * pyra_ratio
                         else:
-                            now_dt = get_kst_now()
-                            is_weekend = check_is_weekend_kst(now_dt)
-                            h_val = now_dt.hour
-                            m_val = now_dt.minute
-                            if 9 <= h_val < 16:
-                                s_thresh_key = "weekend_asia" if is_weekend else "asia"
-                            elif 16 <= h_val < 22 or (h_val == 22 and m_val < 30):
-                                s_thresh_key = "weekend_europe" if is_weekend else "europe"
-                            elif (h_val == 22 and m_val >= 30) or h_val >= 23 or h_val < 5:
-                                s_thresh_key = "weekend_us" if is_weekend else "us"
-                            else:
-                                s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
-
-                            s_thresh = (getattr(self, "session_thresholds", None) or getattr(dashboard, "session_thresholds", {})).get(s_thresh_key, {})
-                            
                             if order_type == "ADD_THIRD_ENTRY":
-                                ratio = float(s_thresh.get("entry_3", getattr(dashboard, "split_entry_3_ratio", 0.0)))
+                                ratio = dashboard.split_entry_3_ratio
                             elif order_type == "ADD_100_PERCENT":
-                                ratio = float(s_thresh.get("entry_2", getattr(dashboard, "split_entry_2_ratio", 400.0)))
+                                ratio = dashboard.split_entry_2_ratio
                             else:
-                                ratio = float(s_thresh.get("entry_1", getattr(dashboard, "split_entry_1_ratio", 800.0)))
+                                ratio = dashboard.split_entry_1_ratio
                                 
                             if ratio <= 0.0:
                                 return False
@@ -2777,11 +2766,26 @@ class ShinseonV35Engine:
                 elif direction and direction in ["LONG", "SHORT"] and direction == self.entry_direction:
                     # [동일 방향 중복 신호 발생 ➡️ 2차/3차 추가 매수(물타기) 또는 눌림목 불타기 검증]
                     dashboard = getattr(self.bot, "dashboard", None) or self.bot
-                    split_cooldown = float(getattr(dashboard, "split_cooldown_seconds", 900.0))
+                    now_dt = get_kst_now()
+                    is_weekend = check_is_weekend_kst(now_dt)
+                    hour_val = now_dt.hour
+                    minute_val = now_dt.minute
+                    if 9 <= hour_val < 16:
+                        s_thresh_key = "weekend_asia" if is_weekend else "asia"
+                    elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                        s_thresh_key = "weekend_europe" if is_weekend else "europe"
+                    elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                        s_thresh_key = "weekend_us" if is_weekend else "us"
+                    else:
+                        s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+                        
+                    tr_configs = getattr(self, "session_trading_configs", None) or getattr(dashboard, "session_trading_configs", {}) or {}
+                    s_tr = tr_configs.get(s_thresh_key, {})
+                    split_cooldown = float(s_tr.get("split_cooldown_seconds", getattr(dashboard, "split_cooldown_seconds", 900.0)))
                     
                     # A. 2차 추매 (1차 평단 대비 설정 손실폭 이하 마이너스 도달 시)
                     if not getattr(self, "has_second_entry", False):
-                        trig_2_pct = float(getattr(dashboard, "split_entry_2_trigger_pct", -0.3)) / 100.0
+                        trig_2_pct = float(s_tr.get("split_entry_2_trigger_pct", getattr(dashboard, "split_entry_2_trigger_pct", -0.3))) / 100.0
                         pnl_from_1 = (binance_mid - self.entry_price_1) / self.entry_price_1 if self.entry_direction == "LONG" else (self.entry_price_1 - binance_mid) / self.entry_price_1
                         if pnl_from_1 <= trig_2_pct:
                             if time.time() - getattr(self, "last_split_entry_time", 0.0) >= split_cooldown:
@@ -2792,7 +2796,7 @@ class ShinseonV35Engine:
                                 return
                     # B. 3차 추매 (1차 평단 대비 3차 손실폭 이하 마이너스 도달 시)
                     elif getattr(self, "has_second_entry", False) and not getattr(self, "has_third_entry", False):
-                        trig_3_pct = float(getattr(dashboard, "split_entry_3_trigger_pct", -0.6)) / 100.0
+                        trig_3_pct = float(s_tr.get("split_entry_3_trigger_pct", getattr(dashboard, "split_entry_3_trigger_pct", -0.6))) / 100.0
                         pnl_from_1 = (binance_mid - self.entry_price_1) / self.entry_price_1 if self.entry_direction == "LONG" else (self.entry_price_1 - binance_mid) / self.entry_price_1
                         if pnl_from_1 <= trig_3_pct:
                             if time.time() - getattr(self, "last_split_entry_time", 0.0) >= split_cooldown:
@@ -3327,11 +3331,26 @@ class ShinseonV35Engine:
         self.has_pyramided = False
         self.last_exit_time = time.time()
         dashboard = getattr(self.bot, "dashboard", None) or self.bot
-        cooldown_limit = dashboard.cooldown_seconds
+        now_dt = get_kst_now()
+        is_weekend = check_is_weekend_kst(now_dt)
+        hour_val = now_dt.hour
+        minute_val = now_dt.minute
+        if 9 <= hour_val < 16:
+            s_thresh_key = "weekend_asia" if is_weekend else "asia"
+        elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+            s_thresh_key = "weekend_europe" if is_weekend else "europe"
+        elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+            s_thresh_key = "weekend_us" if is_weekend else "us"
+        else:
+            s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
+            
+        tr_configs = getattr(self, "session_trading_configs", None) or getattr(dashboard, "session_trading_configs", {}) or {}
+        s_tr = tr_configs.get(s_thresh_key, {})
+        cooldown_limit = float(s_tr.get("cooldown_seconds", getattr(dashboard, "cooldown_seconds", 30.0)))
+        profit_cooldown_limit = float(s_tr.get("profit_cooldown_seconds", getattr(dashboard, "profit_cooldown_seconds", 10.0)))
         
         # [선제 락킹] 비동기 대기(await)를 타기 전 즉시 쿨다운을 선제 마킹하여 1초 틈새 휩소 격발 차단
-        cooldown_sec = getattr(dashboard, "profit_cooldown_seconds", 15.0)
-        self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + cooldown_sec)
+        self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + profit_cooldown_limit)
         
         # 평단가 대비 실제 PnL율이 음수(손실)인지 안전하게 판정
         exit_pnl_pct = 0.0
@@ -3347,7 +3366,7 @@ class ShinseonV35Engine:
             self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + cooldown_limit)
             reason_label = "손절 쿨타임"
         else:
-            final_cooldown_sec = getattr(dashboard, "profit_cooldown_seconds", 60.0)
+            final_cooldown_sec = profit_cooldown_limit
             self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + final_cooldown_sec)
             reason_label = "익절 쿨타임"
 
@@ -3699,6 +3718,10 @@ class WsServer:
                                 self.bot_core.session_guardrails = config_data["session_guardrails"]
                                 if self.bot_core.v35_engine:
                                     self.bot_core.v35_engine.session_guardrails = config_data["session_guardrails"]
+                            if "session_trading_configs" in config_data:
+                                self.bot_core.session_trading_configs = config_data["session_trading_configs"]
+                                if self.bot_core.v35_engine:
+                                    self.bot_core.v35_engine.session_trading_configs = config_data["session_trading_configs"]
                             if "manual_threshold" in config_data:
                                 self.bot_core.manual_threshold = config_data["manual_threshold"]
                             if "target_liq" in config_data:
