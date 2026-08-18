@@ -321,7 +321,7 @@ async def sync_past_bitget_trades_7d(bot_core):
         if not trades:
             return
 
-        reset_ts_ms = 1786015200000.0  # 2026-08-07 20:20:00 KST ms timestamp
+        reset_ts_ms = 1787011200000.0  # 2026-08-18 09:00:00 KST ms timestamp (실전 자금 본격 가동 시점)
         sorted_trades = sorted(trades, key=lambda x: float(x.get('timestamp', 0) or 0))
         
         # 포지션 누적용 상태 변수
@@ -485,19 +485,61 @@ def get_calculated_stats_payload(last_downloaded_date=None):
     summary = load_trade_stats_summary()
     now_dt = get_kst_now()
     today_str = now_dt.strftime("%Y-%m-%d")
-    SESSION_START_DATE = "2026-08-09"
+    LIVE_START_DATE = "2026-08-18"
+    LIVE_START_TIME = "09:00:00"
     
     daily_index = summary.get("daily_index", [])
-    filtered_index = [d for d in daily_index if d >= SESSION_START_DATE]
-    
+    filtered_index = [d for d in daily_index if d >= LIVE_START_DATE]
+    if today_str >= LIVE_START_DATE and today_str not in filtered_index:
+        filtered_index.insert(0, today_str)
+        
     if last_downloaded_date:
         target_dates = [d for d in filtered_index if d >= last_downloaded_date]
     else:
         target_dates = filtered_index
         
-    daily_records = [load_daily_stats(d) for d in target_dates if d and d >= SESSION_START_DATE]
+    daily_records = []
+    for d in target_dates:
+        if not d or d < LIVE_START_DATE:
+            continue
+        rec = load_daily_stats(d)
+        if d == LIVE_START_DATE:
+            # 2026-08-18 09:00:00 KST 이전 데이터 필터링 (순수 실전 거래만 산출)
+            raw_details = rec.get("trades_detail", [])
+            filtered_details = [
+                t for t in raw_details
+                if (str(t.get("time", "")) >= LIVE_START_TIME or str(t.get("close_time", "")) >= LIVE_START_TIME)
+            ]
+            rec["trades_detail"] = filtered_details
+            rec["trades"] = len(filtered_details)
+            rec["wins"] = sum(1 for t in filtered_details if float(t.get("pnl", 0.0)) >= 0)
+            rec["losses"] = sum(1 for t in filtered_details if float(t.get("pnl", 0.0)) < 0)
+            rec["profit_tot"] = sum(float(t.get("pnl", 0.0)) for t in filtered_details if float(t.get("pnl", 0.0)) >= 0)
+            rec["loss_tot"] = abs(sum(float(t.get("pnl", 0.0)) for t in filtered_details if float(t.get("pnl", 0.0)) < 0))
+            rec["pnl"] = rec["profit_tot"] - rec["loss_tot"]
+            rec["win_rate"] = (rec["wins"] / rec["trades"] * 100.0) if rec["trades"] > 0 else 0.0
+            roes = [float(t.get("roe", 0.0)) for t in filtered_details]
+            rec["avg_roe"] = (sum(roes) / len(roes)) if roes else 0.0
+        daily_records.append(rec)
+        
     today_rec = load_daily_stats(today_str)
-    
+    if today_str == LIVE_START_DATE:
+        raw_details = today_rec.get("trades_detail", [])
+        filtered_details = [
+            t for t in raw_details
+            if (str(t.get("time", "")) >= LIVE_START_TIME or str(t.get("close_time", "")) >= LIVE_START_TIME)
+        ]
+        today_rec["trades_detail"] = filtered_details
+        today_rec["trades"] = len(filtered_details)
+        today_rec["wins"] = sum(1 for t in filtered_details if float(t.get("pnl", 0.0)) >= 0)
+        today_rec["losses"] = sum(1 for t in filtered_details if float(t.get("pnl", 0.0)) < 0)
+        today_rec["profit_tot"] = sum(float(t.get("pnl", 0.0)) for t in filtered_details if float(t.get("pnl", 0.0)) >= 0)
+        today_rec["loss_tot"] = abs(sum(float(t.get("pnl", 0.0)) for t in filtered_details if float(t.get("pnl", 0.0)) < 0))
+        today_rec["pnl"] = today_rec["profit_tot"] - today_rec["loss_tot"]
+        today_rec["win_rate"] = (today_rec["wins"] / today_rec["trades"] * 100.0) if today_rec["trades"] > 0 else 0.0
+        roes = [float(t.get("roe", 0.0)) for t in filtered_details]
+        today_rec["avg_roe"] = (sum(roes) / len(roes)) if roes else 0.0
+        
     tot_trades = sum(r.get("trades", 0) for r in daily_records)
     tot_wins = sum(r.get("wins", 0) for r in daily_records)
     tot_losses = sum(r.get("losses", 0) for r in daily_records)
@@ -1773,7 +1815,7 @@ class ShinseonV35Engine:
                 return
                 
             # 1. UI 대시보드 및 세션별 실시간 설정값 정밀 동적 판정 (V6.40 8대 세션 100% 정합)
-            now_dt = datetime.datetime.now(pytz.timezone('Asia/Seoul'))
+            now_dt = get_kst_now()
             is_weekend = check_is_weekend_kst(now_dt)
             hour_val = now_dt.hour
             minute_val = now_dt.minute
