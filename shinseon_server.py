@@ -680,7 +680,7 @@ async def run_telegram_command_poller(bot_core):
                                 else:
                                     pos_block = "포지션: <b>100% 현금 대기 중 (포지션 없음)</b>"
                                     
-                                state_str = bot_core.v35_engine.bot_state if bot_core.v35_engine else "RUNNING"
+                                state_str = bot_core.v35_engine.bot_state if bot_core.v35_engine else "STOPPED"
                                 
                                 status_msg = (
                                     f"<b>📊 [신선 봇 실시간 상태 보고]</b>\n\n"
@@ -1626,8 +1626,8 @@ class ShinseonV35Engine:
         self.entry_direction = "LONG"
         self.position_side = "LONG"
         self.is_position_active = False
-        self.is_snipe_active = True      # 24시간 자율 저격 감시 가동 상태
-        self.bot_state = "RUNNING"        # 기본 24시간 봇 가동 상태 (RUNNING)
+        self.is_snipe_active = False     # 기본 정지 상태 (클라이언트 명시적 시작 명령 대기)
+        self.bot_state = "STOPPED"       # 기본 정지 상태 (STOPPED)
         self.exit_in_progress = False     # 선제 청산 중복 방지 락 플래그 (개발계획서_171)
         self.entry_price = 0.0
         self.entry_price_1 = 0.0

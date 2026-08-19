@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.60"
+        self.CURRENT_VERSION = "V6.61"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
