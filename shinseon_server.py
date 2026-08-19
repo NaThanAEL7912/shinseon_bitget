@@ -1285,7 +1285,26 @@ class BotCore:
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
 
-                    # [V5.33 수술] '1초 감시' 중복 로깅 구문 100% 삭제 (파일 용량 비대화 차단)
+                    # [V6.60]: 실시간 오더플로우 시장 기세(Flow Bias) 4대 나침반 연산
+                    if oi_delta_1m < 0:
+                        flow_bias = "DELEVERAGING"   # -OI 포지션 정리/관망
+                    elif price_slope_1m > 0 and short_liq >= long_liq:
+                        flow_bias = "BULLISH"        # 롱(LONG) 우세 ↗
+                    elif price_slope_1m < 0 and long_liq >= short_liq:
+                        flow_bias = "BEARISH"        # 숏(SHORT) 우세 ↘
+                    elif price_slope_1m > 0 and long_liq > short_liq:
+                        flow_bias = "LONG_OVERLOAD"  # 롱 청산 과열 (상승 중 롱 털림 ➔ 숏 반전 주시)
+                    elif price_slope_1m < 0 and short_liq > long_liq:
+                        flow_bias = "SHORT_OVERLOAD" # 숏 청산 과열 (하락 중 숏 털림 ➔ 롱 반전 주시)
+                    else:
+                        flow_bias = "NEUTRAL"
+
+                    if display_liq >= target_liq and display_oi > 0 and display_oi >= target_oi and direction in ["LONG", "SHORT"]:
+                        hint_val = f"SNIPE_{direction}"
+                    elif self.v35_engine and self.v35_engine.is_position_active:
+                        hint_val = f"HOLD_{direction_active}_{flow_bias}"
+                    else:
+                        hint_val = f"BIAS_{flow_bias}"
 
                     custom_stop_active = getattr(self.v35_engine, "custom_stop_active", False)
                     custom_stop_offset = float(getattr(self.v35_engine, "custom_stop_offset_roe", getattr(self.v35_engine, "custom_stop_offset_pct", 0.8)))
@@ -1304,7 +1323,7 @@ class BotCore:
                         target_oi=target_oi,
                         long_liq=long_liq,
                         short_liq=short_liq,
-                        expected_dir=f"HOLD_{direction_active}" if (self.v35_engine and self.v35_engine.is_position_active) else direction,
+                        expected_dir=hint_val,
                         has_real_force=has_real_force,
                         liq_wss_connected=liq_wss_connected,
                         custom_stop_active=custom_stop_active,

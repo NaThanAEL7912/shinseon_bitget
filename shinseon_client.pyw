@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.59"
+        self.CURRENT_VERSION = "V6.60"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2845,14 +2845,18 @@ class ShinseonDashboard(QMainWindow):
                 """)
             
         # [과부하 박멸 2]: QLabel 힌트 스타일시트 캐싱 가드 (LONG, SHORT, HOLD, 대기 4대 정밀 상태)
+        # [V6.60]: 실시간 오더플로우 시장 기세(Flow Bias) 나침반 상시 표출 렌더러
         if getattr(self, "_last_applied_hint_dir", "UNSET") != expected_dir:
             self._last_applied_hint_dir = expected_dir
-            if expected_dir == "LONG":
-                self.lbl_hint.setText("[ 🟢 타점 포착 시 진입: LONG ]")
+            e_str = str(expected_dir or "")
+            
+            # 1. 💥 100% 임계치 돌파 타점 격발
+            if e_str == "SNIPE_LONG" or e_str == "LONG":
+                self.lbl_hint.setText("[ 💥 100% 타점 돌파! 즉시 저격: LONG ↗ ]")
                 self.lbl_hint.setStyleSheet("""
                     QLabel {
-                        background-color: rgba(82, 172, 98, 0.45);
-                        border: 1px solid #52AC62;
+                        background-color: rgba(0, 230, 118, 0.4);
+                        border: 2px solid #00E676;
                         border-radius: 4px;
                         color: #00FFCC;
                         font-family: 'Consolas', 'Segoe UI';
@@ -2860,12 +2864,12 @@ class ShinseonDashboard(QMainWindow):
                         font-weight: bold;
                     }
                 """)
-            elif expected_dir == "SHORT":
-                self.lbl_hint.setText("[ 🔴 타점 포착 시 진입: SHORT ]")
+            elif e_str == "SNIPE_SHORT" or e_str == "SHORT":
+                self.lbl_hint.setText("[ 💥 100% 타점 돌파! 즉시 저격: SHORT ↘ ]")
                 self.lbl_hint.setStyleSheet("""
                     QLabel {
-                        background-color: rgba(172, 90, 82, 0.45);
-                        border: 1px solid #AC5A52;
+                        background-color: rgba(255, 82, 82, 0.4);
+                        border: 2px solid #FF5252;
                         border-radius: 4px;
                         color: #FF6666;
                         font-family: 'Consolas', 'Segoe UI';
@@ -2873,22 +2877,131 @@ class ShinseonDashboard(QMainWindow):
                         font-weight: bold;
                     }
                 """)
-            elif expected_dir and str(expected_dir).startswith("HOLD_"):
-                side = "LONG" if "LONG" in str(expected_dir) else "SHORT"
-                self.lbl_hint.setText(f"[ 🛡️ {side} 포지션 보유 중 (가드레일 케어 가동) ]")
+            # 2. 🛡️ 포지션 보유 중 (스마트 융합 기세 나침반)
+            elif e_str.startswith("HOLD_"):
+                side = "LONG" if "HOLD_LONG" in e_str else "SHORT"
+                if "BULLISH" in e_str:
+                    if side == "LONG":
+                        txt = "[ 🛡️ LONG 보유 중 | 시장 기세: 롱(LONG) 우세 📈 ]"
+                        bg = "rgba(46, 125, 50, 0.5)"
+                        bd = "#4CAF50"
+                        col = "#00FFCC"
+                    else:
+                        txt = "[ 🛡️ SHORT 보유 중 | ⚠️ 반대 롱(LONG) 기세 유입 주의 ↗ ]"
+                        bg = "rgba(230, 81, 0, 0.4)"
+                        bd = "#FF9800"
+                        col = "#FFB74D"
+                elif "BEARISH" in e_str:
+                    if side == "SHORT":
+                        txt = "[ 🛡️ SHORT 보유 중 | 시장 기세: 숏(SHORT) 우세 📉 ]"
+                        bg = "rgba(183, 28, 28, 0.5)"
+                        bd = "#E53935"
+                        col = "#FF6666"
+                    else:
+                        txt = "[ 🛡️ LONG 보유 중 | ⚠️ 반대 숏(SHORT) 기세 유입 주의 ↘ ]"
+                        bg = "rgba(230, 81, 0, 0.4)"
+                        bd = "#FF9800"
+                        col = "#FFB74D"
+                elif "LONG_OVERLOAD" in e_str:
+                    txt = f"[ 🛡️ {side} 보유 | ⚠️ 롱 청산 과열 (롱 털림) ➔ 숏 반전 주시 ]"
+                    bg = "rgba(100, 80, 20, 0.6)"
+                    bd = "#DEBA9D"
+                    col = "#FFE082"
+                elif "SHORT_OVERLOAD" in e_str:
+                    txt = f"[ 🛡️ {side} 보유 | ⚠️ 숏 청산 과열 (숏 털림) ➔ 롱 반전 주시 ]"
+                    bg = "rgba(100, 80, 20, 0.6)"
+                    bd = "#DEBA9D"
+                    col = "#FFE082"
+                elif "DELEVERAGING" in e_str:
+                    txt = f"[ 🛡️ {side} 보유 | ⚪ -OI 포지션 정리 관망 ]"
+                    bg = "rgba(50, 45, 40, 0.7)"
+                    bd = "#DEBA9D"
+                    col = "#B0BEC5"
+                else:
+                    txt = f"[ 🛡️ {side} 포지션 보유 중 (가드레일 케어 가동) ]"
+                    bg = "rgba(50, 45, 40, 0.7)"
+                    bd = "#DEBA9D"
+                    col = "#00E676"
+                self.lbl_hint.setText(txt)
+                self.lbl_hint.setStyleSheet(f"""
+                    QLabel {{
+                        background-color: {bg};
+                        border: 1px solid {bd};
+                        border-radius: 4px;
+                        color: {col};
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }}
+                """)
+            # 3. 🧭 현금 대기 중 (실시간 시장 기세 나침반 상시 표출)
+            elif "BULLISH" in e_str:
+                self.lbl_hint.setText("[ 🟢 현재 시장 기세: 롱(LONG) 우세 ↗ (타점 대기) ]")
                 self.lbl_hint.setStyleSheet("""
                     QLabel {
-                        background-color: rgba(50, 45, 40, 0.7);
-                        border: 1px solid #DEBA9D;
+                        background-color: rgba(46, 125, 50, 0.35);
+                        border: 1px solid #4CAF50;
                         border-radius: 4px;
-                        color: #00E676;
+                        color: #00FFCC;
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                """)
+            elif "BEARISH" in e_str:
+                self.lbl_hint.setText("[ 🔴 현재 시장 기세: 숏(SHORT) 우세 ↘ (타점 대기) ]")
+                self.lbl_hint.setStyleSheet("""
+                    QLabel {
+                        background-color: rgba(183, 28, 28, 0.35);
+                        border: 1px solid #E53935;
+                        border-radius: 4px;
+                        color: #FF6666;
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                """)
+            elif "LONG_OVERLOAD" in e_str:
+                self.lbl_hint.setText("[ ⚠️ 롱 청산 과열 (상승 중 롱 털림) ➔ 숏 반전 주시 ]")
+                self.lbl_hint.setStyleSheet("""
+                    QLabel {
+                        background-color: rgba(100, 80, 20, 0.5);
+                        border: 1px solid #FFB74D;
+                        border-radius: 4px;
+                        color: #FFE082;
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                """)
+            elif "SHORT_OVERLOAD" in e_str:
+                self.lbl_hint.setText("[ ⚠️ 숏 청산 과열 (하락 중 숏 털림) ➔ 롱 반전 주시 ]")
+                self.lbl_hint.setStyleSheet("""
+                    QLabel {
+                        background-color: rgba(100, 80, 20, 0.5);
+                        border: 1px solid #FFB74D;
+                        border-radius: 4px;
+                        color: #FFE082;
+                        font-family: 'Consolas', 'Segoe UI';
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                """)
+            elif "DELEVERAGING" in e_str:
+                self.lbl_hint.setText("[ ⚪ -OI 포지션 정리 중 (관망 추세) ]")
+                self.lbl_hint.setStyleSheet("""
+                    QLabel {
+                        background-color: rgba(26, 24, 23, 0.8);
+                        border: 1px solid rgba(222, 186, 157, 0.25);
+                        border-radius: 4px;
+                        color: #B0BEC5;
                         font-family: 'Consolas', 'Segoe UI';
                         font-size: 12px;
                         font-weight: bold;
                     }
                 """)
             else:
-                self.lbl_hint.setText("[ ⏳ 타점 탐색 대기 중 (조건 미충족) ]")
+                self.lbl_hint.setText("[ ⏳ 타점 탐색 대기 중 (중립/관망) ]")
                 self.lbl_hint.setStyleSheet("""
                     QLabel {
                         background-color: rgba(26, 24, 23, 0.8);
