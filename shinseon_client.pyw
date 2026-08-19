@@ -536,7 +536,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V6.58"
+        self.CURRENT_VERSION = "V6.59"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -3434,8 +3434,8 @@ class ShinseonConfigDialog(QDialog):
         
         weekday_cols = [
             ("asia", "아시아 (09~16)"),
-            ("europe", "유럽 (16~22:30)"),
-            ("us", "미국 본장 (22:30~05)"),
+            ("europe", "유럽/런던 (16~21:30)"),
+            ("us", "미국 뉴욕 (21:30~05)"),
             ("pacific", "태평양 (05~09)")
         ]
         

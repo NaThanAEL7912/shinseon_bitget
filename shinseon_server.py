@@ -1846,10 +1846,10 @@ class ShinseonV35Engine:
             if 9 <= hour_val < 16:
                 s_key = "WEEKEND_ASIA" if is_weekend else "ASIA"
                 s_thresh_key = "weekend_asia" if is_weekend else "asia"
-            elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+            elif 16 <= hour_val < 21 or (hour_val == 21 and minute_val < 30):
                 s_key = "WEEKEND_LONDON" if is_weekend else "LONDON"
                 s_thresh_key = "weekend_europe" if is_weekend else "europe"
-            elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+            elif (hour_val == 21 and minute_val >= 30) or hour_val >= 22 or hour_val < 5:
                 s_key = "WEEKEND_NY" if is_weekend else "NY"
                 s_thresh_key = "weekend_us" if is_weekend else "us"
             else:
@@ -2051,9 +2051,9 @@ class ShinseonV35Engine:
                 minute_val = now_dt.minute
                 if 9 <= hour_val < 16:
                     s_thresh_key = "weekend_asia" if is_weekend else "asia"
-                elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                elif 16 <= hour_val < 21 or (hour_val == 21 and minute_val < 30):
                     s_thresh_key = "weekend_europe" if is_weekend else "europe"
-                elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                elif (hour_val == 21 and minute_val >= 30) or hour_val >= 22 or hour_val < 5:
                     s_thresh_key = "weekend_us" if is_weekend else "us"
                 else:
                     s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
@@ -2321,9 +2321,9 @@ class ShinseonV35Engine:
                         minute_val = now_dt.minute
                         if 9 <= hour_val < 16:
                             s_thresh_key = "weekend_asia" if is_weekend else "asia"
-                        elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                        elif 16 <= hour_val < 21 or (hour_val == 21 and minute_val < 30):
                             s_thresh_key = "weekend_europe" if is_weekend else "europe"
-                        elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                        elif (hour_val == 21 and minute_val >= 30) or hour_val >= 22 or hour_val < 5:
                             s_thresh_key = "weekend_us" if is_weekend else "us"
                         else:
                             s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
@@ -2824,9 +2824,9 @@ class ShinseonV35Engine:
                     minute_val = now_dt.minute
                     if 9 <= hour_val < 16:
                         s_thresh_key = "weekend_asia" if is_weekend else "asia"
-                    elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                    elif 16 <= hour_val < 21 or (hour_val == 21 and minute_val < 30):
                         s_thresh_key = "weekend_europe" if is_weekend else "europe"
-                    elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                    elif (hour_val == 21 and minute_val >= 30) or hour_val >= 22 or hour_val < 5:
                         s_thresh_key = "weekend_us" if is_weekend else "us"
                     else:
                         s_thresh_key = "weekend_pacific" if is_weekend else "pacific"
@@ -3126,9 +3126,9 @@ class ShinseonV35Engine:
                 is_weekend = check_is_weekend_kst(now_dt)
                 if 9 <= hour_val < 16:
                     s_key = "WEEKEND_ASIA" if is_weekend else "ASIA"
-                elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+                elif 16 <= hour_val < 21 or (hour_val == 21 and minute_val < 30):
                     s_key = "WEEKEND_LONDON" if is_weekend else "LONDON"
-                elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+                elif (hour_val == 21 and minute_val >= 30) or hour_val >= 22 or hour_val < 5:
                     s_key = "WEEKEND_NY" if is_weekend else "NY"
                 else:
                     s_key = "WEEKEND_PACIFIC" if is_weekend else "PACIFIC"
@@ -3388,9 +3388,9 @@ class ShinseonV35Engine:
         minute_val = now_dt.minute
         if 9 <= hour_val < 16:
             s_thresh_key = "weekend_asia" if is_weekend else "asia"
-        elif 16 <= hour_val < 22 or (hour_val == 22 and minute_val < 30):
+        elif 16 <= hour_val < 21 or (hour_val == 21 and minute_val < 30):
             s_thresh_key = "weekend_europe" if is_weekend else "europe"
-        elif (hour_val == 22 and minute_val >= 30) or hour_val >= 23 or hour_val < 5:
+        elif (hour_val == 21 and minute_val >= 30) or hour_val >= 22 or hour_val < 5:
             s_thresh_key = "weekend_us" if is_weekend else "us"
         else:
             s_thresh_key = "weekend_pacific" if is_weekend else "pacific"

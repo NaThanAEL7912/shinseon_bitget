@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.58",
+    "CURRENT_VERSION": "V6.59",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -65,7 +65,7 @@
             "split_entry_3_ratio": 0.0,
             "split_entry_3_trigger_pct": 0.0,
             "split_cooldown_seconds": 900.0,
-            "cooldown_seconds": 30.0,
+            "cooldown_seconds": 300.0,
             "profit_cooldown_seconds": 10.0
         },
         "europe": {
@@ -77,7 +77,7 @@
             "split_entry_3_ratio": 0.0,
             "split_entry_3_trigger_pct": 0.0,
             "split_cooldown_seconds": 900.0,
-            "cooldown_seconds": 30.0,
+            "cooldown_seconds": 300.0,
             "profit_cooldown_seconds": 10.0
         },
         "us": {
@@ -89,7 +89,7 @@
             "split_entry_3_ratio": 0.0,
             "split_entry_3_trigger_pct": 0.0,
             "split_cooldown_seconds": 900.0,
-            "cooldown_seconds": 30.0,
+            "cooldown_seconds": 300.0,
             "profit_cooldown_seconds": 10.0
         },
         "pacific": {
@@ -101,7 +101,7 @@
             "split_entry_3_ratio": 0.0,
             "split_entry_3_trigger_pct": 0.0,
             "split_cooldown_seconds": 900.0,
-            "cooldown_seconds": 30.0,
+            "cooldown_seconds": 300.0,
             "profit_cooldown_seconds": 10.0
         },
         "weekend_asia": {
@@ -161,7 +161,7 @@
     "split_entry_3_ratio": 0.0,
     "split_entry_3_trigger_pct": 0.0,
     "split_cooldown_seconds": 900.0,
-    "cooldown_seconds": 30.0,
+    "cooldown_seconds": 300.0,
     "profit_cooldown_seconds": 10.0,
     "telegram_enabled": true,
     "telegram_token": "8890976392:AAFkGFrep1b9N9P_EQpJY-yNYaMLcd2kEZk",
