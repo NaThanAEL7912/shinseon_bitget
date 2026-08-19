@@ -2628,6 +2628,10 @@ class ShinseonV35Engine:
                     is_opposite = True
             
         if self.is_position_active and is_opposite:
+            # [V6.58 헌법]: 봇이 정지(STOPPED) 상태이면 어떠한 자동 반대 청산도 100% 원천 차단!
+            if getattr(self, "bot_state", "RUNNING") == "STOPPED" or not getattr(self, "is_snipe_active", True):
+                return
+
             # OI > 0 and oi_delta_1m >= target_oi (진짜 자금 유입) 조건 충족 시에만 진짜 스위칭 청산 발동! (Case 2-3, Case 3-3)
             if oi_delta_1m > 0 and oi_delta_1m >= target_oi:
                 if not getattr(self, "exit_in_progress", False):
@@ -2719,6 +2723,10 @@ class ShinseonV35Engine:
             # [포지션 보유 중 스위칭 / 추가매수 / 불타기 검증 엔진 (SHINSEON 원본 규격)]
             if self.is_position_active and not getattr(self, "exit_in_progress", False):
                 if direction and direction in ["LONG", "SHORT"] and direction != self.entry_direction:
+                    # [V6.58 헌법]: 봇이 정지(STOPPED) 상태이면 어떠한 자동 반대 청산도 100% 원천 차단!
+                    if getattr(self, "bot_state", "RUNNING") == "STOPPED" or not getattr(self, "is_snipe_active", True):
+                        return
+
                     # [진입 60초 안전 락다운]: 진입 직후 60초 동안은 어떠한 반대 신호 청산도 100% 원천 차단!
                     elapsed_entry = time.time() - getattr(self, "last_entry_time", 0.0)
                     if elapsed_entry < 60.0:
@@ -2914,7 +2922,7 @@ class ShinseonV35Engine:
                         return
                 
             # 3단계 & 4단계: 발주 전송 및 체결 로그 송출 (오직 direction이 LONG 또는 SHORT일 때만 전격 실행!)
-            if direction and direction in ["LONG", "SHORT"] and not self.is_position_active and self.is_snipe_active and not self.exit_in_progress:
+            if direction and direction in ["LONG", "SHORT"] and not self.is_position_active and self.is_snipe_active and getattr(self, "bot_state", "RUNNING") == "RUNNING" and not self.exit_in_progress:
                 self.is_position_active = True
                 self.last_entry_time = time.time()
                 self.entry_direction = direction
@@ -3104,8 +3112,8 @@ class ShinseonV35Engine:
             except Exception as smart_stop_err:
                 logger.error(f"⚠️ [스마트 스탑 감시 수식 예외 방어] {smart_stop_err}", exc_info=True)
 
-            # [HOTFIX v5.75] 포지션이 유효한 경우(수동/자동 불문) 세션 가드레일 분할익절 100% 감시 집행
-            if not getattr(self, "is_position_active", False):
+            # [HOTFIX v5.75 / V6.58]: 봇 정지(STOPPED) 상태에서는 세션 가드레일 자동 분할익절도 100% 원천 차단 동결!
+            if not getattr(self, "is_position_active", False) or getattr(self, "bot_state", "RUNNING") == "STOPPED" or not getattr(self, "is_snipe_active", True):
                 continue
 
             # ================= 하이브리드 분할 익절 가드레일 =================
