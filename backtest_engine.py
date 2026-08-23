@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 백테스팅 코어 엔진 (Backtest Engine Core)
-- 9일간의 초단위 실측 데이터 기반 기간 필터링 및 8대 세션 정밀 시뮬레이션
-- 박호두 50% 할인 수수료(0.030%) 등 실전 수수료 및 2단계 계단식 공격 가드 완벽 연동
+신선(SHINSEON) 오더플로우 백테스팅 코어 엔진 (Backtest Engine Core) V2.0
+- 실전 서버(core_logic.py, 백서 V7.03) 100% 전수 동기화
+- [4대 완성형 오더플로우 매트릭스: 추세돌파 롱/숏, V자반등 롱, 역V자덤핑 숏]
+- [0.02% 5초 동적 가격 불감대 필터 (Price Delta Shield)]
+- [2단계 50% 분할익절 & 무위험 본전/보존가드 & 스탑로스 손절 & 반대신호 탈출]
+- [박호두 50% 할인 0.030% 및 커스텀 수수료 체계 완벽 연동]
 """
 
 import os
 import sys
 import pickle
 from datetime import datetime
+from collections import deque
 
 CACHE_FILE = "scratch/parsed_session_data.pkl"
 
@@ -21,7 +25,7 @@ def load_all_session_data():
 
 def run_backtest_simulation(config, start_dt=None, end_dt=None):
     """
-    지정된 설정값 및 기간(start_dt ~ end_dt)을 바탕으로 정밀 시뮬레이션 수행
+    지정된 설정값 및 기간(start_dt ~ end_dt)을 바탕으로 실전 서버 100% 동일 정밀 시뮬레이션 수행
     """
     raw_sdata = load_all_session_data()
     if not raw_sdata:
@@ -32,7 +36,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
 
     # 1. 설정값 파싱
     initial_balance = float(config.get('initial_balance', 7020.14))
-    fee_rate = float(config.get('fee_rate', 0.00030))  # 0.030% 박호두 50% 기본
+    fee_rate = float(config.get('fee_rate', 0.00030))  # 기본 0.030% (0.00030)
     
     sessions_cfg = config.get('sessions', {})
     trading_cfg = config.get('trading', {})
@@ -109,20 +113,57 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
         current_trade = {}
         s_trade_logs = []
 
+        # 5초 동적 가격 불감대 계산용 윈도우 (최근 5초간의 가격 저장)
+        price_history_5s = deque()  # (ts, price)
+
         for r in filtered_data:
             cp = r['price']
             cts = r['ts']
             if cp <= 1000.0:
                 continue
 
-            sig_dir = None
-            if r['liq'] >= t_liq and r['oi'] > 0 and r['oi'] >= t_oi:
-                s = r['slope'] if r['slope'] != 0.0 else r['d1m']
-                if s > 0 and r['short_liq'] >= r['long_liq']:
-                    sig_dir = "LONG"
-                elif s < 0 and r['long_liq'] >= r['short_liq']:
-                    sig_dir = "SHORT"
+            price_history_5s.append((cts, cp))
+            while price_history_5s and (cts - price_history_5s[0][0] > 5.5):
+                price_history_5s.popleft()
 
+            # 5초 전 가격 대비 변동폭 계산 (delta_5s)
+            p_5s_ago = price_history_5s[0][1] if price_history_5s else cp
+            delta_5s = (cp - p_5s_ago) / p_5s_ago if p_5s_ago > 0 else 0.0
+
+            # -------------------------------------------------------------
+            # 🎯 [신선 실전 서버 100% 동일 4대 오더플로우 매트릭스 판정]
+            # -------------------------------------------------------------
+            sig_dir = None
+            sig_strategy_name = None
+
+            liq_total = r.get('liq', 0.0)
+            short_liq = r.get('short_liq', 0.0)
+            long_liq = r.get('long_liq', 0.0)
+            oi_speed = r.get('oi', 0.0)
+            slope = r.get('slope', 0.0) if r.get('slope', 0.0) != 0.0 else r.get('d1m', 0.0)
+
+            # 3대 필수 하드 게이트: 청산액 >= target_liq AND abs(OI) >= target_oi AND abs(delta_5s) >= 0.02%
+            if liq_total >= t_liq and abs(oi_speed) >= t_oi and abs(delta_5s) >= 0.00020:
+                # 1️⃣ 추세 돌파 롱 (+OI & 숏청산 폭발 & 5초상승 & 기울기상승)
+                if oi_speed > 0 and short_liq >= long_liq and delta_5s >= 0.00020 and slope >= 0:
+                    sig_dir = "LONG"
+                    sig_strategy_name = "1️⃣ 추세돌파 롱"
+                # 2️⃣ 추세 돌파 숏 (+OI & 롱청산 폭발 & 5초하락 & 기울기하락)
+                elif oi_speed > 0 and long_liq >= short_liq and delta_5s <= -0.00020 and slope <= 0:
+                    sig_dir = "SHORT"
+                    sig_strategy_name = "2️⃣ 추세돌파 숏"
+                # 3️⃣ V자 바닥 반등 롱 (-OI & 롱개미 털림 & 5초 반등턴) 🏹
+                elif oi_speed < 0 and long_liq >= short_liq and delta_5s >= 0.00020:
+                    sig_dir = "LONG"
+                    sig_strategy_name = "3️⃣ V자반등 롱 🏹"
+                # 4️⃣ 역V자 천장 덤핑 숏 (-OI & 매수 고갈 & 5초 덤핑턴) 🏹
+                elif oi_speed < 0 and short_liq >= long_liq and delta_5s <= -0.00020:
+                    sig_dir = "SHORT"
+                    sig_strategy_name = "4️⃣ 역V자덤핑 숏 🏹"
+
+            # -------------------------------------------------------------
+            # 포지션 진입 및 관리 루프
+            # -------------------------------------------------------------
             if not is_in:
                 if cts < cooldown:
                     continue
@@ -142,9 +183,11 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                         'entry_time': datetime.fromtimestamp(cts).strftime('%Y-%m-%d %H:%M:%S'),
                         'entry_ts': cts,
                         'dir': direction,
+                        'strategy': sig_strategy_name,
                         'entry_price': ep1,
-                        'liq': r['liq'],
-                        'oi': r['oi'],
+                        'liq': liq_total,
+                        'oi': oi_speed,
+                        'delta_5s_pct': delta_5s * 100.0,
                         'has_2nd': False,
                         'effective_lev': buy_ratio_1
                     }
@@ -169,12 +212,12 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 cd = tp_cooldown
                 reason = ""
 
-                # 1차 익절
+                # 1차 익절 도달 검사
                 if not is_tp1 and pnl_cur >= tp1_ratio:
                     is_tp1 = True
                     s_tp1_cnt += 1
 
-                # 청산 조건 분기
+                # 4단계 청산 조건 분기
                 if is_tp1 and pnl_cur >= tp2_ratio:
                     closed = True
                     fp = tp2_ratio * (1.0 - tp1_split_ratio)
@@ -196,7 +239,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                     rem = (1.0 - tp1_split_ratio) if is_tp1 else 1.0
                     fp = pnl_cur * rem
                     cd = tp_cooldown if pnl_cur > 0 else sl_cooldown
-                    reason = f"반대신호 전환 ({sig_dir})"
+                    reason = f"반대신호 전환 ({sig_strategy_name})"
 
                 if closed:
                     s_trades += 1

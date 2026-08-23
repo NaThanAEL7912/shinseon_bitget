@@ -704,12 +704,12 @@ class ShinseonBacktesterGUI(QMainWindow):
         log_layout.addLayout(log_btn_h)
 
         self.table_logs = QTableWidget()
-        self.table_logs.setColumnCount(11)
+        self.table_logs.setColumnCount(12)
         self.table_logs.setHorizontalHeaderLabels([
-            "No.", "세션", "진입일시", "청산일시", "포지션", "진입가", "청산가", "최고 PnL", "청산 사유", "👑 순손익 ($)", "지불 수수료 ($)"
+            "No.", "세션", "진입일시", "청산일시", "포지션", "4대 전략 구분", "진입가", "청산가", "최고 PnL", "청산 사유", "👑 순손익 ($)", "지불 수수료 ($)"
         ])
         self.table_logs.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.table_logs.horizontalHeader().setSectionResizeMode(8, QHeaderView.Stretch)
+        self.table_logs.horizontalHeader().setSectionResizeMode(9, QHeaderView.Stretch)
         log_layout.addWidget(self.table_logs)
 
         self.res_tab_widget.addTab(log_widget, "📜 초단위 거래 상세 일지 (Trade Logs)")
@@ -844,17 +844,21 @@ class ShinseonBacktesterGUI(QMainWindow):
             item_dir.setForeground(QColor("#00ffcc" if t.get('dir') == 'LONG' else "#ff3366"))
             self.table_logs.setItem(row, 4, item_dir)
 
-            self.table_logs.setItem(row, 5, QTableWidgetItem(f"${t.get('entry_price', 0.0):,.1f}"))
-            self.table_logs.setItem(row, 6, QTableWidgetItem(f"${t.get('exit_price', 0.0):,.1f}"))
-            self.table_logs.setItem(row, 7, QTableWidgetItem(f"+{t.get('peak_pnl_pct', 0.0):.2f}%"))
-            self.table_logs.setItem(row, 8, QTableWidgetItem(t.get('reason', '')))
+            item_strat = QTableWidgetItem(t.get('strategy', '-'))
+            item_strat.setForeground(QColor("#ffd700"))
+            self.table_logs.setItem(row, 5, item_strat)
+
+            self.table_logs.setItem(row, 6, QTableWidgetItem(f"${t.get('entry_price', 0.0):,.1f}"))
+            self.table_logs.setItem(row, 7, QTableWidgetItem(f"${t.get('exit_price', 0.0):,.1f}"))
+            self.table_logs.setItem(row, 8, QTableWidgetItem(f"+{t.get('peak_pnl_pct', 0.0):.2f}%"))
+            self.table_logs.setItem(row, 9, QTableWidgetItem(t.get('reason', '')))
 
             net_v = t.get('net', 0.0)
             item_net = QTableWidgetItem(f"+${net_v:,.2f}" if net_v >= 0 else f"-${abs(net_v):,.2f}")
             item_net.setForeground(QColor("#00ffcc" if net_v >= 0 else "#ff3366"))
-            self.table_logs.setItem(row, 9, item_net)
+            self.table_logs.setItem(row, 10, item_net)
 
-            self.table_logs.setItem(row, 10, QTableWidgetItem(f"-${t.get('fee', 0.0):,.2f}"))
+            self.table_logs.setItem(row, 11, QTableWidgetItem(f"-${t.get('fee', 0.0):,.2f}"))
 
     def on_export_csv(self):
         if not self.last_results or not self.last_results.get('trade_logs'):
@@ -869,11 +873,11 @@ class ShinseonBacktesterGUI(QMainWindow):
             logs = self.last_results['trade_logs']
             with open(fpath, "w", newline="", encoding="utf-8-sig") as f:
                 writer = csv.writer(f)
-                writer.writerow(["No", "세션", "진입일시", "청산일시", "방향", "진입가", "청산가", "최고PnL(%)", "청산사유", "순손익(USDT)", "수수료(USDT)"])
+                writer.writerow(["No", "세션", "진입일시", "청산일시", "방향", "4대 전략 구분", "진입가", "청산가", "최고PnL(%)", "청산사유", "순손익(USDT)", "수수료(USDT)"])
                 for idx, t in enumerate(logs, 1):
                     writer.writerow([
                         idx, t.get('session'), t.get('entry_time'), t.get('exit_time'),
-                        t.get('dir'), t.get('entry_price'), t.get('exit_price'),
+                        t.get('dir'), t.get('strategy', '-'), t.get('entry_price'), t.get('exit_price'),
                         f"{t.get('peak_pnl_pct', 0.0):.2f}%", t.get('reason'),
                         f"{t.get('net', 0.0):.2f}", f"{t.get('fee', 0.0):.2f}"
                     ])
