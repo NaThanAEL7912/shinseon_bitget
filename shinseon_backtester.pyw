@@ -894,22 +894,102 @@ class ShinseonBacktesterGUI(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "오류", f"설정 저장 실패: {e}")
 
+    def apply_config_to_ui(self, data):
+        """shinseon_config.json 또는 백테스터 json 데이터를 GUI 위젯들에 100% 자동 매핑"""
+        # 1. 탭 1: 세션별 설정 매핑 (session_thresholds 또는 sessions)
+        s_map = data.get("session_thresholds") or data.get("sessions") or {}
+        for s_key, s_cfg in s_map.items():
+            if s_key in self.session_inputs:
+                if "enabled" in s_cfg:
+                    self.session_inputs[s_key]['enabled'].setChecked(bool(s_cfg["enabled"]))
+                if "liq" in s_cfg:
+                    self.session_inputs[s_key]['liq'].setText(f"{int(float(s_cfg['liq'])):,}")
+                if "oi" in s_cfg:
+                    self.session_inputs[s_key]['oi'].setText(f"{float(s_cfg['oi']):.4f}")
+                if "sl" in s_cfg:
+                    self.session_inputs[s_key]['sl'].setText(f"{float(s_cfg['sl']):.1f}")
+
+        # 2. 탭 2: 트레이딩 핵심 설정 매핑 (session_trading_configs 또는 trading)
+        t_map = data.get("session_trading_configs") or data.get("trading") or {}
+        for s_key, t_cfg in t_map.items():
+            if s_key in self.trading_inputs:
+                widgets = self.trading_inputs[s_key]
+                if "leverage" in t_cfg and "leverage" in widgets:
+                    widgets["leverage"].setText(str(int(float(t_cfg["leverage"]))))
+                
+                # 비중 1차
+                b1 = t_cfg.get("split_entry_1_ratio") or t_cfg.get("buy1_ratio")
+                if b1 is not None and "buy1_ratio" in widgets:
+                    widgets["buy1_ratio"].setText(str(float(b1)))
+
+                # 비중 2차
+                b2 = t_cfg.get("split_entry_2_ratio") or t_cfg.get("buy2_ratio")
+                if b2 is not None and "buy2_ratio" in widgets:
+                    widgets["buy2_ratio"].setText(str(float(b2)))
+
+                # DCA 하락폭
+                dca = t_cfg.get("split_entry_2_trigger_pct") or t_cfg.get("dca_drop")
+                if dca is not None and "dca_drop" in widgets:
+                    widgets["dca_drop"].setText(str(float(dca)))
+
+                # 추가매수 쿨타임
+                dca_t = t_cfg.get("split_cooldown_seconds") or t_cfg.get("dca_time_limit")
+                if dca_t is not None and "dca_time_limit" in widgets:
+                    widgets["dca_time_limit"].setText(str(float(dca_t)))
+
+                # 손절 쿨타임
+                sl_cd = t_cfg.get("cooldown_seconds") or t_cfg.get("sl_cooldown")
+                if sl_cd is not None and "sl_cooldown" in widgets:
+                    widgets["sl_cooldown"].setText(str(float(sl_cd)))
+
+                # 익절 쿨타임
+                tp_cd = t_cfg.get("profit_cooldown_seconds") or t_cfg.get("tp_cooldown")
+                if tp_cd is not None and "tp_cooldown" in widgets:
+                    widgets["tp_cooldown"].setText(str(float(tp_cd)))
+
+        # 3. 탭 3: 가드레일 설정 매핑 (guardrail_configs 또는 session_guardrails 또는 guardrails)
+        g_map = data.get("guardrail_configs") or data.get("session_guardrails") or data.get("guardrails") or {}
+        for s_key, g_cfg in g_map.items():
+            if isinstance(g_cfg, dict) and s_key in self.guard_inputs:
+                widgets = self.guard_inputs[s_key]
+                if "tp1" in g_cfg and "tp1" in widgets:
+                    widgets["tp1"].setText(f"{float(g_cfg['tp1']):.2f}")
+                if "tp2" in g_cfg and "tp2" in widgets:
+                    widgets["tp2"].setText(f"{float(g_cfg['tp2']):.2f}")
+                if "be_guard" in g_cfg and "be_guard" in widgets:
+                    widgets["be_guard"].setText(f"{float(g_cfg['be_guard']):.2f}")
+
+        # 4. 자금 & 수수료
+        if "initial_balance" in data:
+            self.ed_initial_balance.setText(str(data["initial_balance"]))
+        if "fee_rate" in data:
+            self.ed_custom_fee.setText(f"{float(data['fee_rate']):.5f}")
+
     def on_load_config_file(self):
-        fpath, _ = QFileDialog.getOpenFileName(self, "백테스터 설정 불러오기", "", "JSON Files (*.json)")
+        fpath, _ = QFileDialog.getOpenFileName(self, "설정 파일 불러오기", "shinseon_config.json", "JSON Files (*.json)")
         if not fpath:
             return
         try:
             with open(fpath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # 파라미터 덮어쓰기 로직
-            QMessageBox.information(self, "불러오기 완료", f"설정 파일을 성공적으로 불러왔습니다:\n{fpath}")
+            self.apply_config_to_ui(data)
+            self.on_run_backtest()
+            QMessageBox.information(self, "불러오기 완료", f"신선 설정 파일을 성공적으로 불러와 UI에 적용하였습니다:\n{fpath}")
         except Exception as e:
             QMessageBox.critical(self, "오류", f"설정 불러오기 실패: {e}")
 
     def load_config_defaults(self):
         # 1. 날짜 기본값
         self.set_date_preset("full")
-        # 2. 실행
+        # 2. 로컬 shinseon_config.json이 존재하면 자동 로드
+        if os.path.exists("shinseon_config.json"):
+            try:
+                with open("shinseon_config.json", "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.apply_config_to_ui(data)
+            except Exception:
+                pass
+        # 3. 1회 백테스트 실행
         self.on_run_backtest()
 
 def main():
