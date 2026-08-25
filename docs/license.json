@@ -4,5 +4,11 @@
         "uuid": "MAC-34:6F:24:2B:A0:CE",
         "status": "ACTIVE",
         "role": "MASTER"
+    },
+    {
+        "name": "나엘로_데스크탑",
+        "uuid": "035E02D8-04D3-055B-2306-850700080009",
+        "status": "ACTIVE",
+        "role": "MASTER"
     }
 ]
