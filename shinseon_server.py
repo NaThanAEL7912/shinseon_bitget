@@ -1,6 +1,14 @@
 
 import sys
 import os
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding='utf-8')
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding='utf-8')
+except Exception:
+    pass
+
 import math
 import asyncio
 import random
@@ -20,6 +28,11 @@ import base64
 
 import ccxt.async_support as ccxt
 import websockets
+
+try:
+    aiohttp.connector.DefaultResolver = aiohttp.ThreadedResolver
+except Exception:
+    pass
 
 def kst_time_converter(*args):
     return time.gmtime(time.time() + 9 * 3600)
@@ -79,14 +92,31 @@ daily_handler.setFormatter(logging.Formatter('[%(asctime)s] [%(levelname)s] %(me
 logger.addHandler(daily_handler)
 
 def load_server_config():
+    cfg = {}
     config_path = os.path.join(BASE_DIR, "server_config.json")
     if os.path.exists(config_path):
         try:
             with open(config_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                cfg = json.load(f)
         except Exception as e:
             logger.error(f"Config load error: {e}")
-    return {}
+            
+    # .env 파일 폴백 로드 (API 키 등 환경 변수 100% 로드)
+    env_path = os.path.join(BASE_DIR, ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip().strip('"').strip("'")
+                        if k not in cfg or not cfg[k]:
+                            cfg[k] = v
+        except Exception as e:
+            logger.error(f".env load error: {e}")
+    return cfg
 
 env_vars = load_server_config()
 
@@ -708,6 +738,113 @@ async def run_telegram_command_poller(bot_core):
             logger.error(f"Telegram poller error: {e}")
         await asyncio.sleep(2)
 
+async def run_non_btc_emergency_sentinel(bot_core):
+    """
+    🚨 [신선 국고 비상방패 V7.30 / 기획서 320]
+    - 24시간 상시 1초 주기 백그라운드 계좌 포지션 전수 감시
+    - 비트코인(BTC) 외 타 종목(ETH, SOL 등 알트코인) 주문/포지션 감지 시 0초 즉시 미체결 취소 & 시장가 강제 전량 청산
+    - 텔레그램 긴급 비상 경보 발송
+    """
+    import requests
+    logger.info("🛡️ [국고 비상방패 V7.30] 비인가 종목(Non-BTC) 0초 즉시 강제 사살 센티널 가동 완료")
+    while True:
+        try:
+            env_vars = getattr(bot_core, "env_vars", {}) or load_server_config()
+            api_key = env_vars.get("BITGET_API_KEY", "")
+            secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+            passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+            
+            if api_key and secret_key and passphrase:
+                # 1. 비트겟 v2 모든 포지션 직접 고속 조회
+                url_base = "https://api.bitget.com"
+                path_pos = "/api/v2/mix/position/all-position"
+                params_pos = "productType=USDT-FUTURES"
+                timestamp = str(int(time.time() * 1000))
+                message = timestamp + "GET" + path_pos + "?" + params_pos
+                mac = hmac.new(secret_key.encode('utf-8'), message.encode('utf-8'), hashlib.sha256)
+                sign = base64.b64encode(mac.digest()).decode('utf-8')
+                headers = {
+                    'ACCESS-KEY': api_key,
+                    'ACCESS-SIGN': sign,
+                    'ACCESS-TIMESTAMP': timestamp,
+                    'ACCESS-PASSPHRASE': passphrase,
+                    'Content-Type': 'application/json',
+                    'locale': 'en-US'
+                }
+                
+                resp = await asyncio.to_thread(requests.get, f"{url_base}{path_pos}?{params_pos}", headers=headers, timeout=3.0)
+                if resp.status_code == 200:
+                    r_json = resp.json()
+                    pos_list = r_json.get("data", []) or []
+                    for pos in pos_list:
+                        sym = str(pos.get("symbol", "") or "")
+                        contracts = float(pos.get("total", 0.0) or pos.get("available", 0.0) or 0.0)
+                        
+                        # BTC가 아닌데 포지션이 존재하는 경우
+                        if sym and "BTC" not in sym and contracts > 0:
+                            side_str = str(pos.get("holdSide", "")).upper()
+                            entry_p = float(pos.get("openPriceAvg", 0.0) or 0.0)
+                            logger.warning(f"🚨 [국고 비상방패 V7.30] 비인가 타 종목({sym}) 포지션 {contracts}개 감지! 즉시 강제 전량 청산 집행!")
+                            
+                            # 1단계: 미체결 주문 즉시 전량 취소
+                            path_cancel = "/api/v2/mix/order/cancel-all-orders"
+                            body_cancel = json.dumps({"symbol": sym, "productType": "USDT-FUTURES"})
+                            t_c = str(int(time.time() * 1000))
+                            msg_c = t_c + "POST" + path_cancel + body_cancel
+                            mac_c = hmac.new(secret_key.encode('utf-8'), msg_c.encode('utf-8'), hashlib.sha256)
+                            sign_c = base64.b64encode(mac_c.digest()).decode('utf-8')
+                            headers_c = {
+                                'ACCESS-KEY': api_key,
+                                'ACCESS-SIGN': sign_c,
+                                'ACCESS-TIMESTAMP': t_c,
+                                'ACCESS-PASSPHRASE': passphrase,
+                                'Content-Type': 'application/json',
+                                'locale': 'en-US'
+                            }
+                            try:
+                                await asyncio.to_thread(requests.post, url_base + path_cancel, headers=headers_c, data=body_cancel, timeout=3.0)
+                            except Exception as ce:
+                                logger.warning(f"⚠️ [비상방패] {sym} 주문 취소 예외: {ce}")
+                                
+                            # 2단계: v2 플래시 전량 청산 API 직송
+                            path_flash = "/api/v2/mix/order/close-positions"
+                            body_flash = json.dumps({"symbol": sym, "productType": "USDT-FUTURES"})
+                            t_f = str(int(time.time() * 1000))
+                            msg_f = t_f + "POST" + path_flash + body_flash
+                            mac_f = hmac.new(secret_key.encode('utf-8'), msg_f.encode('utf-8'), hashlib.sha256)
+                            sign_f = base64.b64encode(mac_f.digest()).decode('utf-8')
+                            headers_f = {
+                                'ACCESS-KEY': api_key,
+                                'ACCESS-SIGN': sign_f,
+                                'ACCESS-TIMESTAMP': t_f,
+                                'ACCESS-PASSPHRASE': passphrase,
+                                'Content-Type': 'application/json',
+                                'locale': 'en-US'
+                            }
+                            try:
+                                resp_f = await asyncio.to_thread(requests.post, url_base + path_flash, headers=headers_f, data=body_flash, timeout=3.0)
+                                logger.info(f"✅ [국고 비상방패 V7.30] {sym} 플래시 강제 청산 응답: {resp_f.text}")
+                            except Exception as fe:
+                                logger.error(f"❌ [비상방패] 플래시 청산 예외: {fe}")
+                                
+                            # 3단계: 텔레그램 긴급 비상 경보 발송
+                            alert_msg = (
+                                f"🚨 <b>[신선 국고 비상 방패 V7.30 발동]</b>\n"
+                                f"━━━━━━━━━━━━━━━━━━━━\n"
+                                f"⚠️ <b>비인가 종목(Non-BTC) 실수 진입 감지!</b>\n"
+                                f"• 종목: <code>{sym}</code>\n"
+                                f"• 진입: <b>{side_str} {contracts}개</b> (평단: ${entry_p:,.2f})\n"
+                                f"• 조치: ⚡ <b>0초 즉시 미체결 취소 & 전량 강제 청산 집행 완료!</b>\n"
+                                f"━━━━━━━━━━━━━━━━━━━━\n"
+                                f"🛡️ 국고 보호를 위해 BTC 외 비인가 종목이 즉시 안전하게 소멸되었습니다."
+                            )
+                            await send_telegram_notification_server(alert_msg)
+        except Exception:
+            pass
+        await asyncio.sleep(1.0)
+
+
+
 def append_daily_csv_record(row_str):
     today_str = datetime.now().strftime("%Y-%m-%d")
     csv_file = os.path.join(LOGS_DIR, f"shinseon_data_{today_str}.csv")
@@ -893,6 +1030,7 @@ class BotCore:
         self.current_task = asyncio.current_task()
         self.token_sniffer_task = asyncio.create_task(self.run_token_sniffer())
         self.telegram_poller_task = asyncio.create_task(run_telegram_command_poller(self))
+        self.non_btc_killer_task = asyncio.create_task(run_non_btc_emergency_sentinel(self))
         
         # v3.5 단방향 저격 엔진 기상
         self.v35_engine = ShinseonV35Engine(self)
@@ -1065,11 +1203,17 @@ class BotCore:
                     while self.price_history and now_t - self.price_history[0][0] > 60.0:
                         self.price_history.popleft()
                         
-                    if self.price_history:
-                        price_10s_ago = self.price_history[0][1]
-                    else:
-                        price_10s_ago = self.current_price
-                        
+                    # [백서 20260820]: 5초 전 및 10초 전 실시간 가격 정밀 산출
+                    price_5s_ago = self.current_price
+                    price_10s_ago = self.current_price
+                    for t_samp, p_samp in reversed(self.price_history):
+                        if now_t - t_samp >= 5.0 and price_5s_ago == self.current_price:
+                            price_5s_ago = p_samp
+                        if now_t - t_samp >= 10.0:
+                            price_10s_ago = p_samp
+                            break
+                            
+                    price_delta_5s = self.current_price - price_5s_ago
                     price_delta_10s = self.current_price - price_10s_ago
                     
                     if self.v35_engine.is_local_mode:
@@ -1113,7 +1257,7 @@ class BotCore:
                             long_liq = display_liq * 0.5
                             short_liq = display_liq * 0.5
                             
-                    # [SHINSEON_오더플로우_판단_백서.md 4대 저격 매트릭스 & 1분 기울기 추세 엔진 연동]
+                    # [SHINSEON_오더플로우_판단_백서_20260820.md 4대 완성형 저격 매트릭스 & 5초 턴 엔진]
                     oi_delta_1m = display_oi
                     
                     # [V6.06 모델 4]: 반감기 15초 지수가중 선형회귀 추세 기울기 (EMA Slope) 산출
@@ -1140,13 +1284,15 @@ class BotCore:
                     else:
                         price_slope_1m = 0.0
 
-                    # [V6.25]: 순수 +OI 세력 자금 유입 전용 2대 정통 돌파 저격 헌법 (Case A, B 영구 폐지)
-                    if price_slope_1m > 0 and oi_delta_1m > 0 and short_liq >= long_liq:
-                        direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 🟢 LONG 추세 탑승
-                    elif price_slope_1m < 0 and oi_delta_1m > 0 and long_liq >= short_liq:
-                        direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 🔴 SHORT 추세 탑승
-                    else:
-                        direction = None      # -OI(음수) 및 휩쏘/혼조세/주도비율 불일치 시 100% NONE 기각!
+                    # --------------------------------------------------------------------------
+                    # 🎯 [신선 실전 오더플로우 청산 주도권 저격 헌법 (V7.24 / 기획서 314)]
+                    # --------------------------------------------------------------------------
+                    direction = None
+                    if display_liq >= target_liq and abs(display_oi) >= target_oi:
+                        if short_liq_val >= long_liq_val:
+                            direction = "LONG"
+                        else:
+                            direction = "SHORT"
                         
                     # v1.1 성능 격상: CVD 델타 산출 및 1분 큐 업데이트
                     cvd_delta = self.agg_buy_vol - self.agg_sell_vol
@@ -1171,6 +1317,8 @@ class BotCore:
                             'long_liq_usd': long_liq,
                             'short_liq_usd': short_liq,
                             'oi_delta_1m': display_oi,
+                            'price_delta_5s': price_delta_5s,
+                            'price_delta_10s': price_delta_10s,
                             'price_delta_1m': price_delta_1m,
                             'price_slope_1m': price_slope_1m,
                             'mid_price': self.current_price,
@@ -1285,24 +1433,26 @@ class BotCore:
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
 
-                    # [V6.60]: 실시간 오더플로우 시장 기세(Flow Bias) 4대 나침반 연산
-                    if oi_delta_1m < 0:
-                        flow_bias = "DELEVERAGING"   # -OI 포지션 정리/관망
-                    elif price_slope_1m > 0 and short_liq >= long_liq:
-                        flow_bias = "BULLISH"        # 롱(LONG) 우세 ↗
-                    elif price_slope_1m < 0 and long_liq >= short_liq:
-                        flow_bias = "BEARISH"        # 숏(SHORT) 우세 ↘
-                    elif price_slope_1m > 0 and long_liq > short_liq:
-                        flow_bias = "LONG_OVERLOAD"  # 롱 청산 과열 (상승 중 롱 털림 ➔ 숏 반전 주시)
-                    elif price_slope_1m < 0 and short_liq > long_liq:
-                        flow_bias = "SHORT_OVERLOAD" # 숏 청산 과열 (하락 중 숏 털림 ➔ 롱 반전 주시)
+                    # [V6.87 / 기획서 309 / 백서 20260824]: 4대 완성형 저격 매트릭스 기반 '롱 유리 / 숏 유리 / 관망' 연산 (0.04% 동적 불감대 적용)
+                    if direction in ["LONG", "SHORT"]:
+                        flow_bias = "LONG_FAVORED" if direction == "LONG" else "SHORT_FAVORED"
+                    elif oi_delta_1m > 0 and price_delta_5s >= dynamic_deadband_5s and price_slope_1m >= 0.0:
+                        flow_bias = "LONG_FAVORED"
+                    elif oi_delta_1m > 0 and price_delta_5s <= -dynamic_deadband_5s and price_slope_1m <= 0.0:
+                        flow_bias = "SHORT_FAVORED"
+                    elif oi_delta_1m < 0 and price_delta_5s >= dynamic_deadband_5s:
+                        flow_bias = "LONG_FAVORED"
+                    elif oi_delta_1m < 0 and price_delta_5s <= -dynamic_deadband_5s:
+                        flow_bias = "SHORT_FAVORED"
                     else:
-                        flow_bias = "NEUTRAL"
+                        flow_bias = "NEUTRAL_CHOP"
 
-                    if display_liq >= target_liq and display_oi > 0 and display_oi >= target_oi and direction in ["LONG", "SHORT"]:
+                    if self.v35_engine and self.v35_engine.is_position_active:
+                        # 포지션 보유 중
+                        is_safe = (direction_active == "LONG" and price_delta_5s >= 0) or (direction_active == "SHORT" and price_delta_5s <= 0)
+                        hint_val = f"HOLD_{direction_active}_{'SAFE' if is_safe else 'WARN'}"
+                    elif direction in ["LONG", "SHORT"]:
                         hint_val = f"SNIPE_{direction}"
-                    elif self.v35_engine and self.v35_engine.is_position_active:
-                        hint_val = f"HOLD_{direction_active}_{flow_bias}"
                     else:
                         hint_val = f"BIAS_{flow_bias}"
 
@@ -1575,8 +1725,14 @@ class BotCore:
     async def sync_bitget_real_position_status(self):
         try:
             if getattr(self, "bitget_exchange", None) and getattr(self, "v35_engine", None):
-                positions = await self.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
-                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
+                positions = await self.bitget_exchange.fetch_positions()
+                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0 and 'BTC' in (p.get('symbol', '') or '')), None)
+                
+                # 🚨 [신선 국고 비상방패 V7.30]: 비트코인 외 비인가 타 종목 즉시 청산 트리거
+                non_btc_pos = [p for p in positions if float(p.get('contracts', 0) or 0) > 0 and 'BTC' not in (p.get('symbol', '') or '')]
+                for nb_pos in non_btc_pos:
+                    asyncio.create_task(run_non_btc_emergency_sentinel(self))
+                    
                 if not active_pos:
                     if self.v35_engine.is_position_active:
                         logger.info("⚡ [실시간 강제 동기화 v4.82] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
@@ -1584,13 +1740,22 @@ class BotCore:
                         self.v35_engine.position_volume = 0
                         self.v35_engine.entry_price = 0.0
                         self.v35_engine.entry_direction = ""
+                        self.v35_engine.last_guarded_pos = {}
                         asyncio.create_task(self.v35_engine.cancel_all_open_plan_orders())
                 else:
                     was_inactive = not self.v35_engine.is_position_active
                     self.v35_engine.is_position_active = True
-                    self.v35_engine.entry_direction = active_pos['side'].upper()
+                    side_val = active_pos['side'].upper()
+                    self.v35_engine.entry_direction = side_val
                     e_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
                     v_contracts = float(active_pos.get('contracts', 0.0) or 0.0)
+                    
+                    # [V7.34 수량/평단 변경 감지]
+                    last_g = getattr(self.v35_engine, "last_guarded_pos", {})
+                    prev_contracts = float(last_g.get("contracts", 0.0) or 0.0)
+                    prev_price = float(last_g.get("entry_price", 0.0) or 0.0)
+                    is_pos_changed = was_inactive or abs(prev_contracts - v_contracts) > 0.00001 or abs(prev_price - e_price) > 0.1
+                    
                     if e_price > 0.0:
                         self.v35_engine.entry_price = e_price
                         self.v35_engine.active_position_entry_price = e_price
@@ -1598,10 +1763,15 @@ class BotCore:
                         self.v35_engine.position_volume = v_contracts
                         self.v35_engine.position_volume_btc = v_contracts
                         
-                    # [V6.19 폐하의 어명]: 모바일 앱/웹 수동 포지션 감지 시 자동 케어 듀얼 TP/SL 선주문 박기!
-                    if was_inactive and e_price > 0.0 and v_contracts > 0.0:
-                        logger.info(f"📱 [수동 진입 자동 케어 v6.19] 비트겟 수동 포지션 감지! ({active_pos['side'].upper()} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ TP/SL 선주문 자동 전송")
-                        asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, active_pos['side'].upper(), v_contracts))
+                    # [V6.19/V7.34 폐하의 어명]: 신규 포지션 또는 수량/평단 변경 감지 시 자동 3대 TP/SL 선주문 재배치!
+                    if is_pos_changed and e_price > 0.0 and v_contracts > 0.0:
+                        self.v35_engine.last_guarded_pos = {
+                            "entry_price": e_price,
+                            "contracts": v_contracts,
+                            "side": side_val
+                        }
+                        logger.info(f"📱 [포지션 변동 감지 v7.34] 비트겟 포지션 변동 감지! ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 선주문 자동 재배치")
+                        asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
         except Exception as e:
             pass
 
@@ -1831,23 +2001,86 @@ class ShinseonV35Engine:
         curr_val = getattr(getattr(self, "bot", None), "current_price", 0.0) or getattr(self, "current_price", 0.0)
         return float(curr_val) if curr_val > 0.0 else 65000.0
 
+    def get_bitget_api_credentials(self):
+        """비트겟 API 인증 키 3단 폴백 안전 로드"""
+        env_vars = getattr(getattr(self, "bot", None), "env_vars", {}) or {}
+        api_key = env_vars.get("BITGET_API_KEY")
+        secret_key = env_vars.get("BITGET_SECRET_KEY")
+        passphrase = env_vars.get("BITGET_PASSPHRASE")
+        
+        if not (api_key and secret_key and passphrase):
+            cfg = load_server_config()
+            api_key = cfg.get("BITGET_API_KEY")
+            secret_key = cfg.get("BITGET_SECRET_KEY")
+            passphrase = cfg.get("BITGET_PASSPHRASE")
+            
+        if not (api_key and secret_key and passphrase):
+            ex = getattr(getattr(self, "bot", None), "bitget_exchange", None) or getattr(self, "bitget_exchange", None)
+            if ex:
+                api_key = getattr(ex, "apiKey", "")
+                secret_key = getattr(ex, "secret", "")
+                passphrase = getattr(ex, "password", "")
+                
+        return api_key or "", secret_key or "", passphrase or ""
+
     async def cancel_all_open_plan_orders(self):
-        """비트겟 거래소 내 미체결 스탑/익절 예약 플랜 주문 100% 전량 캔슬 정화"""
+        """비트겟 거래소 내 미체결 스탑/익절 예약 플랜 주문 100% 전량 V2 REST API 캔슬 정화"""
         try:
-            ex_obj = getattr(self.bot, "bitget_exchange", None)
-            if ex_obj:
-                open_orders = await ex_obj.fetch_open_orders('BTC/USDT:USDT')
-                for o in open_orders:
-                    await ex_obj.cancel_order(o['id'], 'BTC/USDT:USDT')
-                logger.info("🧹 [서버사이드 정화 완료] 미체결 TP/SL 플랜 주문 100% 전량 취소 완료")
+            api_key, secret_key, passphrase = self.get_bitget_api_credentials()
+            if not (api_key and secret_key and passphrase):
+                return
+                
+            url_base = "https://api.bitget.com"
+            path_pending = "/api/v2/mix/order/orders-plan-pending?symbol=BTCUSDT&productType=USDT-FUTURES&planType=profit_loss"
+            ts = str(int(time.time() * 1000))
+            msg = ts + "GET" + path_pending
+            mac = hmac.new(secret_key.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256)
+            sign = base64.b64encode(mac.digest()).decode('utf-8')
+            headers = {
+                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign, 'ACCESS-TIMESTAMP': ts,
+                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url_base + path_pending, headers=headers) as resp:
+                    res = await resp.json()
+                    entrusted = (res.get("data") or {}).get("entrustedList") or []
+                    
+                if entrusted:
+                    path_cancel = "/api/v2/mix/order/cancel-plan-order"
+                    for o in entrusted:
+                        oid = o.get("orderId")
+                        if not oid:
+                            continue
+                        plan_type_val = o.get("planType") or "profit_plan"
+                        body_dict = {
+                            "symbol": "BTCUSDT",
+                            "productType": "USDT-FUTURES",
+                            "marginCoin": "USDT",
+                            "orderId": str(oid),
+                            "planType": plan_type_val
+                        }
+                        body_json = json.dumps(body_dict)
+                        ts_c = str(int(time.time() * 1000))
+                        msg_c = ts_c + "POST" + path_cancel + body_json
+                        mac_c = hmac.new(secret_key.encode('utf-8'), msg_c.encode('utf-8'), hashlib.sha256)
+                        sign_c = base64.b64encode(mac_c.digest()).decode('utf-8')
+                        headers_c = {
+                            'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_c, 'ACCESS-TIMESTAMP': ts_c,
+                            'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                        }
+                        async with session.post(url_base + path_cancel, headers=headers_c, data=body_json) as resp_c:
+                            res_c = await resp_c.json()
+                            logger.info(f"🧹 [플랜주문 캔슬] orderId={oid} 취소 응답: {res_c.get('msg')}")
+                    logger.info(f"🧹 [서버사이드 정화 완료] 총 {len(entrusted)}개의 미체결 TP/SL 플랜 주문 100% 전량 취소 완료")
         except Exception as e:
             logger.error(f"비트겟 미체결 플랜 주문 정화 예외: {e}")
 
     async def place_bitget_tpsl_plan_orders(self, entry_price, direction, qty_btc, is_smart_guard=False):
         """
-        [V6.18 비트겟 거래소 서버사이드 듀얼 TP/SL 선주문 박기]
-        - 진입 즉시 TP (익절가) 및 SL (손절가 / 스마트 본전가드) 비트겟 거래소 플랜 주문 선제 배치
-        - 100% UI 대시보드 설정값 연동
+        [V6.18/V7.34 비트겟 거래소 서버사이드 3대 TP/SL 선주문 박기]
+        - 진입 즉시 1차 TP (50% 익절) / 2차 TP (50% 최종익절) / SL (100% 손절 방패) 비트겟 거래소 플랜 주문 선제 배치
+        - 기존 잔여 플랜 주문 100% 자동 선제 청소 후 신규 수량/평단 기준 정격 발주
         """
         try:
             if not direction or direction not in ["LONG", "SHORT"] or entry_price <= 0.0 or qty_btc <= 0.0:
@@ -1856,6 +2089,14 @@ class ShinseonV35Engine:
             dashboard = getattr(self.bot, "dashboard", None) or self.bot
             if not dashboard:
                 return
+                
+            api_key, secret_key, passphrase = self.get_bitget_api_credentials()
+            if not (api_key and secret_key and passphrase):
+                logger.warning("⚠️ [TP/SL 선주문 기각] 비트겟 API 키 인증 정보가 없습니다.")
+                return
+
+            # [수량/평단 변경 시 기존 구형 플랜 선제 100% 취소 청소]
+            await self.cancel_all_open_plan_orders()
                 
             # 1. UI 대시보드 및 세션별 실시간 설정값 정밀 동적 판정 (V6.40 8대 세션 100% 정합)
             now_dt = get_kst_now()
@@ -1879,9 +2120,12 @@ class ShinseonV35Engine:
             guardrails_dict = getattr(self, "session_guardrails", None) or getattr(dashboard, "session_guardrails", {}) or getattr(self.bot, "session_guardrails", {})
             s_guard = guardrails_dict.get(s_key, {"trigger": 0.4, "trigger_2": 0.6, "guard": 0.1, "enabled": True}) if isinstance(guardrails_dict, dict) else {}
             
-            # 1차 익절 TP PnL %
-            tp_val = float(s_guard.get("trigger", 0.40))
-            tp_pct = abs(tp_val) / 100.0
+            # 1차 및 2차 익절 TP PnL % (UI 가드레일 설정 1:1 연동)
+            tp1_val = float(s_guard.get("trigger", 0.40))
+            tp1_pct = abs(tp1_val) / 100.0
+            
+            tp2_val = float(s_guard.get("trigger_2", 0.60))
+            tp2_pct = abs(tp2_val) / 100.0
             
             # 본전/버퍼가드 PnL %
             entry_sl_guard = float(s_guard.get("guard", 0.10)) / 100.0
@@ -1892,44 +2136,51 @@ class ShinseonV35Engine:
             sl_val = float(s_thresh.get("sl", getattr(self, "current_session_sl", -1.0)))
             initial_sl_pct = abs(sl_val) / 100.0
             
-            # 2. 목표가 연산
+            # 2. 목표가 연산 (1차 TP, 2차 TP, SL)
             if direction == "LONG":
-                tp_price = entry_price * (1.0 + tp_pct)
+                tp1_price = entry_price * (1.0 + tp1_pct)
+                tp2_price = entry_price * (1.0 + tp2_pct)
                 if is_smart_guard or getattr(self, "has_smart_guarded", False):
                     sl_price = entry_price * (1.0 + entry_sl_guard)
                 else:
                     sl_price = entry_price * (1.0 - initial_sl_pct)
             else:
-                tp_price = entry_price * (1.0 - tp_pct)
+                tp1_price = entry_price * (1.0 - tp1_pct)
+                tp2_price = entry_price * (1.0 - tp2_pct)
                 if is_smart_guard or getattr(self, "has_smart_guarded", False):
                     sl_price = entry_price * (1.0 - entry_sl_guard)
                 else:
                     sl_price = entry_price * (1.0 + initial_sl_pct)
                     
-            # 3. 비트겟 REST API로 TP & SL 미체결 플랜 주문 전송
-            env_vars = getattr(self.bot, "env_vars", {}) or load_server_config()
-            api_key = env_vars.get("BITGET_API_KEY", "")
-            secret_key = env_vars.get("BITGET_SECRET_KEY", "")
-            passphrase = env_vars.get("BITGET_PASSPHRASE", "")
-            if not (api_key and secret_key and passphrase):
-                return
-                
-            # 1차 분할익절 수량 비율 연산 (50% 등 v6.40)
+            # 1차 및 2차 분할익절 수량 비율 연산 (기본 50% / 50%)
             ratio_1 = float(getattr(self.bot, "half_exit_close_ratio", getattr(dashboard, "half_exit_close_ratio", 50.0))) / 100.0
-            tp_size_btc = max(0.0001, round(qty_btc * ratio_1, 4))
+            ratio_2 = float(getattr(self.bot, "final_exit_close_ratio", getattr(dashboard, "final_exit_close_ratio", 50.0))) / 100.0
+            tp1_size_btc = max(0.0001, round(qty_btc * ratio_1, 4))
+            tp2_size_btc = max(0.0001, round(qty_btc * ratio_2, 4))
             
             url_base = "https://api.bitget.com"
             path_plan = "/api/v2/mix/order/place-tpsl-order"
             hold_side = "long" if direction == "LONG" else "short"
             
-            tp_body = {
+            tp1_body = {
                 "symbol": "BTCUSDT",
                 "productType": "USDT-FUTURES",
                 "marginCoin": "USDT",
-                "planType": "pos_profit",
-                "triggerPrice": str(round(tp_price, 1)),
+                "planType": "profit_plan",
+                "triggerPrice": str(round(tp1_price, 1)),
                 "triggerType": "fill_price",
-                "size": str(tp_size_btc),
+                "size": str(tp1_size_btc),
+                "holdSide": hold_side
+            }
+            
+            tp2_body = {
+                "symbol": "BTCUSDT",
+                "productType": "USDT-FUTURES",
+                "marginCoin": "USDT",
+                "planType": "profit_plan",
+                "triggerPrice": str(round(tp2_price, 1)),
+                "triggerType": "fill_price",
+                "size": str(tp2_size_btc),
                 "holdSide": hold_side
             }
             
@@ -1944,7 +2195,7 @@ class ShinseonV35Engine:
             }
             
             async with aiohttp.ClientSession() as session:
-                for plan_name, b_dict in [("TP(익절)", tp_body), ("SL(손절)", sl_body)]:
+                for plan_name, b_dict in [("1차 TP(50% 익절)", tp1_body), ("2차 TP(50% 최종익절)", tp2_body), ("SL(손절 방패)", sl_body)]:
                     b_json = json.dumps(b_dict)
                     ts = str(int(time.time() * 1000))
                     msg = ts + "POST" + path_plan + b_json
@@ -1960,6 +2211,10 @@ class ShinseonV35Engine:
                             logger.info(f"📌 [서버사이드 {plan_name} 선주문 성공] 목표가: ${b_dict['triggerPrice']} (수량: {qty_btc} BTC)")
                         else:
                             logger.warning(f"⚠️ [서버사이드 {plan_name} 선주문 응답]: {res.get('msg')} (코드: {res.get('code')})")
+            
+            log_msg = f"🛡️ [3대 안전가드 선주문 완비] {direction} {qty_btc} BTC @ ${entry_price:,.1f} ➡️ 1차TP(${tp1_price:,.1f}), 2차TP(${tp2_price:,.1f}), SL(${sl_price:,.1f})"
+            if hasattr(self.bot, "broadcast_event"):
+                asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
         except Exception as err:
             logger.error(f"비트겟 서버사이드 TP/SL 선주문 예외: {err}")
 
@@ -2543,8 +2798,29 @@ class ShinseonV35Engine:
         session_val = binance_ws_frame.get('session', 'MAIN')
         bot_state_val = binance_ws_frame.get('bot_state', 'RUNNING')
         
-        # [상시 1초 초고밀도 딥다이브 로깅 모드]
-        # 폐하의 어명에 따라 듀얼 임계치 50% 조건을 폐지하고 무조건 1초 간격으로 상시 기록합니다.
+        # --------------------------------------------------------------------------
+        # 🎯 [신선 실전 오더플로우 청산 주도권 저격 헌법 (V7.24 / 기획서 314)]
+        # --------------------------------------------------------------------------
+        price_delta_5s = binance_ws_frame.get('price_delta_5s', 0.0)
+        price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
+        price_slope_1m = binance_ws_frame.get('price_slope_1m', 0.0)
+        direction = None
+        strategy_name = ""
+        
+        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND |OI속도| >= target_oi)
+        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
+            if short_liq_usd >= long_liq_usd:
+                direction = "LONG"
+                strategy_name = "🟢 롱 저격 (숏 청산 압도 / Market Buy Squeeze)"
+            else:
+                direction = "SHORT"
+                strategy_name = "🔴 숏 저격 (롱 청산 압도 / Market Sell Dump)"
+        else:
+            direction = None  # 임계치 미달 시 100% NONE 기각!
+
+        # --------------------------------------------------------------------------
+        # [상시 1초 초고밀도 딥다이브 로깅 모드] (4대 헌법 100% 실시간 직송 동기화)
+        # --------------------------------------------------------------------------
         current_time = time.time()
         current_second = int(current_time)
         
@@ -2560,15 +2836,8 @@ class ShinseonV35Engine:
             first_write = (self.last_record_time == 0.0)
             self.last_record_date = date_str
             try:
-                # [타점 시그널 (signal) 일원화: binance_ws_frame 단일 깃발 100% 직송 동기화]
-                if (rolling_1m_liq_usd >= target_liq) and (oi_delta_1m > 0 and oi_delta_1m >= target_oi):
-                    raw_sig = binance_ws_frame.get('direction', 'NONE')
-                    if raw_sig in ["LONG", "SHORT"]:
-                        signal_val = raw_sig
-                    else:
-                        signal_val = "NONE"
-                else:
-                    signal_val = "NONE"
+                # [타점 시그널 100% 직송 동기화: 4대 헌법 direction 직접 기록]
+                signal_val = direction if direction in ["LONG", "SHORT"] else "NONE"
 
                 csv_filename = f"orderflow_history_{date_str}.csv"
                 if first_write and getattr(self.bot, "dashboard", None):
@@ -2577,16 +2846,16 @@ class ShinseonV35Engine:
                 raw_time_str = get_kst_now().strftime("%Y-%m-%d %H:%M:%S")
                 time_str = f"=\"{raw_time_str}\""
                 
-                # 12대 영문 표준 칼럼: Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State
+                # 13대 영문 표준 칼럼: Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),5s_Price_Delta($),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State
                 clean_state = str(bot_state_val).replace(',', ' ')
                 price_delta_val = binance_ws_frame.get('price_delta_1m', 0.0)
                 price_slope_val = binance_ws_frame.get('price_slope_1m', 0.0)
-                line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{price_delta_val:+.1f},{price_slope_val:+.4f},{signal_val},{clean_state}\n"
+                line_content = f"{time_str},{safe_int(binance_mid)},{safe_int(rolling_1m_liq_usd)},{safe_int(long_liq_usd)},{safe_int(short_liq_usd)},{safe_int(target_liq)},{oi_delta_1m:+.4f},{target_oi:.4f},{price_delta_5s:+.1f},{price_delta_val:+.1f},{price_slope_val:+.4f},{signal_val},{clean_state}\n"
                 
                 def _write_csv(path, content):
                     try:
                         os.makedirs(os.path.dirname(path), exist_ok=True)
-                        header_line = "Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State\n"
+                        header_line = "Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),5s_Price_Delta($),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State\n"
                         
                         file_exists = os.path.exists(path) and os.path.getsize(path) > 0
                         if not file_exists:
@@ -2609,23 +2878,27 @@ class ShinseonV35Engine:
                     self.bot.dashboard.add_log(f"❌ [CSV 레코더 쓰기 에러] {e}")
 
         # --------------------------------------------------------------------------
-        # 🎯 [V6.25] SHINSEON 순수 +OI 세력 자금 유입 전용 판정 엔진 (Case A, B 영구 폐지)
+        # 📱 [폐하의 어명 기획서 303]: 매수/매도 저격 신호 포착 시 즉각 텔레그램 메시지 발송 (30초 디바운싱)
         # --------------------------------------------------------------------------
-        price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
-        price_slope_1m = binance_ws_frame.get('price_slope_1m', 0.0)
-        direction = None
-        
-        # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND OI속도 양수(+) >= target_oi)
-        if rolling_1m_liq_usd >= target_liq and oi_delta_1m > 0 and oi_delta_1m >= target_oi:
-            # [V6.25]: 2대 정통 순추세 돌파 저격 헌법 (Case C 롱 & Case D 숏)
-            if price_slope_1m > 0 and short_liq_usd >= long_liq_usd:
-                direction = "LONG"    # Case C: 📈 EMA상승 + OI증가 + 숏청산돌파 ➡️ 상승 추세 LONG 탑승!
-            elif price_slope_1m < 0 and long_liq_usd >= short_liq_usd:
-                direction = "SHORT"   # Case D: 📉 EMA하락 + OI증가 + 롱청산돌파 ➡️ 하강 추세 SHORT 탑승!
-            else:
-                direction = None      # 휩쏘/불일치 시 100% NONE 기각!
-        else:
-            direction = None  # 임계치 미달 또는 -OI(음수) 시 100% NONE 기각!
+        if direction in ["LONG", "SHORT"]:
+            now_t_tg = time.time()
+            if now_t_tg - getattr(self, "last_telegram_radar_signal_time", 0.0) >= 30.0:
+                self.last_telegram_radar_signal_time = now_t_tg
+                bot_stat_str = "진입 집행 중" if (not self.is_position_active and getattr(self, "bot_state", "RUNNING") == "RUNNING") else ("포지션 보유 중" if self.is_position_active else "관망/대기 중")
+                sig_icon = "🟢 LONG" if direction == "LONG" else "🔴 SHORT"
+                tg_sig_msg = (
+                    f"⚡ <b>[SHINSEON 오더플로우 저격 신호 포착]</b> {sig_icon}\n\n"
+                    f"🎯 <b>포착 전략:</b> {strategy_name}\n"
+                    f"⏰ <b>발생 시간:</b> {get_kst_now_str()} (KST)\n"
+                    f"💰 <b>바이낸스 시세:</b> ${binance_mid:,.1f} USDT\n\n"
+                    f"<b>[📊 실시간 세력 오더플로우 팩트]</b>\n"
+                    f"• 1분 누적 청산: <b>${rolling_1m_liq_usd:,.0f}</b> (기준: ${target_liq:,.0f})\n"
+                    f"• 1분 OI 속도: <b>{oi_delta_1m:+.4f}%</b> (기준: {target_oi:+.4f}%)\n"
+                    f"• 5초 가격 변동: <b>${price_delta_5s:+,.1f}</b>\n"
+                    f"• 1분 추세 기울기: <b>{price_slope_1m:+,.2f}</b>\n\n"
+                    f"🤖 <b>봇 상태:</b> {bot_stat_str}"
+                )
+                asyncio.create_task(send_telegram_notification_server(tg_sig_msg))
 
         # --------------------------------------------------------------------------
         # 🚨 [2단계]: 실전 집행 및 포지션 보유 중 반대 청산 감시 (60초 안전 락다운 포함)
@@ -2736,7 +3009,7 @@ class ShinseonV35Engine:
             return
 
         # 1단계: 동적 레이더 임계치 검증 (순수 +OI 세력 자금 유입 전용 v6.25)
-        if rolling_1m_liq_usd >= target_liq and oi_delta_1m > 0 and oi_delta_1m >= target_oi:
+        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
             now_t_chk = time.time()
             
             # [포지션 보유 중 스위칭 / 추가매수 / 불타기 검증 엔진 (SHINSEON 원본 규격)]
@@ -3618,6 +3891,8 @@ class WsServer:
                     if self.bot_core.v35_engine:
                         v35 = self.bot_core.v35_engine
                         prev_entry = float(getattr(v35, "entry_price", 0.0) or 0.0)
+                        was_inactive = not v35.is_position_active
+                        
                         # [V5.75 완치] 신규 포지션이거나 평단가가 달라지면 구형 분할익절 플래그 100% 리셋
                         if not v35.is_position_active or abs(prev_entry - entry_price) > 0.1:
                             v35.is_half_exited = False
@@ -3638,6 +3913,20 @@ class WsServer:
                         v35.bitget_roe_pct = float(active_pos.get('percentage', 0.0) or 0.0)
                         v35.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
                         v35.bitget_mark_price = float(active_pos.get('markPrice', 0.0) or 0.0)
+                        
+                        # [V7.34 수량/평단 변경 감지 시 3대 안전가드 자동 재배치]
+                        last_g = getattr(v35, "last_guarded_pos", {})
+                        prev_g_contracts = float(last_g.get("contracts", 0.0) or 0.0)
+                        prev_g_price = float(last_g.get("entry_price", 0.0) or 0.0)
+                        is_pos_changed = was_inactive or abs(prev_g_contracts - contracts) > 0.00001 or abs(prev_g_price - entry_price) > 0.1
+                        if is_pos_changed and entry_price > 0.0 and contracts > 0.0:
+                            v35.last_guarded_pos = {
+                                "entry_price": entry_price,
+                                "contracts": contracts,
+                                "side": side
+                            }
+                            logger.info(f"📱 [포지션 변동 감지 v7.34] 클라이언트 동기화 중 포지션 변동 포착! ({side} {contracts} BTC @ ${entry_price:,.1f}) ➡️ 3대 TP/SL 자동 재배치")
+                            asyncio.create_task(v35.place_bitget_tpsl_plan_orders(entry_price, side, contracts))
                         
                     bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
                     payload = {
@@ -3661,6 +3950,8 @@ class WsServer:
                         v35.has_smart_guarded = False
                         v35.is_manual_half_exited = False
                         v35.awaiting_pullback_pyramid = False
+                        v35.last_guarded_pos = {}
+                        asyncio.create_task(v35.cancel_all_open_plan_orders())
                     bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
                     await self.broadcast_event('EVT_SYNC_POSITION', {'has_position': False, 'bot_state': bot_state_val})
                     logger.info(f"📤 [CMD_SYNC_POSITION] EVT_SYNC_POSITION 송신 완료: (has_position=False, bot_state={bot_state_val})")
@@ -3677,18 +3968,42 @@ class WsServer:
             if getattr(self, "bitget_exchange", None) and self.bot_core and getattr(self.bot_core, "v35_engine", None):
                 positions = await self.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
                 active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
+                v35 = self.bot_core.v35_engine
                 if not active_pos:
-                    if self.bot_core.v35_engine.is_position_active:
+                    if v35.is_position_active:
                         logger.info("⚡ [실시간 강제 동기화 v4.80] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
-                        self.bot_core.v35_engine.is_position_active = False
-                        self.bot_core.v35_engine.position_volume = 0
-                        self.bot_core.v35_engine.entry_price = 0.0
-                        self.bot_core.v35_engine.entry_direction = ""
+                        v35.is_position_active = False
+                        v35.position_volume = 0
+                        v35.entry_price = 0.0
+                        v35.entry_direction = ""
+                        v35.last_guarded_pos = {}
+                        asyncio.create_task(v35.cancel_all_open_plan_orders())
                 else:
-                    self.bot_core.v35_engine.is_position_active = True
-                    self.bot_core.v35_engine.entry_direction = active_pos['side'].upper()
-                    self.bot_core.v35_engine.entry_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
-                    self.bot_core.v35_engine.position_volume = float(active_pos.get('contracts', 0.0) or 0.0)
+                    was_inactive = not v35.is_position_active
+                    v35.is_position_active = True
+                    side_val = active_pos['side'].upper()
+                    v35.entry_direction = side_val
+                    e_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
+                    v_contracts = float(active_pos.get('contracts', 0.0) or 0.0)
+                    
+                    if e_price > 0.0:
+                        v35.entry_price = e_price
+                    if v_contracts > 0.0:
+                        v35.position_volume = v_contracts
+                        v35.position_volume_btc = v_contracts
+                        
+                    last_g = getattr(v35, "last_guarded_pos", {})
+                    prev_g_contracts = float(last_g.get("contracts", 0.0) or 0.0)
+                    prev_g_price = float(last_g.get("entry_price", 0.0) or 0.0)
+                    is_pos_changed = was_inactive or abs(prev_g_contracts - v_contracts) > 0.00001 or abs(prev_g_price - e_price) > 0.1
+                    if is_pos_changed and e_price > 0.0 and v_contracts > 0.0:
+                        v35.last_guarded_pos = {
+                            "entry_price": e_price,
+                            "contracts": v_contracts,
+                            "side": side_val
+                        }
+                        logger.info(f"📱 [포지션 변동 감지 v7.34] WsServer 포지션 변동 감지! ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 자동 재배치")
+                        asyncio.create_task(v35.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
         except Exception as e:
             pass
 

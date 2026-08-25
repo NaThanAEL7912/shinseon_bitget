@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V6.61",
+    "CURRENT_VERSION": "V7.34",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -7,20 +7,20 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 250000.0,
-            "oi": 0.05,
+            "liq": 600000.0,
+            "oi": 0.17,
             "sl": -0.6,
             "enabled": true
         },
         "europe": {
-            "liq": 600000.0,
-            "oi": 0.18,
+            "liq": 1000000.0,
+            "oi": 0.28,
             "sl": -0.8,
             "enabled": true
         },
         "us": {
-            "liq": 650000.0,
-            "oi": 0.18,
+            "liq": 1400000.0,
+            "oi": 0.28,
             "sl": -1.3,
             "enabled": true
         },
@@ -174,25 +174,25 @@
     "entry_sl_guard_pct": 0.0,
     "session_guardrails": {
         "ASIA": {
-            "trigger": 0.8,
-            "trigger_2": 1.2,
+            "trigger": 1.5,
+            "trigger_2": 2.0,
             "guard": 0.5,
             "enabled": true
         },
         "LONDON": {
-            "trigger": 1.0,
-            "trigger_2": 1.2,
+            "trigger": 1.5,
+            "trigger_2": 2.0,
             "guard": 0.5,
             "enabled": true
         },
         "NY": {
-            "trigger": 1.2,
-            "trigger_2": 1.5,
+            "trigger": 1.5,
+            "trigger_2": 2.0,
             "guard": 1.0,
             "enabled": true
         },
         "PACIFIC": {
-            "trigger": 0.4,
+            "trigger": 1.5,
             "trigger_2": 0.6,
             "guard": 0.2,
             "enabled": true
