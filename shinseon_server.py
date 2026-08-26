@@ -1038,6 +1038,18 @@ class BotCore:
         self.v35_engine.DEPLOY_MARGIN = self.c_total * 0.50
         self.v35_engine.POSITION_SIZE = self.v35_engine.DEPLOY_MARGIN * 20.0
         
+        # 🚨 [V7.40 최우선 철칙]: 3초 비트겟 거래소 포지션 감시 및 TP/SL 안전가드 자동 발주 0순위 독립 데몬 가동!
+        async def run_position_guard_daemon():
+            logger.info("🛡️ [포지션 가드 데몬] 3초 비트겟 실시간 포지션 및 3대 안전가드 독립 감시자 가동 완료")
+            while self.is_running:
+                try:
+                    await self.sync_bitget_real_position_status()
+                except Exception as guard_err:
+                    logger.error(f"포지션 가드 데몬 루프 예외: {guard_err}")
+                await asyncio.sleep(3.0)
+                
+        self.position_guard_task = asyncio.create_task(run_position_guard_daemon())
+        
         ui_callback(0.0, 0, "★ [雷達] 바이낸스 실시간 시세 웹소켓(WSS) 연결 수립 중...")
         
         spot_exchange = ccxt.binance({
@@ -1090,12 +1102,6 @@ class BotCore:
             while self.is_running:
                 try:
                     await asyncio.sleep(0.1)
-                    
-                    # [V7.37 최우선 철칙]: 3초마다 비트겟 거래소 실제 포지션 강제 동기화 (UI 오류와 완전 격리되어 무조건 1순위 독자 가동)
-                    now_t_sync = time.time()
-                    if now_t_sync - getattr(self, "last_bitget_pos_sync_time", 0.0) >= 3.0:
-                        self.last_bitget_pos_sync_time = now_t_sync
-                        asyncio.create_task(self.sync_bitget_real_position_status())
 
                     # 0. KST 시스템 시간 기반 동적 임계치 실시간 계산 및 수동 오버라이드
                     from datetime import datetime, timezone, timedelta

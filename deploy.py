@@ -88,9 +88,7 @@ def deploy_to_aws_server():
         
         print(" 🔄 AWS 기존 서버 프로세스 안전 종료 및 최신 데몬 재기동...")
         restart_cmd = """
-pkill -f shinseon_server.py
-sleep 1
-nohup /home/ubuntu/botenv/bin/python -u /home/ubuntu/shinseon_server.py > /home/ubuntu/shinseon_stdout.log 2>&1 < /dev/null &
+sudo systemctl restart shinseon.service 2>/dev/null || (pkill -f shinseon_server.py; sleep 1; nohup /home/ubuntu/botenv/bin/python -u /home/ubuntu/shinseon_server.py > /home/ubuntu/shinseon_stdout.log 2>&1 < /dev/null &)
 sleep 2
 ps aux | grep shinseon_server.py | grep -v grep
 """
