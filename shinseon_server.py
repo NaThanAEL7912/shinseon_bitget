@@ -3942,20 +3942,6 @@ class WsServer:
                         v35.bitget_unrealized_pnl = float(active_pos.get('unrealizedPnl', 0.0) or 0.0)
                         v35.bitget_mark_price = float(active_pos.get('markPrice', 0.0) or 0.0)
                         
-                        # [V7.34 수량/평단 변경 감지 시 3대 안전가드 자동 재배치]
-                        last_g = getattr(v35, "last_guarded_pos", {})
-                        prev_g_contracts = float(last_g.get("contracts", 0.0) or 0.0)
-                        prev_g_price = float(last_g.get("entry_price", 0.0) or 0.0)
-                        is_pos_changed = was_inactive or abs(prev_g_contracts - contracts) > 0.00001 or abs(prev_g_price - entry_price) > 0.1
-                        if is_pos_changed and entry_price > 0.0 and contracts > 0.0:
-                            v35.last_guarded_pos = {
-                                "entry_price": entry_price,
-                                "contracts": contracts,
-                                "side": side
-                            }
-                            logger.info(f"📱 [포지션 변동 감지 v7.34] 클라이언트 동기화 중 포지션 변동 포착! ({side} {contracts} BTC @ ${entry_price:,.1f}) ➡️ 3대 TP/SL 자동 재배치")
-                            asyncio.create_task(v35.place_bitget_tpsl_plan_orders(entry_price, side, contracts))
-                        
                     bot_state_val = self.bot_core.v35_engine.bot_state if self.bot_core.v35_engine else "RUNNING"
                     payload = {
                         'has_position': True,
@@ -3993,46 +3979,8 @@ class WsServer:
 
     async def sync_bitget_real_position_status(self):
         try:
-            ex = getattr(self.bot_core, "bitget_exchange", None) or getattr(self, "bitget_exchange", None)
-            if ex and self.bot_core and getattr(self.bot_core, "v35_engine", None):
-                positions = await ex.fetch_positions(['BTC/USDT:USDT'])
-                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
-                v35 = self.bot_core.v35_engine
-                if not active_pos:
-                    if v35.is_position_active:
-                        logger.info("⚡ [실시간 강제 동기화 v4.80] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
-                        v35.is_position_active = False
-                        v35.position_volume = 0
-                        v35.entry_price = 0.0
-                        v35.entry_direction = ""
-                        v35.last_guarded_pos = {}
-                        asyncio.create_task(v35.cancel_all_open_plan_orders())
-                else:
-                    was_inactive = not v35.is_position_active
-                    v35.is_position_active = True
-                    side_val = active_pos['side'].upper()
-                    v35.entry_direction = side_val
-                    e_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
-                    v_contracts = float(active_pos.get('contracts', 0.0) or 0.0)
-                    
-                    if e_price > 0.0:
-                        v35.entry_price = e_price
-                    if v_contracts > 0.0:
-                        v35.position_volume = v_contracts
-                        v35.position_volume_btc = v_contracts
-                        
-                    last_g = getattr(v35, "last_guarded_pos", {})
-                    prev_g_contracts = float(last_g.get("contracts", 0.0) or 0.0)
-                    prev_g_price = float(last_g.get("entry_price", 0.0) or 0.0)
-                    is_pos_changed = was_inactive or abs(prev_g_contracts - v_contracts) > 0.00001 or abs(prev_g_price - e_price) > 0.1
-                    if is_pos_changed and e_price > 0.0 and v_contracts > 0.0:
-                        v35.last_guarded_pos = {
-                            "entry_price": e_price,
-                            "contracts": v_contracts,
-                            "side": side_val
-                        }
-                        logger.info(f"📱 [포지션 변동 감지 v7.34] WsServer 포지션 변동 감지! ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 자동 재배치")
-                        asyncio.create_task(v35.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
+            if self.bot_core:
+                await self.bot_core.sync_bitget_real_position_status()
         except Exception as e:
             pass
 
