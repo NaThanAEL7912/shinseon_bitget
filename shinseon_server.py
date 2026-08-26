@@ -1328,14 +1328,11 @@ class BotCore:
                         }
                         await self.v35_engine.check_radar_signal_dynamic(ws_frame, target_liq, target_oi)
                     
-                    # 3초마다 비트겟 거래소 실제 포지션 강제 동기화 (가짜 포지션 잠김 100% 박멸)
+                    # 3초마다 비트겟 거래소 실제 포지션 강제 동기화 (가짜 포지션 잠김 100% 박멸 및 수동 진입 3대 가드 즉시 발주)
                     now_t_sync = time.time()
                     if now_t_sync - getattr(self, "last_bitget_pos_sync_time", 0.0) >= 3.0:
                         self.last_bitget_pos_sync_time = now_t_sync
-                        if hasattr(self, "wss") and self.wss:
-                            asyncio.create_task(self.wss.sync_bitget_real_position_status())
-                        else:
-                            asyncio.create_task(self.sync_bitget_real_position_status())
+                        asyncio.create_task(self.sync_bitget_real_position_status())
                     
                     # 3. UI 갱신 송출 (동적 임계치 및 KST 세션 정보 탑재)
                     latency_show = float(getattr(self, "last_packet_latency_ms", 15.0))
@@ -3965,8 +3962,9 @@ class WsServer:
 
     async def sync_bitget_real_position_status(self):
         try:
-            if getattr(self, "bitget_exchange", None) and self.bot_core and getattr(self.bot_core, "v35_engine", None):
-                positions = await self.bitget_exchange.fetch_positions(['BTC/USDT:USDT'])
+            ex = getattr(self.bot_core, "bitget_exchange", None) or getattr(self, "bitget_exchange", None)
+            if ex and self.bot_core and getattr(self.bot_core, "v35_engine", None):
+                positions = await ex.fetch_positions(['BTC/USDT:USDT'])
                 active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0), None)
                 v35 = self.bot_core.v35_engine
                 if not active_pos:
