@@ -2196,7 +2196,7 @@ class ShinseonV35Engine:
                 "marginCoin": "USDT",
                 "planType": "profit_plan",
                 "triggerPrice": str(round(tp1_price, 1)),
-                "triggerType": "fill_price",
+                "triggerType": "mark_price",
                 "size": str(tp1_size_btc),
                 "holdSide": hold_side
             }
@@ -2207,7 +2207,7 @@ class ShinseonV35Engine:
                 "marginCoin": "USDT",
                 "planType": "profit_plan",
                 "triggerPrice": str(round(tp2_price, 1)),
-                "triggerType": "fill_price",
+                "triggerType": "mark_price",
                 "size": str(tp2_size_btc),
                 "holdSide": hold_side
             }
@@ -2218,7 +2218,7 @@ class ShinseonV35Engine:
                 "marginCoin": "USDT",
                 "planType": "pos_loss",
                 "triggerPrice": str(round(sl_price, 1)),
-                "triggerType": "fill_price",
+                "triggerType": "mark_price",
                 "holdSide": hold_side
             }
             
