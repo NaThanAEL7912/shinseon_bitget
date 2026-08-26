@@ -1091,13 +1091,20 @@ class BotCore:
                 try:
                     await asyncio.sleep(0.1)
                     
-                    # 0. KST 시스템 시간 기반 동적 임계치 실시간 계산 및 수동 오버라이드
+                    # [V7.37 최우선 철칙]: 3초마다 비트겟 거래소 실제 포지션 강제 동기화 (UI 오류와 완전 격리되어 무조건 1순위 독자 가동)
+                    now_t_sync = time.time()
+                    if now_t_sync - getattr(self, "last_bitget_pos_sync_time", 0.0) >= 3.0:
+                        self.last_bitget_pos_sync_time = now_t_sync
+                        asyncio.create_task(self.sync_bitget_real_position_status())
+
                     # 0. KST 시스템 시간 기반 동적 임계치 실시간 계산 및 수동 오버라이드
                     from datetime import datetime, timezone, timedelta
                     kst_tz = timezone(timedelta(hours=9))
                     kst_dt = datetime.now(timezone.utc).astimezone(kst_tz)
                     hour_val = kst_dt.hour
                     kst_time_str = kst_dt.strftime("%H:%M:%S")
+                    
+                    dynamic_deadband_5s = self.current_price * 0.0004 if self.current_price > 0 else 30.0
                     
                     dashboard = getattr(self, "dashboard", None)
                     # BotCore session_thresholds 및 dashboard 안전 참조
@@ -1328,11 +1335,7 @@ class BotCore:
                         }
                         await self.v35_engine.check_radar_signal_dynamic(ws_frame, target_liq, target_oi)
                     
-                    # 3초마다 비트겟 거래소 실제 포지션 강제 동기화 (가짜 포지션 잠김 100% 박멸 및 수동 진입 3대 가드 즉시 발주)
-                    now_t_sync = time.time()
-                    if now_t_sync - getattr(self, "last_bitget_pos_sync_time", 0.0) >= 3.0:
-                        self.last_bitget_pos_sync_time = now_t_sync
-                        asyncio.create_task(self.sync_bitget_real_position_status())
+
                     
                     # 3. UI 갱신 송출 (동적 임계치 및 KST 세션 정보 탑재)
                     latency_show = float(getattr(self, "last_packet_latency_ms", 15.0))
