@@ -90,8 +90,8 @@ def deploy_to_aws_server():
         restart_cmd = """
 pkill -f shinseon_server.py
 sleep 1
-nohup /home/ubuntu/botenv/bin/python -u /home/ubuntu/shinseon_server.py > /home/ubuntu/shinseon_stdout.log 2>&1 &
-sleep 1
+nohup /home/ubuntu/botenv/bin/python -u /home/ubuntu/shinseon_server.py > /home/ubuntu/shinseon_stdout.log 2>&1 < /dev/null &
+sleep 2
 ps aux | grep shinseon_server.py | grep -v grep
 """
         stdin, stdout, stderr = ssh.exec_command(restart_cmd)
