@@ -2100,6 +2100,7 @@ class ShinseonV35Engine:
                             res_c = await resp_c.json()
                             logger.info(f"🧹 [플랜주문 캔슬] orderId={oid} 취소 응답: {res_c.get('msg')}")
                     logger.info(f"🧹 [서버사이드 정화 완료] 총 {len(entrusted)}개의 미체결 TP/SL 플랜 주문 100% 전량 취소 완료")
+                    await asyncio.sleep(0.3)
         except Exception as e:
             logger.error(f"비트겟 미체결 플랜 주문 정화 예외: {e}")
 
