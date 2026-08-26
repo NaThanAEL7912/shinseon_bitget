@@ -1724,56 +1724,77 @@ class BotCore:
 
     async def sync_bitget_real_position_status(self):
         try:
-            if getattr(self, "bitget_exchange", None) and getattr(self, "v35_engine", None):
-                positions = await self.bitget_exchange.fetch_positions()
-                active_pos = next((p for p in positions if float(p.get('contracts', 0) or 0) > 0 and 'BTC' in (p.get('symbol', '') or '')), None)
+            if not getattr(self, "v35_engine", None):
+                return
+
+            api_key, secret_key, passphrase = self.v35_engine.get_bitget_api_credentials()
+            if not (api_key and secret_key and passphrase):
+                return
+
+            url_base = "https://api.bitget.com"
+            path_pos = "/api/v2/mix/position/all-position?productType=USDT-FUTURES&marginCoin=USDT"
+            ts = str(int(time.time() * 1000))
+            msg = ts + "GET" + path_pos
+            mac = hmac.new(secret_key.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256)
+            sign = base64.b64encode(mac.digest()).decode('utf-8')
+            headers = {
+                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign, 'ACCESS-TIMESTAMP': ts,
+                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url_base + path_pos, headers=headers, timeout=aiohttp.ClientTimeout(total=3.0)) as resp:
+                    res = await resp.json()
+                    positions = res.get("data", []) or []
+
+            active_pos = next((p for p in positions if float(p.get('total', 0.0) or 0.0) > 0.0 and 'BTC' in (p.get('symbol', '') or '')), None)
+            
+            # 🚨 [신선 국고 비상방패 V7.30]: 비트코인 외 비인가 타 종목 즉시 청산 트리거
+            non_btc_pos = [p for p in positions if float(p.get('total', 0.0) or 0.0) > 0.0 and 'BTC' not in (p.get('symbol', '') or '')]
+            for nb_pos in non_btc_pos:
+                asyncio.create_task(run_non_btc_emergency_sentinel(self))
                 
-                # 🚨 [신선 국고 비상방패 V7.30]: 비트코인 외 비인가 타 종목 즉시 청산 트리거
-                non_btc_pos = [p for p in positions if float(p.get('contracts', 0) or 0) > 0 and 'BTC' not in (p.get('symbol', '') or '')]
-                for nb_pos in non_btc_pos:
-                    asyncio.create_task(run_non_btc_emergency_sentinel(self))
+            if not active_pos:
+                if self.v35_engine.is_position_active:
+                    logger.info("⚡ [실시간 강제 동기화 v4.82] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
+                    self.v35_engine.is_position_active = False
+                    self.v35_engine.position_volume = 0
+                    self.v35_engine.entry_price = 0.0
+                    self.v35_engine.entry_direction = ""
+                    self.v35_engine.last_guarded_pos = {}
+                    asyncio.create_task(self.v35_engine.cancel_all_open_plan_orders())
+            else:
+                was_inactive = not self.v35_engine.is_position_active
+                self.v35_engine.is_position_active = True
+                side_val = (active_pos.get('holdSide') or 'long').upper()
+                self.v35_engine.entry_direction = side_val
+                e_price = float(active_pos.get('openPriceAvg', 0.0) or active_pos.get('entryPrice', 0.0) or 0.0)
+                v_contracts = float(active_pos.get('total', 0.0) or active_pos.get('contracts', 0.0) or 0.0)
+                
+                # [V7.38 수량/평단 변경 무결성 정밀 감지]
+                last_g = getattr(self.v35_engine, "last_guarded_pos", {})
+                prev_contracts = float(last_g.get("contracts", 0.0) or 0.0)
+                prev_price = float(last_g.get("entry_price", 0.0) or 0.0)
+                is_pos_changed = was_inactive or abs(prev_contracts - v_contracts) > 0.00001 or abs(prev_price - e_price) > 0.1
+                
+                if e_price > 0.0:
+                    self.v35_engine.entry_price = e_price
+                    self.v35_engine.active_position_entry_price = e_price
+                if v_contracts > 0.0:
+                    self.v35_engine.position_volume = v_contracts
+                    self.v35_engine.position_volume_btc = v_contracts
                     
-                if not active_pos:
-                    if self.v35_engine.is_position_active:
-                        logger.info("⚡ [실시간 강제 동기화 v4.82] 거래소 포지션 0개 감지 ➡️ is_position_active False 강제 리셋 완료")
-                        self.v35_engine.is_position_active = False
-                        self.v35_engine.position_volume = 0
-                        self.v35_engine.entry_price = 0.0
-                        self.v35_engine.entry_direction = ""
-                        self.v35_engine.last_guarded_pos = {}
-                        asyncio.create_task(self.v35_engine.cancel_all_open_plan_orders())
-                else:
-                    was_inactive = not self.v35_engine.is_position_active
-                    self.v35_engine.is_position_active = True
-                    side_val = active_pos['side'].upper()
-                    self.v35_engine.entry_direction = side_val
-                    e_price = float(active_pos.get('entryPrice', 0.0) or 0.0)
-                    v_contracts = float(active_pos.get('contracts', 0.0) or 0.0)
-                    
-                    # [V7.34 수량/평단 변경 감지]
-                    last_g = getattr(self.v35_engine, "last_guarded_pos", {})
-                    prev_contracts = float(last_g.get("contracts", 0.0) or 0.0)
-                    prev_price = float(last_g.get("entry_price", 0.0) or 0.0)
-                    is_pos_changed = was_inactive or abs(prev_contracts - v_contracts) > 0.00001 or abs(prev_price - e_price) > 0.1
-                    
-                    if e_price > 0.0:
-                        self.v35_engine.entry_price = e_price
-                        self.v35_engine.active_position_entry_price = e_price
-                    if v_contracts > 0.0:
-                        self.v35_engine.position_volume = v_contracts
-                        self.v35_engine.position_volume_btc = v_contracts
-                        
-                    # [V6.19/V7.34 폐하의 어명]: 신규 포지션 또는 수량/평단 변경 감지 시 자동 3대 TP/SL 선주문 재배치!
-                    if is_pos_changed and e_price > 0.0 and v_contracts > 0.0:
-                        self.v35_engine.last_guarded_pos = {
-                            "entry_price": e_price,
-                            "contracts": v_contracts,
-                            "side": side_val
-                        }
-                        logger.info(f"📱 [포지션 변동 감지 v7.34] 비트겟 포지션 변동 감지! ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 선주문 자동 재배치")
-                        asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
+                # [V6.19/V7.38 폐하의 어명]: 신규 포지션 또는 수량/평단 변경 감지 시 자동 3대 TP/SL 선주문 재배치!
+                if is_pos_changed and e_price > 0.0 and v_contracts > 0.0:
+                    self.v35_engine.last_guarded_pos = {
+                        "entry_price": e_price,
+                        "contracts": v_contracts,
+                        "side": side_val
+                    }
+                    logger.info(f"📱 [포지션 변동 감지 v7.38] 비트겟 V2 REST 포지션 변동 감지! ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 선주문 자동 재배치")
+                    asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
         except Exception as e:
-            pass
+            logger.error(f"비트겟 V2 포지션 동기화 예외: {e}")
 
 
 # ==============================================================================
