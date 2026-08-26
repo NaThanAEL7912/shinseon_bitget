@@ -1,0 +1,669 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHINSEON BITGET - MASTER WHITEPAPER V7.11 (20260823)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Noto+Sans+KR:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050505;
+            --surface-color: rgba(20, 20, 22, 0.75);
+            --surface-border: rgba(255, 255, 255, 0.1);
+            --primary-color: #DEBA9D; /* 신선 골드 */
+            --accent-green: #00FFCC; /* Long / Success */
+            --accent-red: #FF3366; /* Short / Danger */
+            --accent-blue: #38bdf8;
+            --text-main: #F3F4F6;
+            --text-muted: #9CA3AF;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Noto Sans KR', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(222, 186, 157, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 255, 204, 0.06) 0%, transparent 50%);
+            color: var(--text-main);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-color); }
+        ::-webkit-scrollbar-thumb { background: var(--primary-color); border-radius: 4px; }
+
+        header {
+            padding: 80px 20px 40px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%);
+            border-bottom: 1px solid var(--surface-border);
+            position: relative;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, rgba(222, 186, 157, 0.25), rgba(222, 186, 157, 0.05));
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 0.95rem;
+            font-weight: 800;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 25px rgba(222, 186, 157, 0.25);
+            animation: pulse 2s infinite;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+            margin-bottom: 15px;
+            background: linear-gradient(to right, #FFFFFF, var(--primary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        section {
+            margin-bottom: 60px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeUp 0.8s forwards;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            color: var(--text-main);
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .section-title span {
+            color: var(--primary-color);
+            font-size: 1.5rem;
+        }
+
+        .card {
+            background: var(--surface-color);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(222, 186, 157, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .card h3 {
+            color: var(--primary-color);
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(222, 186, 157, 0.2);
+            padding-bottom: 10px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .matrix-box {
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            padding: 20px;
+            font-family: monospace;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .matrix-box::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+            background: var(--accent-green);
+        }
+        
+        .matrix-box.short::before { background: var(--accent-red); }
+        .matrix-box.gold::before { background: var(--primary-color); }
+
+        .matrix-title {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .highlight-green { color: var(--accent-green); font-weight: bold; }
+        .highlight-red { color: var(--accent-red); font-weight: bold; }
+        .highlight-gold { color: var(--primary-color); font-weight: bold; }
+        .highlight-blue { color: var(--accent-blue); font-weight: bold; }
+
+        ul.feature-list {
+            list-style: none;
+        }
+
+        ul.feature-list li {
+            position: relative;
+            padding-left: 25px;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+        }
+
+        ul.feature-list li::before {
+            content: '▹';
+            position: absolute;
+            left: 0;
+            color: var(--primary-color);
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        ul.feature-list li strong {
+            color: var(--text-main);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 13px 16px;
+            border-bottom: 1px solid var(--surface-border);
+            font-size: 0.95rem;
+        }
+
+        th {
+            background: rgba(222, 186, 157, 0.12);
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        code {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #A78BFA;
+        }
+
+        .badge {
+            display: inline-block;
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .badge-green { background: #059669; }
+        .badge-red { background: #dc2626; }
+        .badge-gold { background: #d97706; color: black; }
+
+        @keyframes fadeUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(222, 186, 157, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(222, 186, 157, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(222, 186, 157, 0); }
+        }
+
+        section:nth-child(1) { animation-delay: 0.1s; }
+        section:nth-child(2) { animation-delay: 0.2s; }
+        section:nth-child(3) { animation-delay: 0.3s; }
+        section:nth-child(4) { animation-delay: 0.4s; }
+        section:nth-child(5) { animation-delay: 0.5s; }
+        section:nth-child(6) { animation-delay: 0.6s; }
+        section:nth-child(7) { animation-delay: 0.7s; }
+        section:nth-child(8) { animation-delay: 0.8s; }
+        section:nth-child(9) { animation-delay: 0.9s; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="version-badge">MASTER WHITEPAPER V7.11 (20260823)</div>
+        <h1>SHINSEON BITGET</h1>
+        <p>4대 완성형 오더플로우 저격 & 3중 청산 가드레일 마스터 백서</p>
+    </header>
+
+    <div class="container">
+
+        <!-- 01. 프로젝트 개요 -->
+        <section>
+            <h2 class="section-title"><span>01</span> 프로젝트 개요 및 목표</h2>
+            <div class="card">
+                <h3>신선(ShinSeon) 프로젝트란?</h3>
+                <div style="margin-bottom: 25px; color: var(--text-muted);">
+                    신선 비트겟 시스템은 전 세계 최대 거래량을 자랑하는 <strong>Binance 선물 시장</strong>의 세력 오더플로우 데이터를 극초음속으로 스캐닝하여 
+                    <strong>Bitget 거래소</strong>에 0.0019초(1.9ms) 만에 시장가 타점 및 리스크 관리를 꽂아넣는 <strong>'초고속 오더플로우 융합 자동 트레이딩 봇'</strong>입니다. <br><br>
+                    
+                    <strong style="color: var(--primary-color); font-size: 1.1rem;">[🔥 극초음속 스캐닝 엔진 스펙]</strong>
+                    <ul class="feature-list" style="margin-top: 12px; margin-bottom: 0;">
+                        <li><strong>청산(Liquidation) 수집: <span class="highlight-green">실시간 (0초 딜레이)</span></strong> <br>바이낸스 WebSocket을 통해 청산 이벤트 발생 즉시 서버로 다이렉트 푸시(Push)됩니다.</li>
+                        <li><strong>미결제약정(OI) 스캐닝: <span class="highlight-green">0.2초 단위 폴링</span></strong> <br>1초에 5번씩 타격하며 세력 자금의 유입/유출을 초정밀 감시합니다.</li>
+                        <li><strong>딥다이브 레코더(CSV): <span class="highlight-gold">1초 상시 기록 (무조건)</span></strong> <br>사후 완벽한 복기 및 AI 머신러닝 데이터 축적을 위해, 조건이나 임계치를 따지지 않고 24시간 내내 1초 간격으로 초고밀도 폭포수 로깅을 수행합니다.</li>
+                    </ul>
+                </div>
+                <div class="grid-2">
+                    <div class="matrix-box">
+                        <span class="matrix-title">핵심 철학 (The Core Philosophy)</span>
+                        "개미들의 눈물이 세력의 자양분이 되는 순간을 포착하라." <br><br>
+                        대중의 거대한 손절(청산)이 발생할 때, 스마트머니(세력)가 그 물량을 받아먹고 추세를 반전시킵니다. 신선은 이 <strong>변곡점(Pivot)</strong>을 정확히 타격합니다.
+                    </div>
+                    <div class="matrix-box gold">
+                        <span class="matrix-title">최종 목표 (The Ultimate Goal)</span>
+                        인간의 감정과 뇌동매매를 100% 배제하고, 수학적 임계치와 오더플로우 팩트(Fact)에만 기반하여 <strong>'무손실에 가까운 최적의 타점'</strong>을 기계적으로 선점하여 누적 수익을 극대화합니다.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 02. 시스템 아키텍처 -->
+        <section>
+            <h2 class="section-title"><span>02</span> 시스템 아키텍처 및 환경</h2>
+            <div class="grid-3">
+                <div class="card">
+                    <h3>🖥️ AWS 서버 (엔진)</h3>
+                    <ul class="feature-list">
+                        <li><strong>OS:</strong> Ubuntu Linux 22.04 LTS</li>
+                        <li><strong>역할:</strong> 24시간 365일 무중단 가동 데몬</li>
+                        <li><strong>수집:</strong> 바이낸스 WebSocket 실시간 듀얼 샘플링</li>
+                        <li><strong>판단:</strong> 4대 완성형 저격 매트릭스 연산</li>
+                        <li><strong>실행:</strong> 비트겟 REST API v2 실전 발주 (1.9ms)</li>
+                        <li><strong>통신:</strong> 텔레그램 양방향 제어 및 클라이언트 TCP 서버</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>💻 클라이언트 (대시보드)</h3>
+                    <ul class="feature-list">
+                        <li><strong>OS:</strong> Local Windows</li>
+                        <li><strong>역할:</strong> 관리자용 시각화 관제 모니터</li>
+                        <li><strong>UI/UX:</strong> PySide6 기반 최고급 GUI 터미널</li>
+                        <li><strong>기능:</strong> 실시간 로그 전시, 차트 렌더링, AWS 서버 상태 동기화, 실시간 파라미터 설정</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h3>🌐 거래소 연동 맵</h3>
+                    <ul class="feature-list">
+                        <li><strong>Binance (Data Source):</strong> <code>wss://fstream.binance.com</code> (청산, 틱 데이터)</li>
+                        <li><strong>Bitget (Action Source):</strong> <code>https://api.bitget.com</code> (API v2 50% 분할 발주, 스탑로스, 포지션 조회)</li>
+                        <li><strong>Telegram (Alert/Control):</strong> 봇 API를 통한 실시간 수익 보고 및 비상 원격 제어</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 03. 핵심 코어 엔진 (4대 완성형 저격 헌법) -->
+        <section>
+            <h2 class="section-title"><span>03</span> 핵심 판단 코어 엔진 (4대 완성형 저격 헌법)</h2>
+            <div class="card" style="border-color: var(--primary-color);">
+                <h3>🚨 0단계: 듀얼 임계치 & 0.02% 동적 불감대 절대 룰</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px;">
+                    주문이 발생하기 위한 <strong>최소한의 자격 요건</strong>입니다. 아래 조건이 동시에 충족되지 않으면 시스템은 절대 움직이지 않습니다.
+                </p>
+                <div class="matrix-box gold" style="margin-bottom: 20px; text-align: center; font-size: 1.15rem;">
+                    <code>rolling_1m_liq_usd >= target_liq</code> <br>
+                    <span class="highlight-gold">AND</span> <br>
+                    <code>abs(oi_delta_1m) >= target_oi</code> (음수/양수 전수 감지!) <br>
+                    <span class="highlight-gold">AND</span> <br>
+                    <code>abs(price_delta_5s) >= current_price * 0.0002</code> (0.02% 동적 불감대)
+                </div>
+
+                <h3>📊 1단계: 4대 완성형 오더플로우 저격 매트릭스 (abs(OI) 전수 적용)</h3>
+                <table style="margin-bottom: 20px;">
+                    <tr>
+                        <th>번호</th>
+                        <th>전략 명칭</th>
+                        <th>1분 청산액</th>
+                        <th>1분 OI 속도</th>
+                        <th>0.02% 동적 5초 가격 턴</th>
+                        <th>1분 추세 기울기</th>
+                        <th>최종 진입 방향</th>
+                    </tr>
+                    <tr>
+                        <td><strong>1️⃣</strong></td>
+                        <td><strong>강력한 불장 돌파 롱</strong></td>
+                        <td>>= Target</td>
+                        <td class="highlight-green">+OI (양수)</td>
+                        <td><code>delta_5s >= +0.02%</code></td>
+                        <td>기울기 &ge; 0</td>
+                        <td><span class="badge badge-green">🟢 LONG 탑승</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>2️⃣</strong></td>
+                        <td><strong>강력한 폭락 추세 숏</strong></td>
+                        <td>>= Target</td>
+                        <td class="highlight-green">+OI (양수)</td>
+                        <td><code>delta_5s <= -0.02%</code></td>
+                        <td>기울기 &le; 0</td>
+                        <td><span class="badge badge-red">🔴 SHORT 탑승</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>3️⃣</strong></td>
+                        <td><strong>V자 바닥 반등 롱</strong></td>
+                        <td>>= Target</td>
+                        <td class="highlight-red">-OI (음수)</td>
+                        <td><code>delta_5s >= +0.02% (반등턴)</code></td>
+                        <td>무관</td>
+                        <td><span class="badge badge-green">🟢 LONG 저격 🏹</span></td>
+                    </tr>
+                    <tr>
+                        <td><strong>4️⃣</strong></td>
+                        <td><strong>역V자 천장 덤핑 숏</strong></td>
+                        <td>>= Target</td>
+                        <td class="highlight-red">-OI (음수)</td>
+                        <td><code>delta_5s <= -0.02% (덤핑턴)</code></td>
+                        <td>무관</td>
+                        <td><span class="badge badge-red">🔴 SHORT 저격 🏹</span></td>
+                    </tr>
+                </table>
+
+                <h3>🛡️ 2단계: 안전 스위칭 및 락다운 로직</h3>
+                <ul class="feature-list">
+                    <li><strong>안전 쿨타임 (Lockdown):</strong> 주문 청산 후 대시보드 UI 설정창에서 지정한 <strong>손절 쿨타임(기본 30초) / 익절 쿨타임(기본 15초)</strong> 동안은 어떠한 추가 진입 신호도 무시합니다. 이는 연쇄 청산 꼬리에 휩쓸리는 뇌동매매를 방지합니다.</li>
+                    <li><strong>진성 자금 스위칭 허용:</strong> 포지션 보유 중 반대 방향의 진성 자금 신호 발생 시, 먼저 기존 포지션을 안전하게 전량 청산한 후 쿨타임 종료 후 신규 진입을 집행합니다.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 04. 전술 기능 명세 (3중 주문 청산) -->
+        <section>
+            <h2 class="section-title"><span>04</span> 3중 주문 청산 & 무위험 스윙 가드레일</h2>
+            
+            <div class="grid-2">
+                <div class="card">
+                    <h3>1. 최초 손절선 (Hard Stop Loss)</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>Why:</strong> 돌발적인 시장 역주행 시 원금을 철통같이 방어하는 최후의 안전벨트.<br><br>
+                        <strong>How:</strong> 비트겟 REST API <code>loss_plan</code>을 통해 세션별 설정된 손절선(-0.6% ~ -1.3%) 도달 시 <strong>100% 전량 즉시 시장가 손절</strong>을 집행합니다.
+                    </p>
+                </div>
+                
+                <div class="card">
+                    <h3>2. 50% 부분 분할 익절 (Partial TP)</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>Why:</strong> 목표 수익률 도달 시 선제적으로 현금을 확보하여 원금 리스크를 영구 제거하기 위함.<br><br>
+                        <strong>How:</strong> 1차 목표 수익률(+0.9% ~ +1.2%) 도달 시 <code>profit_plan</code>으로 <strong>진입 수량의 정확히 50%만 시장가 익절</strong>하여 현금을 락인합니다.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3>3. 무위험 본전 스탑 가드 (Breakeven Guard)</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>Why:</strong> 50% 익절 후 남은 잔여 물량으로 대세 랠리를 무위험(Zero-Risk) 완주하기 위함.<br><br>
+                        <strong>How:</strong> 50% 익절 체결 즉시, 남은 50% 포지션의 손절선을 <strong>진입가 본전(+0.10% BEP)</strong>으로 자동 상향 이동시켜 손실 확률을 0.00%로 소멸시킵니다.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <h3>4. 다단계 계단식 분할 손절 방패 (Scaled SL)</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>Why:</strong> 야간 수면 시간 및 주말 돌발 변동성에 대비한 리스크 분산 방패.<br><br>
+                        <strong>How:</strong> 거래소 서버에 1.0 BTC 단위로 계단식 분할 손절선(예: .2k / .0k)을 사전 예약 발주하여 급격한 꼬리 찌르기 시에도 리스크를 단계별로 차단합니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 05. 대시보드 명세 -->
+        <section>
+            <h2 class="section-title"><span>05</span> 클라이언트 대시보드 제어 패널 & 상태 뱃지</h2>
+            <div class="grid-2">
+                <div class="card">
+                    <h3>🔄 실전 계좌 잔고 동기화</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>How:</strong> 원클릭으로 비트겟 REST API를 호출하여 최신 총 자산 및 가용 USDT를 대시보드에 즉시 렌더링합니다.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>📡 실시간 오더플로우 레이더</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>How:</strong> 청산액과 OI 속도를 게이지바로 표시하며, 목표 임계치에 도달하거나 돌파할 경우 직각적인 시각적 알람을 제공합니다.
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>🏷️ 대시보드 상태 뱃지 판독법</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        ▹ <strong>[ 🟢 LONG 보유 중 | 수익 순항 중 ]</strong> : 롱 포지션이 흑자 구간에서 정상 가드레일 추적 중.<br>
+                        ▹ <strong>[ 🔵 LONG 보유 중 | ⚠️ 시세 꺾임 주의 ↘ ]</strong> : 롱 포지션 보유 중 롱 청산 덤핑이 발생하여 가격이 아래로 꺾였을 때 손절선을 예의주시하라는 실시간 경고 알림. (신규 숏 신호가 아님!)
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>🚨 비상 마스터 탈출 (EMERGENCY)</h3>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">
+                        <strong>How:</strong> 버튼 클릭 즉시 0.0019초 만에 현재 포지션을 전량 시장가로 던지고 모든 예약 주문을 취소하여 시드를 100% 보호합니다.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 06. 환경 설정 (세션별 매트릭스) -->
+        <section>
+            <h2 class="section-title"><span>06</span> 평일 및 주말 세션별 최적 헌법 매트릭스</h2>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>세션 구분</th>
+                        <th>운용 시간대 (KST)</th>
+                        <th>1분 청산액 임계치</th>
+                        <th>1분 OI 속도 임계치</th>
+                        <th>최초 손절선</th>
+                        <th>활성화</th>
+                        <th>세션별 운용 전략</th>
+                    </tr>
+                    <tr>
+                        <td><strong>🌏 아시아 (Asia)</strong></td>
+                        <td>08:59 ~ 15:59</td>
+                        <td><strong>,000</strong></td>
+                        <td><strong>0.1500%</strong></td>
+                        <td><strong>-0.6%</strong></td>
+                        <td><span class="highlight-green">ON</span></td>
+                        <td>아침 9시 상승 랠리 및 짧은 눌림목 빠른 저격</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🌍 유럽 (Europe)</strong></td>
+                        <td>15:59 ~ 22:29</td>
+                        <td><strong>,000,000</strong></td>
+                        <td><strong>0.1500%</strong></td>
+                        <td><strong>-0.8%</strong></td>
+                        <td><span class="highlight-green">ON</span></td>
+                        <td>런던 장 오픈의 강력한 상하방 돌파 및 변동성 수확</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🇺🇸 미국 본장 (US)</strong></td>
+                        <td>22:29 ~ 04:59</td>
+                        <td><strong>,500,000</strong></td>
+                        <td><strong>0.1800%</strong></td>
+                        <td><strong>-1.3%</strong></td>
+                        <td><span class="highlight-green">ON</span></td>
+                        <td>뉴욕 본장의 대형 고래 유동성 및 거대 추세 탑승</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🌊 태평양 (Pacific)</strong></td>
+                        <td>04:59 ~ 08:59</td>
+                        <td>,000</td>
+                        <td>0.1200%</td>
+                        <td>-1.0%</td>
+                        <td><span class="highlight-red">OFF</span></td>
+                        <td>거래량 부족 및 슬로우 블리딩 구간 사전 회피</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🏖️ 주말 아시아</strong></td>
+                        <td>주말 08:59 ~ 15:59</td>
+                        <td><strong>,000</strong></td>
+                        <td><strong>0.0400%</strong></td>
+                        <td><strong>-0.6%</strong></td>
+                        <td><span class="highlight-green">ON</span></td>
+                        <td>주말 얇은 유동성에 맞춘 저청산 저변동 정밀 저격</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🏖️ 주말 유럽</strong></td>
+                        <td>주말 15:59 ~ 22:29</td>
+                        <td><strong>,000</strong></td>
+                        <td><strong>0.0500%</strong></td>
+                        <td><strong>-0.6%</strong></td>
+                        <td><span class="highlight-green">ON</span></td>
+                        <td>주말 유럽 시간대 기술적 반등 저격</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🏖️ 주말 미국</strong></td>
+                        <td>주말 22:29 ~ 04:59</td>
+                        <td><strong>,000</strong></td>
+                        <td><strong>0.0400%</strong></td>
+                        <td><strong>-0.8%</strong></td>
+                        <td><span class="highlight-green">ON</span></td>
+                        <td>주말 CME 마감 후 박스권 상하단 레인지 저격</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🏖️ 주말 태평양</strong></td>
+                        <td>주말 04:59 ~ 08:59</td>
+                        <td>,000</td>
+                        <td>0.0300%</td>
+                        <td>-0.5%</td>
+                        <td><span class="highlight-red">OFF</span></td>
+                        <td>유동성 공백 위험 구간 진입 원천 차단</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <!-- 07. 신선 V3.0 AI 추세 헌법 -->
+        <section>
+            <h2 class="section-title"><span>07</span> [차세대] 신선 V3.0 AI 추세 필터 헌법</h2>
+            <div class="card" style="border-color: var(--accent-green);">
+                <h3>📈 1. 상승장 (15분/1시간봉 이평선 정배열 7 > 25 > 99)</h3>
+                <ul class="feature-list">
+                    <li>❌ <strong>역추세 숏 진입 전면 금지!</strong> (아무리 과매수여도 숏 안 침!)</li>
+                    <li>🟢 <strong>오직 바닥 눌림목(과매도 20~30)에서만 '추세 롱' 진입!</strong></li>
+                    <li>💰 <strong>과매수(RSI 80+)는 '숏 치는 게 아니라 롱 익절 및 신규 매수 금지 브레이크'로만 사용!</strong></li>
+                </ul>
+
+                <h3 style="margin-top: 25px;">📉 2. 하락장 (15분/1시간봉 이평선 역배열 7 < 25 < 99)</h3>
+                <ul class="feature-list">
+                    <li>❌ <strong>떨어지는 칼날 롱 진입 전면 금지!</strong> (아무리 과매도여도 롱 안 잡음!)</li>
+                    <li>🔴 <strong>오직 반등 꼭지(과매수 70~80)에서만 '되돌림 숏' 진입!</strong></li>
+                    <li>💰 <strong>과매도(RSI 20-)는 '롱 잡는 게 아니라 숏 익절 및 신규 매도 금지 브레이크'로만 사용!</strong></li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 08. 파일 구조 -->
+        <section>
+            <h2 class="section-title"><span>08</span> 핵심 파일 및 폴더 명세</h2>
+            <div class="card">
+                <table>
+                    <tr>
+                        <th>파일 / 폴더명</th>
+                        <th>역할 및 설명</th>
+                    </tr>
+                    <tr>
+                        <td><code>shinseon_server.py</code></td>
+                        <td><strong>[서버 심장]</strong> AWS에서 실행되는 메인 데몬. 바이낸스 웹소켓 수신, 4대 저격 로직 연산, 비트겟 실시간 발주, 클라이언트 TCP 통신 총괄.</td>
+                    </tr>
+                    <tr>
+                        <td><code>core_logic.py</code></td>
+                        <td><strong>[공용 뇌]</strong> 봇의 상태(Config), 백그라운드 스레드 및 abs(OI) 4대 매트릭스 연산 유틸리티.</td>
+                    </tr>
+                    <tr>
+                        <td><code>shinseon_client.pyw</code></td>
+                        <td><strong>[관제 센터]</strong> 로컬 PC에서 실행되는 PySide6 기반 UI 창. AWS 서버 접속 제어 및 시각적 렌더링.</td>
+                    </tr>
+                    <tr>
+                        <td><code>deploy.py</code> / <code>shinseon_updater.py</code></td>
+                        <td><strong>[배포 시스템]</strong> 로컬 코드를 AWS로 안전 배포하고 데몬을 정격 재기동하는 자동화 인프라.</td>
+                    </tr>
+                    <tr>
+                        <td><code>docs/SHINSEON_오더플로우_판단_백서.md</code></td>
+                        <td>🚨 <strong>[불가침 성역]</strong> 4대 저격 매트릭스 및 3중 청산 가드레일 대헌법.</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+        <!-- 09. 유지보수 및 트러블슈팅 -->
+        <section>
+            <h2 class="section-title"><span>09</span> 🛠️ 유지보수 가이드 (Troubleshooting)</h2>
+            <div class="card">
+                <ul class="feature-list">
+                    <li>
+                        <strong>증상:</strong> 비트겟 주문이 안 나가거나 에러가 뜸 (예: 400172)
+                        <br><strong>해결:</strong> <code>shinseon_server.py</code>의 <code>execute_bitget_internal_packet()</code> 함수 내부 잔여 수량 처리 로직을 점검하십시오.
+                    </li>
+                    <li style="margin-top: 15px;">
+                        <strong>증상:</strong> 오더플로우 깃발 방향이 엉뚱하게 뜰 때
+                        <br><strong>해결:</strong> <code>abs(oi_delta_1m)</code> 및 <code>price_delta_5s</code> 0.02% 불감대 조건이 백서와 일치하는지 대조하십시오.
+                    </li>
+                    <li style="margin-top: 15px;">
+                        <strong>증상:</strong> 클라이언트와 AWS 서버 간 로그 동기화가 끊어짐
+                        <br><strong>해결:</strong> <code>shinseon_server.py</code>의 <code>start_socket_server()</code> TCP 소켓 유지 로직을 점검하십시오.
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <div style="text-align: center; margin-top: 60px; color: var(--text-muted); font-size: 0.9rem;">
+            <p>Copyright © 2026 SHINSEON TRADING SYSTEM. All rights reserved.</p>
+            <p>Crafted for Supreme Efficiency & Zero Emotion. (VER: V7.11 / 20260823)</p>
+        </div>
+
+    </div>
+
+</body>
+</html>

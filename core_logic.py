@@ -1227,7 +1227,7 @@ class ShinseonV35Engine:
             
         if self.is_position_active and is_opposite:
             # 1遺?泥?궛 諛?OI > 0 (?뚮윭???먭툑 ?좎엯) 議곌굔 異⑹” ?쒖뿉留?吏꾩쭨 ?ㅼ쐞移?泥?궛 諛쒕룞!
-            if rolling_1m_liq_usd >= target_liq and oi_delta_1m >= target_oi and oi_delta_1m > 0:
+            if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
                 if not getattr(self, "exit_in_progress", False):
                     self.exit_in_progress = True
                     self.exit_reason = f"諛섎? 諛⑺뼢 吏꾩쭨 ?먭툑 ?좎엯(OI>0 & ?꾧퀎移섎룎?? ?ㅼ쐞移?媛먯? (蹂댁쑀: {self.entry_direction} / ?좏샇: {direction}) (泥?궛: ${rolling_1m_liq_usd:,.0f}, OI: {oi_delta_1m:+.4f}%)"

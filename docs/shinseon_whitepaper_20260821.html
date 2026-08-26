@@ -1,0 +1,92 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SHINSEON 4대 완성형 오더플로우 저격 헌법 백서 (20260821)</title>
+    <style>
+        body { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; background-color: #0b0e14; color: #e1e7ec; line-height: 1.6; margin: 0; padding: 40px 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: #151a23; padding: 40px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); border: 1px solid #232b38; }
+        h1 { color: #00f0ff; border-bottom: 2px solid #00f0ff; padding-bottom: 15px; font-size: 28px; }
+        h2 { color: #5eead4; margin-top: 35px; font-size: 22px; border-left: 4px solid #5eead4; padding-left: 12px; }
+        table { width: 100%; border-collapse: collapse; margin: 25px 0; background: #0f1319; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid #1f2735; }
+        th { background: #1c2432; color: #38bdf8; font-weight: 600; }
+        .box { background: #192231; border: 1px solid #2d3b52; border-radius: 10px; padding: 20px; margin: 20px 0; }
+        .highlight { color: #34d399; font-weight: bold; }
+        .badge { background: #0284c7; color: white; padding: 4px 10px; border-radius: 20px; font-size: 13px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>👑 SHINSEON 4대 완성형 오더플로우 저격 헌법 백서</h1>
+    <p><strong>문서 번호:</strong> SHINSEON_오더플로우_판단_백서_20260821 | <strong>버전:</strong> V6.87 | <strong>발행 일자:</strong> 2026-08-21 KST</p>
+    
+    <h2>1. 개요 및 헌법 대전제 (0.02% 동적 불감대 & 1분 기울기 결합)</h2>
+    <div class="box">
+        <p><strong>🏛️ [헌법 제1조 - 5초 실시간 방향 & 0.02% 동적 불감대 절대 우선권 대전제]:</strong></p>
+        <p>1. 모든 오더플로우 판단은 바이낸스(Binance) 실시간 1초 틱 체결 데이터로 판정합니다.</p>
+        <p>2. 횡보장 미세 호가 잡음에 의한 1초 채터링(깜빡임)을 100% 원천 차단하기 위해, <strong>"0.02% 동적 5초 불감대(price_delta_5s >= current_price * 0.0002)"</strong>와 <strong>"1분 지수가중 회귀 기울기(price_slope_1m)"</strong>가 최종 진입 방향과 100% 일치해야만 방아쇠가 격발됩니다!</p>
+    </div>
+
+    <h2>2. 4대 완성형 오더플로우 저격 매트릭스 (0.02% 동적 불감대 적용)</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>번호</th>
+                <th>전략 명칭</th>
+                <th>1분 청산액</th>
+                <th>1분 OI 속도</th>
+                <th>0.02% 동적 5초 가격 턴</th>
+                <th>1분 기울기</th>
+                <th>진입 방향</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>1️⃣</td>
+                <td><strong>불장 돌파 롱</strong></td>
+                <td>>= Target</td>
+                <td class="highlight">+OI (양수)</td>
+                <td><strong>delta_5s >= +0.02% (+15불)</strong></td>
+                <td>기울기 >= 0</td>
+                <td><span class="badge" style="background:#10b981;">🟢 LONG</span></td>
+            </tr>
+            <tr>
+                <td>2️⃣</td>
+                <td><strong>폭락 추세 숏</strong></td>
+                <td>>= Target</td>
+                <td class="highlight">+OI (양수)</td>
+                <td><strong>delta_5s <= -0.02% (-15불)</strong></td>
+                <td>기울기 <= 0</td>
+                <td><span class="badge" style="background:#ef4444;">🔴 SHORT</span></td>
+            </tr>
+            <tr>
+                <td>3️⃣</td>
+                <td><strong>V자 바닥 반등 롱</strong></td>
+                <td>>= Target</td>
+                <td style="color:#f87171;">-OI (음수)</td>
+                <td><strong>delta_5s >= +0.02% (+15불)</strong></td>
+                <td>무관 (반등)</td>
+                <td><span class="badge" style="background:#10b981;">🟢 LONG</span></td>
+            </tr>
+            <tr>
+                <td>4️⃣</td>
+                <td><strong>역V자 천장 덤핑 숏</strong></td>
+                <td>>= Target</td>
+                <td style="color:#f87171;">-OI (음수)</td>
+                <td><strong>delta_5s <= -0.02% (-15불)</strong></td>
+                <td>무관 (덤핑)</td>
+                <td><span class="badge" style="background:#ef4444;">🔴 SHORT</span></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>3. 50% 부분 분할 익절 & 무위험 스윙 완주</h2>
+    <div class="box">
+        <p>• <strong>1차 50% 분할 익절:</strong> 목표가 도달 시 수량의 50%를 비트겟 API로 선제 확정 익절하여 원금 완벽 회수!</p>
+        <p>• <strong>남은 50% 무위험 스윙:</strong> 본전 가드(+0.10%)로 손절선을 상향하여 ,000 ➔ ,000+ 피날레까지 무위험 완주!</p>
+    </div>
+</div>
+</body>
+</html>

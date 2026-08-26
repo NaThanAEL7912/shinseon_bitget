@@ -62,6 +62,48 @@ def run_cmd(cmd):
     print(res.stdout)
     return True
 
+def deploy_to_aws_server():
+    key_path = os.path.join(BASE_DIR, "shinseon-key.pem")
+    if not os.path.exists(key_path):
+        print("⚠️ [AWS 배포 건너뜀] shinseon-key.pem 키 파일이 로컬에 없습니다.")
+        return False
+        
+    try:
+        import paramiko
+        print("🚀 [AWS 도쿄 서버] SSH/SFTP 직통 원격 배포 접속 시도 (13.192.187.244)...")
+        key = paramiko.RSAKey.from_private_key_file(key_path)
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect("13.192.187.244", username="ubuntu", pkey=key, timeout=10)
+        
+        sftp = ssh.open_sftp()
+        upload_files = ["shinseon_server.py", "shinseon_config.json", "core_logic.py"]
+        for f in upload_files:
+            local_f = os.path.join(BASE_DIR, f)
+            remote_f = f"/home/ubuntu/{f}"
+            if os.path.exists(local_f):
+                print(f" 📤 SFTP 전송: {f} ➡️ AWS {remote_f}")
+                sftp.put(local_f, remote_f)
+        sftp.close()
+        
+        print(" 🔄 AWS 기존 서버 프로세스 안전 종료 및 최신 데몬 재기동...")
+        restart_cmd = """
+pkill -f shinseon_server.py
+sleep 1
+nohup /home/ubuntu/botenv/bin/python -u /home/ubuntu/shinseon_server.py > /home/ubuntu/shinseon_stdout.log 2>&1 &
+sleep 1
+ps aux | grep shinseon_server.py | grep -v grep
+"""
+        stdin, stdout, stderr = ssh.exec_command(restart_cmd)
+        out_txt = stdout.read().decode('utf-8', errors='ignore')
+        print(f" 📊 [AWS 데몬 기동 확인]:\n{out_txt}")
+        ssh.close()
+        print(" ✅ [AWS 배포 성공] AWS 도쿄 서버에 최신 소스 반영 및 데몬 무중단 재기동 완료!")
+        return True
+    except Exception as e:
+        print(f" ❌ [AWS 배포 실패]: {e}")
+        return False
+
 def main():
     # 콘솔 인코딩 강제 설정 (Windows CP949 오류 방지)
     try:
@@ -79,7 +121,7 @@ def main():
             pass
 
     print("====================================================")
-    print(" 🚀 [SHINSEON] GitHub 원클릭 자동 배포 엔진 가동")
+    print(" 🚀 [SHINSEON] GitHub + AWS 원클릭 자동 배포 엔진 가동")
     print("====================================================")
     
     config_data = load_config()
@@ -106,6 +148,10 @@ def main():
     save_config(config_data)
     print("shinseon_config.json 내 버전 정보가 성공적으로 업데이트되었습니다.")
     
+    # 1. AWS 도쿄 실전 서버 원격 핫-리로드 배포
+    deploy_to_aws_server()
+
+    # 2. GitHub 원격 main 브랜치 백업 배포
     try:
         files_to_deploy = [
             "shinseon_server.py",
@@ -115,6 +161,7 @@ def main():
             "client_config.json",
             "server_config.json",
             "core_logic.py",
+            "deploy.py",
             "Start_Sejong.bat",
             "신선_비트겟_클라이언트.bat"
         ]
@@ -139,7 +186,7 @@ def main():
         sys.exit(1)
         
     print("====================================================")
-    print(f" 🎉 [배포 완료] {new_version} 버전이 GitHub 배포 서버에 완벽하게 적재되었습니다!")
+    print(f" 🎉 [배포 완료] {new_version} 버전이 GitHub 및 AWS 서버에 완벽하게 적재/재기동되었습니다!")
     print("====================================================")
 
 if __name__ == "__main__":
