@@ -548,7 +548,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V7.54"
+        self.CURRENT_VERSION = "V7.56"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1035,6 +1035,35 @@ class ShinseonDashboard(QMainWindow):
         """)
         self.btn_position_sync.clicked.connect(self.trigger_position_sync)
         right_layout.addWidget(self.btn_position_sync)
+        
+        # 🛡️ 자동 안전가드 (TP 2단 / SL 2단) 버튼
+        self.btn_auto_guard = QPushButton("🛡️ 자동 안전가드 (TP 2단 / SL 2단)", right_widget)
+        self.btn_auto_guard.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #1E4D2B, stop:1 #11331B);
+                color: #00FFCC;
+                font-weight: bold;
+                font-size: 11px;
+                padding: 8px;
+                border-radius: 4px;
+                border: 1px solid #00FFCC;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #2A6B3D, stop:1 #1E4D2B);
+                border: 1px solid #33FFDD;
+                color: #FFFFFF;
+            }
+            QPushButton:pressed {
+                background: #0D2413;
+            }
+            QPushButton:disabled {
+                background: #1A2E22;
+                color: #558877;
+                border: 1px solid #335544;
+            }
+        """)
+        self.btn_auto_guard.clicked.connect(self.trigger_auto_guard_4stage)
+        right_layout.addWidget(self.btn_auto_guard)
         
         self.lbl_guardrail = QLabel("진입/청산 상태:\n[100% 현금 대기 중]")
         self.lbl_guardrail.setStyleSheet("font-size: 12px; color: #DEBA9D; font-weight: bold; line-height: 1.4;")
@@ -2151,6 +2180,36 @@ class ShinseonDashboard(QMainWindow):
         finally:
             self.btn_position_sync.setEnabled(True)
             self.btn_position_sync.setText("🔄 포지션 동기화")
+            
+    def trigger_auto_guard_4stage(self):
+        self.btn_auto_guard.setEnabled(False)
+        self.btn_auto_guard.setText("🛡️ 안전가드 세팅 중...")
+        asyncio.create_task(self.do_auto_guard_4stage())
+
+    async def do_auto_guard_4stage(self):
+        try:
+            ws_connected = False
+            for attempt in range(1, 6):
+                if self.is_ws_active():
+                    ws_connected = True
+                    break
+                if attempt < 5:
+                    self.add_log(f"⏳ [자동 안전가드] 소켓 안착 대기 중... ({attempt}/5)")
+                    await asyncio.sleep(0.5)
+
+            if ws_connected and self.is_ws_active():
+                import json
+                await self.ws.send(json.dumps({"cmd": "CMD_TRIGGER_AUTO_GUARD_4STAGE"}))
+                self.add_log("🛡️ [원클릭 안전가드] 현재 포지션 기준 4단 분할 안전가드(TP +$1000/+$1200, SL -$500/-$600) 발주 명령 전송!")
+            else:
+                self.add_log("⚠️ [웹소켓] 5회(2.5초) 대기 후에도 소켓 미연결 상태입니다. 즉시 자동 재접속을 트리거합니다.")
+                self.trigger_force_reconnect()
+        except Exception as e:
+            self.add_log(f"❌ [안전가드 실패] 명령 전송 중 오류 발생: {e}")
+        finally:
+            await asyncio.sleep(1.0)
+            self.btn_auto_guard.setEnabled(True)
+            self.btn_auto_guard.setText("🛡️ 자동 안전가드 (TP 2단 / SL 2단)")
             
     async def run_startup_sync_sequence(self):
         """부팅 시 3대 핵심 요소 자동 동기화 시퀀스집행"""

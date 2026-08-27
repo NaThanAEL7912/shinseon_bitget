@@ -860,7 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.54"
+        self.CURRENT_VERSION = "V7.56"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -3974,6 +3974,151 @@ class WsServer:
         except Exception as e:
             pass
 
+    async def handle_trigger_auto_guard_4stage(self, websocket):
+        logger.info("🛡️ [CMD_TRIGGER_AUTO_GUARD_4STAGE] 클라이언트 4단 자동 안전가드 요청 수신")
+        try:
+            api_key, secret_key, passphrase = ("", "", "")
+            if self.bot_core and self.bot_core.v35_engine:
+                api_key, secret_key, passphrase = self.bot_core.v35_engine.get_bitget_api_credentials()
+            if not (api_key and secret_key and passphrase):
+                env_vars = getattr(self.bot_core, "env_vars", {}) or load_server_config()
+                api_key = env_vars.get("BITGET_API_KEY", "")
+                secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+                passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+                
+            if not (api_key and secret_key and passphrase):
+                err_msg = "⚠️ [자동 안전가드] 비트겟 API 키 설정이 누락되었습니다."
+                logger.warning(err_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_msg})
+                return
+
+            # 1. 비트겟 V2 REST API로 현재 포지션 조회
+            url_base = "https://api.bitget.com"
+            path_pos = "/api/v2/mix/position/all-position?productType=USDT-FUTURES"
+            ts = str(int(time.time() * 1000))
+            msg = ts + "GET" + path_pos
+            mac = hmac.new(secret_key.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256)
+            sign = base64.b64encode(mac.digest()).decode('utf-8')
+            headers = {
+                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign, 'ACCESS-TIMESTAMP': ts,
+                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url_base + path_pos, headers=headers, timeout=aiohttp.ClientTimeout(total=3.0)) as resp:
+                    res = await resp.json()
+                    positions = res.get("data", []) or []
+
+            active_pos = next((p for p in positions if float(p.get('total', 0.0) or p.get('contracts', 0.0) or 0.0) > 0.0 and 'BTC' in (p.get('symbol', '') or '')), None)
+
+            if not active_pos or float(active_pos.get('total', 0.0) or active_pos.get('contracts', 0.0) or 0.0) <= 0.0:
+                no_pos_msg = "⚠️ [자동 안전가드] 현재 보유 중인 포지션이 없습니다."
+                logger.warning(no_pos_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": no_pos_msg})
+                return
+
+            entry_price = float(active_pos.get('openPriceAvg', 0.0) or active_pos.get('entryPrice', 0.0) or 0.0)
+            total_qty = float(active_pos.get('total', 0.0) or active_pos.get('contracts', 0.0) or 0.0)
+            hold_side_raw = str(active_pos.get('holdSide', 'long')).lower()
+            side_str = "LONG" if hold_side_raw == "long" else "SHORT"
+
+            if entry_price <= 0.0 or total_qty <= 0.0:
+                err_msg = f"⚠️ [자동 안전가드] 포지션 정보 파싱 실패 (평단가: {entry_price}, 수량: {total_qty})"
+                logger.warning(err_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_msg})
+                return
+
+            # 수량 50% 분할
+            v1 = round(total_qty * 0.5, 4)
+            v2 = round(total_qty - v1, 4)
+
+            if side_str == "LONG":
+                tp1_p = entry_price + 1000.0
+                tp2_p = entry_price + 1200.0
+                sl1_p = entry_price - 500.0
+                sl2_p = entry_price - 600.0
+            else:
+                tp1_p = entry_price - 1000.0
+                tp2_p = entry_price - 1200.0
+                sl1_p = entry_price + 500.0
+                sl2_p = entry_price + 600.0
+
+            # 2. 기존 플랜 주문 전량 취소 후 비트겟 /api/v2/mix/order/place-tpsl-order로 4개 주문 발주
+            if self.bot_core and self.bot_core.v35_engine:
+                await self.bot_core.v35_engine.cancel_all_open_plan_orders()
+
+            path_plan = "/api/v2/mix/order/place-tpsl-order"
+            orders = [
+                ("1차 TP(+1000)" if side_str == "LONG" else "1차 TP(-1000)", {
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "profit_plan",
+                    "triggerPrice": str(round(tp1_p, 1)),
+                    "triggerType": "mark_price",
+                    "size": str(v1),
+                    "holdSide": hold_side_raw
+                }),
+                ("2차 TP(+1200)" if side_str == "LONG" else "2차 TP(-1200)", {
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "profit_plan",
+                    "triggerPrice": str(round(tp2_p, 1)),
+                    "triggerType": "mark_price",
+                    "size": str(v2),
+                    "holdSide": hold_side_raw
+                }),
+                ("1차 SL(-500)" if side_str == "LONG" else "1차 SL(+500)", {
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "loss_plan",
+                    "triggerPrice": str(round(sl1_p, 1)),
+                    "triggerType": "mark_price",
+                    "size": str(v1),
+                    "holdSide": hold_side_raw
+                }),
+                ("2차 SL(-600)" if side_str == "LONG" else "2차 SL(+600)", {
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "loss_plan",
+                    "triggerPrice": str(round(sl2_p, 1)),
+                    "triggerType": "mark_price",
+                    "size": str(v2),
+                    "holdSide": hold_side_raw
+                })
+            ]
+
+            async with aiohttp.ClientSession() as session:
+                for name, b_dict in orders:
+                    b_json = json.dumps(b_dict)
+                    ts_o = str(int(time.time() * 1000))
+                    msg_o = ts_o + "POST" + path_plan + b_json
+                    mac_o = hmac.new(secret_key.encode('utf-8'), msg_o.encode('utf-8'), hashlib.sha256)
+                    sign_o = base64.b64encode(mac_o.digest()).decode('utf-8')
+                    headers_o = {
+                        'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_o, 'ACCESS-TIMESTAMP': ts_o,
+                        'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+                    }
+                    async with session.post(url_base + path_plan, headers=headers_o, data=b_json) as resp_o:
+                        res_o = await resp_o.json()
+                        if res_o.get("code") == "00000":
+                            logger.info(f"✅ [4단 안전가드 {name} 성공] 목표가: ${b_dict['triggerPrice']} (수량: {b_dict['size']} BTC)")
+                        else:
+                            logger.warning(f"⚠️ [4단 안전가드 {name} 응답]: {res_o.get('msg')} (코드: {res_o.get('code')})")
+
+            success_msg = f"✅ [원클릭 안전가드 안착 완료] {side_str} 포지션 기준 TP 2단 / SL 2단 발주 성공!"
+            logger.info(success_msg)
+            await self.broadcast_event("EVT_RESPONSE_LOG", {"message": success_msg})
+            write_trade_history_log(f"🛡️ [원클릭 4단 안전가드 배치] {side_str} {total_qty} BTC @ ${entry_price:,.1f} ➡️ TP1(${tp1_p:,.1f}, {v1}BTC), TP2(${tp2_p:,.1f}, {v2}BTC), SL1(${sl1_p:,.1f}, {v1}BTC), SL2(${sl2_p:,.1f}, {v2}BTC)")
+
+        except Exception as e:
+            err_log = f"❌ [자동 안전가드 오류] 발주 처리 중 예외 발생: {e}"
+            logger.error(err_log)
+            await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_log})
+
     async def register(self, websocket):
         self.clients.add(websocket)
         client_addr = getattr(websocket, "remote_address", "Unknown")
@@ -3995,6 +4140,8 @@ class WsServer:
                     logger.info(f"🌐 [WEB_COMMAND] 클라이언트 패킷 수신: {cmd}")
                     if cmd == "CMD_SYNC_POSITION":
                         asyncio.create_task(self.handle_sync_position(websocket))
+                    elif cmd == "CMD_TRIGGER_AUTO_GUARD_4STAGE":
+                        asyncio.create_task(self.handle_trigger_auto_guard_4stage(websocket))
                     elif cmd == "CMD_REQ_STATS_DETAIL":
                         last_date = payload.get("last_downloaded_date")
                         stats_payload = get_calculated_stats_payload(last_downloaded_date=last_date)
