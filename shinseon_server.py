@@ -860,7 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.50"
+        self.CURRENT_VERSION = "V7.54"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1771,6 +1771,7 @@ class BotCore:
                     self.v35_engine.last_guarded_pos = {}
                     asyncio.create_task(self.v35_engine.cancel_all_open_plan_orders())
             else:
+                was_inactive = not self.v35_engine.is_position_active
                 self.v35_engine.is_position_active = True
                 side_val = (active_pos.get('holdSide') or 'long').upper()
                 self.v35_engine.entry_direction = side_val
@@ -1783,6 +1784,11 @@ class BotCore:
                 if v_contracts > 0.0:
                     self.v35_engine.position_volume = v_contracts
                     self.v35_engine.position_volume_btc = v_contracts
+
+                # 🛡️ [기획서 346] 신규 포지션 최초 진입 시 3대 TP/SL 안전가드 즉시 1회 선제 배치 복원 (수량 변경 시 재배치 배제)
+                if was_inactive and e_price > 0.0 and v_contracts > 0.0:
+                    logger.info(f"🛡️ [신규 포지션 최초 진입 감지] ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 안전가드 즉시 1회 선제 배치 가동!")
+                    asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
         except Exception as e:
             logger.error(f"비트겟 V2 포지션 동기화 예외: {e}")
 
