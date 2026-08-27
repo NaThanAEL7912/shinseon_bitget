@@ -860,6 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
+        self.CURRENT_VERSION = "V7.50"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1770,18 +1771,11 @@ class BotCore:
                     self.v35_engine.last_guarded_pos = {}
                     asyncio.create_task(self.v35_engine.cancel_all_open_plan_orders())
             else:
-                was_inactive = not self.v35_engine.is_position_active
                 self.v35_engine.is_position_active = True
                 side_val = (active_pos.get('holdSide') or 'long').upper()
                 self.v35_engine.entry_direction = side_val
                 e_price = float(active_pos.get('openPriceAvg', 0.0) or active_pos.get('entryPrice', 0.0) or 0.0)
                 v_contracts = float(active_pos.get('total', 0.0) or active_pos.get('contracts', 0.0) or 0.0)
-                
-                # [V7.38 수량/평단 변경 무결성 정밀 감지]
-                last_g = getattr(self.v35_engine, "last_guarded_pos", {})
-                prev_contracts = float(last_g.get("contracts", 0.0) or 0.0)
-                prev_price = float(last_g.get("entry_price", 0.0) or 0.0)
-                is_pos_changed = was_inactive or abs(prev_contracts - v_contracts) > 0.00001 or abs(prev_price - e_price) > 0.1
                 
                 if e_price > 0.0:
                     self.v35_engine.entry_price = e_price
@@ -1789,16 +1783,6 @@ class BotCore:
                 if v_contracts > 0.0:
                     self.v35_engine.position_volume = v_contracts
                     self.v35_engine.position_volume_btc = v_contracts
-                    
-                # [V6.19/V7.38 폐하의 어명]: 신규 포지션 또는 수량/평단 변경 감지 시 자동 3대 TP/SL 선주문 재배치!
-                if is_pos_changed and e_price > 0.0 and v_contracts > 0.0:
-                    self.v35_engine.last_guarded_pos = {
-                        "entry_price": e_price,
-                        "contracts": v_contracts,
-                        "side": side_val
-                    }
-                    logger.info(f"📱 [포지션 변동 감지 v7.38] 비트겟 V2 REST 포지션 변동 감지! ({side_val} {v_contracts} BTC @ ${e_price:,.1f}) ➡️ 3대 TP/SL 선주문 자동 재배치")
-                    asyncio.create_task(self.v35_engine.place_bitget_tpsl_plan_orders(e_price, side_val, v_contracts))
         except Exception as e:
             logger.error(f"비트겟 V2 포지션 동기화 예외: {e}")
 

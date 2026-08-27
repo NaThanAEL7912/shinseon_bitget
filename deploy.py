@@ -77,7 +77,7 @@ def deploy_to_aws_server():
         ssh.connect("13.192.187.244", username="ubuntu", pkey=key, timeout=10)
         
         sftp = ssh.open_sftp()
-        upload_files = ["shinseon_server.py", "shinseon_config.json", "core_logic.py"]
+        upload_files = ["shinseon_server.py", "shinseon_config.json", "core_logic.py", ".env", "server_config.json"]
         for f in upload_files:
             local_f = os.path.join(BASE_DIR, f)
             remote_f = f"/home/ubuntu/{f}"

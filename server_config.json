@@ -116,5 +116,8 @@
         }
     },
     "pyramiding_enabled": true,
-    "pyramiding_ratio": 30.0
+    "pyramiding_ratio": 30.0,
+    "BITGET_API_KEY": "bg_670c7963afe129099346583180ce606b",
+    "BITGET_SECRET_KEY": "4fe82e41304e84e315c7aa222ead7a4307182ec5f4766c37ad2290bf4268a2a0",
+    "BITGET_PASSPHRASE": "shinsun1234567"
 }
