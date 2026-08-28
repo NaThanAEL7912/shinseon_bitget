@@ -860,7 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.63"
+        self.CURRENT_VERSION = "V7.64"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1303,7 +1303,7 @@ class BotCore:
                     # --------------------------------------------------------------------------
                     direction = None
                     if display_liq >= target_liq and abs(display_oi) >= target_oi:
-                        if short_liq_val >= long_liq_val:
+                        if short_liq >= long_liq:
                             direction = "LONG"
                         else:
                             direction = "SHORT"
