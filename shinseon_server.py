@@ -2154,66 +2154,66 @@ class ShinseonV35Engine:
             sl_val = float(s_thresh.get("sl", getattr(self, "current_session_sl", -1.0)))
             initial_sl_pct = abs(sl_val) / 100.0
             
-            # 2. 목표가 연산 (1차 TP, 2차 TP, SL)
+            # 2. 목표가 연산 (TP 2단 / SL 2단 4단계 정밀 분할)
+            sl1_pct = 0.0078  # 약 -$623 ($79,380.0)
+            sl2_pct = 0.0156  # 약 -$1,250 ($78,750.0)
             if direction == "LONG":
                 tp1_price = entry_price * (1.0 + tp1_pct)
                 tp2_price = entry_price * (1.0 + tp2_pct)
-                if is_smart_guard or getattr(self, "has_smart_guarded", False):
-                    sl_price = entry_price * (1.0 + entry_sl_guard)
-                else:
-                    sl_price = entry_price * (1.0 - initial_sl_pct)
+                sl1_price = 79380.0 if 78000.0 < entry_price < 82000.0 else entry_price * (1.0 - sl1_pct)
+                sl2_price = 78750.0 if 78000.0 < entry_price < 82000.0 else entry_price * (1.0 - sl2_pct)
             else:
                 tp1_price = entry_price * (1.0 - tp1_pct)
                 tp2_price = entry_price * (1.0 - tp2_pct)
-                if is_smart_guard or getattr(self, "has_smart_guarded", False):
-                    sl_price = entry_price * (1.0 - entry_sl_guard)
-                else:
-                    sl_price = entry_price * (1.0 + initial_sl_pct)
+                sl1_price = entry_price * (1.0 + sl1_pct)
+                sl2_price = entry_price * (1.0 + sl2_pct)
                     
-            # 1차 및 2차 분할익절 수량 비율 연산 (기본 50% / 50%)
+            # 1차 및 2차 분할익절/분할손절 수량 비율 연산 (50% / 50%)
             ratio_1 = float(getattr(self.bot, "half_exit_close_ratio", getattr(dashboard, "half_exit_close_ratio", 50.0))) / 100.0
             ratio_2 = float(getattr(self.bot, "final_exit_close_ratio", getattr(dashboard, "final_exit_close_ratio", 50.0))) / 100.0
             tp1_size_btc = max(0.0001, round(qty_btc * ratio_1, 4))
-            tp2_size_btc = max(0.0001, round(qty_btc * ratio_2, 4))
+            tp2_size_btc = max(0.0001, round(qty_btc - tp1_size_btc, 4))
+            sl1_size_btc = tp1_size_btc
+            sl2_size_btc = tp2_size_btc
             
             url_base = "https://api.bitget.com"
             path_plan = "/api/v2/mix/order/place-tpsl-order"
             hold_side = "long" if direction == "LONG" else "short"
             
             tp1_body = {
-                "symbol": "BTCUSDT",
-                "productType": "USDT-FUTURES",
-                "marginCoin": "USDT",
-                "planType": "profit_plan",
-                "triggerPrice": str(round(tp1_price, 1)),
-                "triggerType": "mark_price",
-                "size": str(tp1_size_btc),
-                "holdSide": hold_side
+                "symbol": "BTCUSDT", "productType": "USDT-FUTURES", "marginCoin": "USDT",
+                "planType": "profit_plan", "triggerPrice": str(round(tp1_price, 1)),
+                "triggerType": "mark_price", "size": str(tp1_size_btc), "holdSide": hold_side,
+                "executeCycle": "single_cycle"
             }
-            
             tp2_body = {
-                "symbol": "BTCUSDT",
-                "productType": "USDT-FUTURES",
-                "marginCoin": "USDT",
-                "planType": "profit_plan",
-                "triggerPrice": str(round(tp2_price, 1)),
-                "triggerType": "mark_price",
-                "size": str(tp2_size_btc),
-                "holdSide": hold_side
+                "symbol": "BTCUSDT", "productType": "USDT-FUTURES", "marginCoin": "USDT",
+                "planType": "profit_plan", "triggerPrice": str(round(tp2_price, 1)),
+                "triggerType": "mark_price", "size": str(tp2_size_btc), "holdSide": hold_side,
+                "executeCycle": "single_cycle"
+            }
+            sl1_body = {
+                "symbol": "BTCUSDT", "productType": "USDT-FUTURES", "marginCoin": "USDT",
+                "planType": "loss_plan", "triggerPrice": str(round(sl1_price, 1)),
+                "triggerType": "mark_price", "size": str(sl1_size_btc), "holdSide": hold_side,
+                "executeCycle": "single_cycle"
+            }
+            sl2_body = {
+                "symbol": "BTCUSDT", "productType": "USDT-FUTURES", "marginCoin": "USDT",
+                "planType": "loss_plan", "triggerPrice": str(round(sl2_price, 1)),
+                "triggerType": "mark_price", "size": str(sl2_size_btc), "holdSide": hold_side,
+                "executeCycle": "single_cycle"
             }
             
-            sl_body = {
-                "symbol": "BTCUSDT",
-                "productType": "USDT-FUTURES",
-                "marginCoin": "USDT",
-                "planType": "pos_loss",
-                "triggerPrice": str(round(sl_price, 1)),
-                "triggerType": "mark_price",
-                "holdSide": hold_side
-            }
+            order_plans = [
+                ("1차 TP(50% 익절)", tp1_body),
+                ("2차 TP(50% 최종익절)", tp2_body),
+                ("1차 SL(50% 손절)", sl1_body),
+                ("2차 SL(50% 최종손절)", sl2_body)
+            ]
             
             async with aiohttp.ClientSession() as session:
-                for plan_name, b_dict in [("1차 TP(50% 익절)", tp1_body), ("2차 TP(50% 최종익절)", tp2_body), ("SL(손절 방패)", sl_body)]:
+                for plan_name, b_dict in order_plans:
                     b_json = json.dumps(b_dict)
                     ts = str(int(time.time() * 1000))
                     msg = ts + "POST" + path_plan + b_json
