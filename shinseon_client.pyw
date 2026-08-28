@@ -548,7 +548,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V7.61"
+        self.CURRENT_VERSION = "V7.62"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -1963,8 +1963,34 @@ class ShinseonDashboard(QMainWindow):
             self.start_bot()
 
     def send_telegram_notification(self, text):
-        # [V4.93] 텔레그램 알림 및 원격 제어는 AWS 웹서버가 100% 전담하므로 클라이언트 이중 발송 비활성화
-        pass
+        """
+        [V7.62] GUI 대시보드 실시간 가격 알림 및 원격 이벤트 텔레그램 비동기 즉각 전송 모듈
+        """
+        def _bg_send():
+            try:
+                cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shinseon_config.json")
+                token = ""
+                chat_id = ""
+                if os.path.exists(cfg_path):
+                    with open(cfg_path, "r", encoding="utf-8") as f:
+                        cfg = json.load(f)
+                        token = str(cfg.get("telegram_token", "")).strip()
+                        chat_id = str(cfg.get("telegram_chat_id", "")).strip()
+                
+                if not token or not chat_id:
+                    return
+                
+                url = f"https://api.telegram.org/bot{token}/sendMessage"
+                payload = {
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "HTML"
+                }
+                requests.post(url, json=payload, timeout=8)
+            except Exception as e:
+                pass
+
+        threading.Thread(target=_bg_send, daemon=True).start()
 
     def handle_telegram_command(self, text):
         cmd = text.strip()
@@ -2758,13 +2784,14 @@ class ShinseonDashboard(QMainWindow):
 
         msg = f"🔔 [가격 알림 등록] 목표가 ${target:,.1f} ({dir_text} 감시 개시)"
         self.add_log(msg)
-        self.send_telegram_notification(msg)
+        self.send_telegram_notification(f"🔔 <b>[신선 가격 알림 등록]</b>\n목표가: <code>${target:,.1f}</code> ({dir_text} 감시 개시)\n현재가: <code>${cur_price:,.1f} USDT</code>")
         self.update_price_alert_ui()
 
     def clear_price_alerts(self):
         self.price_alerts.clear()
         msg = "🔔 [가격 알림] 등록된 모든 가격 알림이 해제되었습니다."
         self.add_log(msg)
+        self.send_telegram_notification("🔕 <b>[신선 알림]</b> 등록된 모든 가격 알림이 해제되었습니다.")
         self.update_price_alert_ui()
 
     def update_price_alert_ui(self):
@@ -2837,7 +2864,7 @@ class ShinseonDashboard(QMainWindow):
                     target = alert['target']
                     play_order_sound("CLEAR", getattr(self, "sound_enabled", True))
                     self.add_log(f"🔔 [가격 알림 돌파 포착] 비트코인 목표가 ${target:,.1f} {dir_desc} (현재가: ${price:,.1f})")
-                    self.send_telegram_notification(f"🔔 [신선 알림] 비트코인 목표가 ${target:,.1f} {dir_desc} (현재가: ${price:,.1f})")
+                    self.send_telegram_notification(f"🚨 <b>[신선 목표가 도달 알림!]</b>\n비트코인이 목표가 <code>${target:,.1f}</code> ({dir_desc})에 도달하였습니다!\n현재 실시간 가격: <code>${price:,.1f} USDT</code>")
 
                 if triggered:
                     self.update_price_alert_ui()
