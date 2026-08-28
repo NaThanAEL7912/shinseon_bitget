@@ -548,7 +548,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V7.62"
+        self.CURRENT_VERSION = "V7.63"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2771,6 +2771,18 @@ class ShinseonDashboard(QMainWindow):
         cur_price = getattr(self, "current_price", 0.0)
         if cur_price <= 0.0:
             cur_price = getattr(self, "last_price", 0.0)
+        if cur_price <= 0.0 and hasattr(self, "lbl_price"):
+            try:
+                txt = self.lbl_price.text()
+                if "가격:" in txt:
+                    p_part = txt.split("가격:")[1].replace("USDT", "").replace(",", "").strip()
+                    cur_price = float(p_part)
+            except Exception:
+                pass
+
+        if cur_price <= 0.0:
+            self.add_log("⚠️ [가격 알림] 실시간 시세를 수신 중입니다. 1~2초 후 다시 시도해주십시오.")
+            return
 
         if target > cur_price:
             dir_type = "ABOVE"
@@ -2779,7 +2791,13 @@ class ShinseonDashboard(QMainWindow):
             dir_type = "BELOW"
             dir_text = "하강 돌파"
 
-        alert_item = {'target': target, 'direction': dir_type, 'dir_text': dir_text}
+        alert_item = {
+            'target': target,
+            'direction': dir_type,
+            'dir_text': dir_text,
+            'init_price': cur_price,
+            'created_at': time.time()
+        }
         self.price_alerts.append(alert_item)
 
         msg = f"🔔 [가격 알림 등록] 목표가 ${target:,.1f} ({dir_text} 감시 개시)"
@@ -2847,10 +2865,14 @@ class ShinseonDashboard(QMainWindow):
             self.current_price = price
             self.lbl_price.setText(f"BTC/USDT 실시간 가격: {price:,.1f} USDT")
 
-            # 실시간 목표가 가격 알림 돌파 포착 검증 (v3.65)
+            # 실시간 목표가 가격 알림 돌파 포착 검증 (v3.65 / v7.63 쿨다운 가드)
             if hasattr(self, 'price_alerts') and self.price_alerts:
+                now_ts = time.time()
                 triggered = []
                 for alert in list(self.price_alerts):
+                    # 등록 후 최소 2초 경과 후 돌파 판정 (오발탄 즉시 소멸 방지)
+                    if now_ts - alert.get('created_at', 0.0) < 2.0:
+                        continue
                     target = alert['target']
                     direction = alert['direction']
                     if direction == "ABOVE" and price >= target:
