@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V1.0)
+신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.67)
 - 3대 설정 탭(세션별 설정, 트레이딩 핵심 설정, 가드레일 설정) 100% 연동
 - 시작일시~종료일시 기간 필터링 및 원클릭 프리셋
 - 실시간 성과 대시보드, 세션별 성과표, 초단위 매매일지, CSV 내보내기, 황금 파라미터 자동 최적화 탑재
@@ -19,10 +19,10 @@ from PySide6.QtWidgets import (
     QDateTimeEdit, QComboBox, QFileDialog, QMessageBox, QProgressBar,
     QSplitter, QScrollArea, QFrame
 )
-from PySide6.QtCore import Qt, QDateTime, QThread, Signal
+from PySide6.QtCore import Qt, QDateTime, QThread, Signal, QTimer
 from PySide6.QtGui import QFont, QColor, QIcon
 
-from backtest_engine import run_backtest_simulation, load_all_session_data
+from backtest_engine import run_backtest_simulation, load_all_session_data, sync_and_build_all_data, get_unified_ticks_cached
 
 CONFIG_FILE = "shinseon_config.json"
 
@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V1.0 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.67 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
@@ -253,9 +253,26 @@ class ShinseonBacktesterGUI(QMainWindow):
         layout.setSpacing(8)
 
         top_h = QHBoxLayout()
-        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>v1.0 (9일간 초단위 실측 오더플로우 전수 탑재)</span>")
+        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.67 (downloads 21일 전수 실측 오더플로우 연동)</span>")
         top_h.addWidget(title_lbl)
         top_h.addStretch()
+
+        # 🎯 OI 진입 모드 선택기
+        top_h.addWidget(QLabel("<b style='color: #ffd700;'>🎯 OI 진입 모드:</b>"))
+        self.cb_oi_mode = QComboBox()
+        self.cb_oi_mode.addItem("🟢 +OI (양수 자금유입 전용 - 추천)", "POSITIVE_ONLY")
+        self.cb_oi_mode.addItem("⚪ abs(OI) (절댓값 전수 진입 - 고빈도)", "ALL")
+        self.cb_oi_mode.setStyleSheet("""
+            QComboBox {
+                background-color: #161922;
+                border: 1px solid #ffd700;
+                border-radius: 5px;
+                padding: 6px 12px;
+                color: #ffffff;
+                font-weight: bold;
+            }
+        """)
+        top_h.addWidget(self.cb_oi_mode)
 
         # 액션 버튼들
         self.btn_run = QPushButton("🚀 백테스트 실행 (Run Backtest)")
@@ -279,67 +296,172 @@ class ShinseonBacktesterGUI(QMainWindow):
 
         # 기간 선택 바
         date_h = QHBoxLayout()
-        date_h.setSpacing(10)
+        date_h.setSpacing(8)
 
         date_h.addWidget(QLabel("<b style='color: #00ffcc;'>시작 일시:</b>"))
-        self.dt_start = QDateTimeEdit(QDateTime.fromString("2026-08-10 09:00:00", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_start = QDateTimeEdit(QDateTime.fromString("2026-08-17 00:00:00", "yyyy-MM-dd HH:mm:ss"))
         self.dt_start.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.dt_start.setMinimumDateTime(QDateTime.fromString("2026-08-01 00:00:00", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_start.setMaximumDateTime(QDateTime.fromString("2026-08-31 23:59:59", "yyyy-MM-dd HH:mm:ss"))
         self.dt_start.setCalendarPopup(True)
+        self.dt_start.dateTimeChanged.connect(self.update_period_preview)
         date_h.addWidget(self.dt_start)
 
         date_h.addWidget(QLabel("<b style='color: #ff3366;'>종료 일시:</b>"))
-        self.dt_end = QDateTimeEdit(QDateTime.fromString("2026-08-18 16:30:00", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_end = QDateTimeEdit(QDateTime.fromString("2026-08-21 23:59:59", "yyyy-MM-dd HH:mm:ss"))
         self.dt_end.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
+        self.dt_end.setMinimumDateTime(QDateTime.fromString("2026-08-01 00:00:00", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_end.setMaximumDateTime(QDateTime.fromString("2026-08-31 23:59:59", "yyyy-MM-dd HH:mm:ss"))
         self.dt_end.setCalendarPopup(True)
+        self.dt_end.dateTimeChanged.connect(self.update_period_preview)
         date_h.addWidget(self.dt_end)
 
         # 빠른 프리셋 버튼들
-        btn_full = QPushButton("전체 기간 (Full)")
+        btn_full = QPushButton("전체 기간")
         btn_full.setObjectName("btn_preset")
         btn_full.clicked.connect(lambda: self.set_date_preset("full"))
         date_h.addWidget(btn_full)
-
-        btn_24h = QPushButton("최근 24시간")
-        btn_24h.setObjectName("btn_preset")
-        btn_24h.clicked.connect(lambda: self.set_date_preset("24h"))
-        date_h.addWidget(btn_24h)
 
         btn_3d = QPushButton("최근 3일")
         btn_3d.setObjectName("btn_preset")
         btn_3d.clicked.connect(lambda: self.set_date_preset("3d"))
         date_h.addWidget(btn_3d)
 
-        btn_weekday = QPushButton("지난주 평일 (월~금)")
+        btn_weekday = QPushButton("지난 주 평일 (8/17~8/21)")
         btn_weekday.setObjectName("btn_preset")
+        btn_weekday.setStyleSheet("color: #00ffcc; font-weight: bold;")
         btn_weekday.clicked.connect(lambda: self.set_date_preset("weekday"))
         date_h.addWidget(btn_weekday)
 
-        btn_weekend = QPushButton("지난주 주말 (토~일)")
+        btn_weekend = QPushButton("주말 (8/22~8/23)")
         btn_weekend.setObjectName("btn_preset")
+        btn_weekend.setStyleSheet("color: #ff9900; font-weight: bold;")
         btn_weekend.clicked.connect(lambda: self.set_date_preset("weekend"))
         date_h.addWidget(btn_weekend)
+
+        btn_24h = QPushButton("최근 24시간")
+        btn_24h.setObjectName("btn_preset")
+        btn_24h.clicked.connect(lambda: self.set_date_preset("24h"))
+        date_h.addWidget(btn_24h)
+
+        # ⚡ 최신 데이터 정렬 버튼
+        self.btn_sync_data = QPushButton("⚡ 최신 실측 데이터 정렬 (Sync)")
+        self.btn_sync_data.setStyleSheet("""
+            QPushButton {
+                background-color: #004d40;
+                color: #00ffcc;
+                border: 1px solid #00ffcc;
+                border-radius: 6px;
+                padding: 6px 14px;
+                font-weight: 900;
+            }
+            QPushButton:hover {
+                background-color: #00796b;
+                color: #ffffff;
+            }
+        """)
+        self.btn_sync_data.clicked.connect(self.on_sync_data)
+        date_h.addWidget(self.btn_sync_data)
+
+        # 선택 기간 실시간 안내 라벨
+        self.lbl_period_preview = QLabel("<b>[📌 선택 구간: 08/17 ~ 08/21]</b>")
+        self.lbl_period_preview.setStyleSheet("color: #ffd700; font-size: 13px; font-weight: bold; margin-left: 10px;")
+        date_h.addWidget(self.lbl_period_preview)
 
         date_h.addStretch()
         layout.addLayout(date_h)
 
         return group
 
+    def on_sync_data(self):
+        """downloads 폴더 내의 모든 실측 CSV를 전수 스캔하여 pkl 캐시 갱신 및 날짜 범위 자동 확장 (사용자 선택 날짜 100% 보존)"""
+        try:
+            # 1. 정렬 전 폐하께서 선택해두신 날짜 범위 안전 기억
+            cur_start_dt, cur_end_dt = self.get_selected_date_range()
+
+            self.btn_sync_data.setText("⏳ 데이터 정렬 중...")
+            self.btn_sync_data.setEnabled(False)
+            QApplication.processEvents()
+
+            res = sync_and_build_all_data()
+            if not res.get('success'):
+                QMessageBox.critical(self, "오류", f"데이터 정렬 실패: {res.get('error')}")
+                return
+
+            min_dt = res['min_dt']
+            max_dt = res['max_dt']
+            total_files = res['total_files']
+            total_ticks = res['total_ticks']
+
+            # 2. 폐하의 선택 날짜를 100% 철통 보존 (전체 날짜로 덮어쓰기 방지)
+            if cur_start_dt and cur_end_dt:
+                self.dt_start.setDateTime(QDateTime(cur_start_dt.year, cur_start_dt.month, cur_start_dt.day, cur_start_dt.hour, cur_start_dt.minute, cur_start_dt.second))
+                self.dt_end.setDateTime(QDateTime(cur_end_dt.year, cur_end_dt.month, cur_end_dt.day, cur_end_dt.hour, cur_end_dt.minute, cur_end_dt.second))
+            else:
+                self.dt_start.setDateTime(QDateTime(min_dt.year, min_dt.month, min_dt.day, min_dt.hour, min_dt.minute, min_dt.second))
+                self.dt_end.setDateTime(QDateTime(max_dt.year, max_dt.month, max_dt.day, max_dt.hour, max_dt.minute, max_dt.second))
+
+            QMessageBox.information(
+                self,
+                "데이터 정렬 완료",
+                f"총 {total_files}개 폴더/파일의 실측 데이터 ({total_ticks:,}틱)가 성공적으로 정렬되었습니다!\n\n"
+                f"📅 전체 가용 기간: {min_dt.strftime('%Y-%m-%d %H:%M')} ~ {max_dt.strftime('%Y-%m-%d %H:%M')}\n"
+                f"🎯 현재 선택 유지 구간: {cur_start_dt.strftime('%Y-%m-%d %H:%M')} ~ {cur_end_dt.strftime('%Y-%m-%d %H:%M')}\n\n"
+                f"선택하신 구간으로 백테스트가 연계 수행됩니다!"
+            )
+
+            # 즉시 1회 백테스트 실행 (선택된 구간으로 정밀 실행)
+            self.on_run_backtest()
+        except Exception as e:
+            QMessageBox.critical(self, "오류", f"데이터 정렬 중 예외 발생: {e}")
+        finally:
+            self.btn_sync_data.setText("⚡ 최신 실측 데이터 정렬 (Sync)")
+            self.btn_sync_data.setEnabled(True)
+
+
+    def update_period_preview(self):
+        """사용자가 날짜를 변경할 때 실시간으로 선택 기간 안내 라벨 갱신"""
+        try:
+            s_dt, e_dt = self.get_selected_date_range()
+            diff = e_dt - s_dt
+            days = diff.days + (1 if diff.seconds > 0 else 0)
+            if hasattr(self, 'lbl_period_preview'):
+                self.lbl_period_preview.setText(f"<b>[📌 선택 구간: {s_dt.strftime('%m/%d')} ~ {e_dt.strftime('%m/%d')} (총 {max(1, days)}일간)]</b>")
+        except Exception:
+            pass
+
     def set_date_preset(self, preset):
+        # RAM 캐시 데이터에서 min/max 초광속(0.0001초) 참조
+        _, all_ts = get_unified_ticks_cached()
+        if all_ts:
+            min_dt = datetime.fromtimestamp(all_ts[0])
+            max_dt = datetime.fromtimestamp(all_ts[-1])
+        else:
+            min_dt = datetime(2026, 8, 7, 6, 15, 5)
+            max_dt = datetime(2026, 8, 24, 2, 31, 1)
+
         if preset == "full":
-            self.dt_start.setDateTime(QDateTime.fromString("2026-08-10 09:00:00", "yyyy-MM-dd HH:mm:ss"))
-            self.dt_end.setDateTime(QDateTime.fromString("2026-08-18 16:30:00", "yyyy-MM-dd HH:mm:ss"))
+            self.dt_start.setDateTime(QDateTime(min_dt.year, min_dt.month, min_dt.day, 0, 0, 0))
+            self.dt_end.setDateTime(QDateTime(max_dt.year, max_dt.month, max_dt.day, 23, 59, 59))
         elif preset == "24h":
-            self.dt_start.setDateTime(QDateTime.fromString("2026-08-17 16:30:00", "yyyy-MM-dd HH:mm:ss"))
-            self.dt_end.setDateTime(QDateTime.fromString("2026-08-18 16:30:00", "yyyy-MM-dd HH:mm:ss"))
+            start_24h = max_dt - timedelta(hours=24)
+            self.dt_start.setDateTime(QDateTime(start_24h.year, start_24h.month, start_24h.day, start_24h.hour, start_24h.minute, start_24h.second))
+            self.dt_end.setDateTime(QDateTime(max_dt.year, max_dt.month, max_dt.day, 23, 59, 59))
         elif preset == "3d":
-            self.dt_start.setDateTime(QDateTime.fromString("2026-08-15 00:00:00", "yyyy-MM-dd HH:mm:ss"))
-            self.dt_end.setDateTime(QDateTime.fromString("2026-08-18 16:30:00", "yyyy-MM-dd HH:mm:ss"))
+            start_3d = max_dt - timedelta(days=2) # 3일간
+            self.dt_start.setDateTime(QDateTime(start_3d.year, start_3d.month, start_3d.day, 0, 0, 0))
+            self.dt_end.setDateTime(QDateTime(max_dt.year, max_dt.month, max_dt.day, 23, 59, 59))
         elif preset == "weekday":
-            self.dt_start.setDateTime(QDateTime.fromString("2026-08-10 09:00:00", "yyyy-MM-dd HH:mm:ss"))
-            self.dt_end.setDateTime(QDateTime.fromString("2026-08-15 05:00:00", "yyyy-MM-dd HH:mm:ss"))
+            # 지난 주 평일 5일간 (8/17 월 00:00:00 ~ 8/21 금 23:59:59)
+            self.dt_start.setDateTime(QDateTime(2026, 8, 17, 0, 0, 0))
+            self.dt_end.setDateTime(QDateTime(2026, 8, 21, 23, 59, 59))
         elif preset == "weekend":
-            self.dt_start.setDateTime(QDateTime.fromString("2026-08-15 05:00:00", "yyyy-MM-dd HH:mm:ss"))
-            self.dt_end.setDateTime(QDateTime.fromString("2026-08-17 09:00:00", "yyyy-MM-dd HH:mm:ss"))
+            # 주말 2일간 (8/22 토 00:00:00 ~ 8/23 일 23:59:59)
+            self.dt_start.setDateTime(QDateTime(2026, 8, 22, 0, 0, 0))
+            self.dt_end.setDateTime(QDateTime(2026, 8, 23, 23, 59, 59))
+
+        self.update_period_preview()
+
 
     # -------------------------------------------------------------
     # 2. [탭 1: 세션별 설정] (스크린샷 1과 100% 동일)
@@ -551,6 +673,7 @@ class ShinseonBacktesterGUI(QMainWindow):
             h_row.addWidget(QLabel("<b>1차 익절 PnL (%)</b>"), 2)
             h_row.addWidget(QLabel("<b>2차 익절 PnL (%)</b>"), 2)
             h_row.addWidget(QLabel("<b>본전/버퍼 가드 (PnL %)</b>"), 2)
+            h_row.addWidget(QLabel("<b>분할익절 가동</b>"), 1, Qt.AlignCenter)
             layout_grp.addLayout(h_row)
 
             for key, name, tp1, tp2, be in s_list:
@@ -569,28 +692,64 @@ class ShinseonBacktesterGUI(QMainWindow):
                 ed_be.setAlignment(Qt.AlignCenter)
                 row.addWidget(ed_be, 2)
 
+                chk_half = QCheckBox()
+                chk_half.setChecked(True)
+                chk_half.setStyleSheet("margin-left: 15px;")
+                row.addWidget(chk_half, 1, Qt.AlignCenter)
+
                 self.guard_inputs[key] = {
                     'tp1': ed_tp1,
                     'tp2': ed_tp2,
-                    'be_guard': ed_be
+                    'be_guard': ed_be,
+                    'enabled': chk_half
                 }
                 layout_grp.addLayout(row)
 
             g_layout.addWidget(grp)
 
-        # 공통 가드레일 비율
-        c_grp = QGroupBox("공통 분할 익절 및 추세 추종 설정")
-        c_layout = QHBoxLayout(c_grp)
+        # 공통 가드레일 및 불타기 / 보존가드 설정
+        c_grp = QGroupBox("공통 분할 익절 & 추세 추종 불타기 & 보존가드 설정")
+        c_layout = QVBoxLayout(c_grp)
+        c_layout.setSpacing(10)
 
-        c_layout.addWidget(QLabel("1차 분할 익절 비율 (%):"))
+        # 1행: 1차 / 2차 분할익절 비율
+        row_split = QHBoxLayout()
+        row_split.addWidget(QLabel("1차 분할 익절 비율 (%):"), 2)
         self.ed_tp1_split = QLineEdit("50.0")
         self.ed_tp1_split.setAlignment(Qt.AlignCenter)
-        c_layout.addWidget(self.ed_tp1_split)
+        row_split.addWidget(self.ed_tp1_split, 2)
 
-        c_layout.addWidget(QLabel("2차 분할 익절 비율 (%):"))
+        row_split.addWidget(QLabel("2차 분할 익절 비율 (%):"), 2)
         self.ed_tp2_split = QLineEdit("50.0")
         self.ed_tp2_split.setAlignment(Qt.AlignCenter)
-        c_layout.addWidget(self.ed_tp2_split)
+        row_split.addWidget(self.ed_tp2_split, 2)
+        c_layout.addLayout(row_split)
+
+        # 2행: 추세 추종 불타기 (Pyramiding) 가동
+        row_pyra = QHBoxLayout()
+        self.chk_pyramiding = QCheckBox("추세 추종 불타기(Pyramiding) 가동")
+        self.chk_pyramiding.setChecked(True)
+        self.chk_pyramiding.setStyleSheet("color: #ffd700; font-weight: bold;")
+        row_pyra.addWidget(self.chk_pyramiding, 4)
+
+        self.ed_pyramiding_ratio = QLineEdit("30.0")
+        self.ed_pyramiding_ratio.setAlignment(Qt.AlignCenter)
+        row_pyra.addWidget(self.ed_pyramiding_ratio, 2)
+        row_pyra.addStretch(2)
+        c_layout.addLayout(row_pyra)
+
+        # 3행: 보존가드 발동 최소값 & 가드레일 스탑값
+        row_guard = QHBoxLayout()
+        row_guard.addWidget(QLabel("🛡️ 보존가드 발동 최소값 (PnL %):"), 3)
+        self.ed_mid_guard_trigger = QLineEdit("0.60")
+        self.ed_mid_guard_trigger.setAlignment(Qt.AlignCenter)
+        row_guard.addWidget(self.ed_mid_guard_trigger, 2)
+
+        row_guard.addWidget(QLabel("가드레일 스탑값 (PnL %):"), 3)
+        self.ed_mid_guard_offset = QLineEdit("0.20")
+        self.ed_mid_guard_offset.setAlignment(Qt.AlignCenter)
+        row_guard.addWidget(self.ed_mid_guard_offset, 2)
+        c_layout.addLayout(row_guard)
 
         g_layout.addWidget(c_grp)
         g_layout.addStretch()
@@ -625,15 +784,17 @@ class ShinseonBacktesterGUI(QMainWindow):
         row_f = QHBoxLayout()
         row_f.addWidget(QLabel("<b>적용 수수료 체계 (Taker):</b>"), 2)
         self.cb_fee_preset = QComboBox()
-        self.cb_fee_preset.addItem("👑 박호두 레퍼럴 50% 할인 (0.030% / 0.00030)", 0.00030)
+        self.cb_fee_preset.addItem("👑 비트겟 일반 레퍼럴 (0.040% / 0.00040)", 0.00040)
+        self.cb_fee_preset.addItem("🔥 박호두 레퍼럴 50% 할인 (0.030% / 0.00030)", 0.00030)
         self.cb_fee_preset.addItem("비트겟 기본 표준 시장가 (0.060% / 0.00060)", 0.00060)
         self.cb_fee_preset.addItem("VIP / 페이백 결합 최상위 (0.025% / 0.00025)", 0.00025)
         self.cb_fee_preset.addItem("수수료 0% (수수료 미차감 원장 분석)", 0.00000)
         self.cb_fee_preset.currentIndexChanged.connect(self.on_fee_preset_changed)
         row_f.addWidget(self.cb_fee_preset, 3)
 
-        self.ed_custom_fee = QLineEdit("0.00030")
+        self.ed_custom_fee = QLineEdit("0.00040")
         self.ed_custom_fee.setAlignment(Qt.AlignCenter)
+        self.ed_custom_fee.textChanged.connect(self.on_custom_fee_text_changed)
         row_f.addWidget(self.ed_custom_fee, 1)
         row_f.addStretch(1)
         g_layout.addLayout(row_f)
@@ -644,7 +805,24 @@ class ShinseonBacktesterGUI(QMainWindow):
 
     def on_fee_preset_changed(self, idx):
         val = self.cb_fee_preset.currentData()
-        self.ed_custom_fee.setText(f"{val:.5f}")
+        if val is not None:
+            self.ed_custom_fee.blockSignals(True)
+            self.ed_custom_fee.setText(f"{val:.5f}")
+            self.ed_custom_fee.blockSignals(False)
+
+    def on_custom_fee_text_changed(self, text):
+        try:
+            val = float(text.strip())
+            for i in range(self.cb_fee_preset.count()):
+                c_val = self.cb_fee_preset.itemData(i)
+                if abs(c_val - val) < 1e-6:
+                    self.cb_fee_preset.blockSignals(True)
+                    self.cb_fee_preset.setCurrentIndex(i)
+                    self.cb_fee_preset.blockSignals(False)
+                    return
+        except Exception:
+            pass
+
 
     # -------------------------------------------------------------
     # 6. 하단 결과 대시보드 (종합 요약 + 세션별 성과 + 거래 일지)
@@ -656,8 +834,8 @@ class ShinseonBacktesterGUI(QMainWindow):
         layout.setSpacing(8)
 
         # 8대 요약 카드 박스
-        cards_grp = QGroupBox("📊 백테스팅 종합 성과 대시보드 (Performance Summary)")
-        cards_layout = QHBoxLayout(cards_grp)
+        self.cards_grp = QGroupBox("📊 백테스팅 종합 성과 대시보드 (Performance Summary)")
+        cards_layout = QHBoxLayout(self.cards_grp)
         cards_layout.setContentsMargins(10, 8, 10, 8)
         cards_layout.setSpacing(8)
 
@@ -674,7 +852,7 @@ class ShinseonBacktesterGUI(QMainWindow):
                      self.lbl_net, self.lbl_krw, self.lbl_roi, self.lbl_mdd]:
             cards_layout.addWidget(card)
 
-        layout.addWidget(cards_grp)
+        layout.addWidget(self.cards_grp)
 
         # 결과 서브 탭 (세션별 성과 vs 거래 상세 일지)
         self.res_tab_widget = QTabWidget()
@@ -740,7 +918,57 @@ class ShinseonBacktesterGUI(QMainWindow):
     # -------------------------------------------------------------
     # 7. 백테스트 실행 및 결과 렌더링
     # -------------------------------------------------------------
+    def get_selected_date_range(self):
+        """키보드 포커스 미커밋 방지 및 텍스트 직접 파싱 2중 안전망을 통한 정밀 날짜 추출 (2026년 락 & 역전 자동 보정)"""
+        import re
+        self.dt_start.interpretText()
+        self.dt_end.interpretText()
+        
+        # 1. 텍스트 직접 정제 및 파싱
+        s_txt = self.dt_start.text().strip()
+        e_txt = self.dt_end.text().strip()
+        
+        # 특수문자/LTR/RTL 마크 정제 (숫자, -, :, 공백만 추출)
+        s_txt_clean = re.sub(r'[^0-9\-:\s]', '', s_txt).strip()
+        e_txt_clean = re.sub(r'[^0-9\-:\s]', '', e_txt).strip()
+        
+        # 연도 튐 방지: 2027년 등 엉뚱한 연도가 오면 2026년으로 자동 교정
+        if s_txt_clean.startswith("2027-"):
+            s_txt_clean = "2026-" + s_txt_clean[5:]
+        if e_txt_clean.startswith("2027-"):
+            e_txt_clean = "2026-" + e_txt_clean[5:]
+        
+        start_dt = None
+        end_dt = None
+        for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"]:
+            if not start_dt:
+                try: start_dt = datetime.strptime(s_txt_clean, fmt)
+                except Exception: pass
+            if not end_dt:
+                try: end_dt = datetime.strptime(e_txt_clean, fmt)
+                except Exception: pass
+                
+        if not start_dt:
+            start_dt = self.dt_start.dateTime().toPython()
+        if not end_dt:
+            end_dt = self.dt_end.dateTime().toPython()
+            
+        # 연도 강제 2026년 락
+        if start_dt.year != 2026:
+            try: start_dt = start_dt.replace(year=2026)
+            except Exception: pass
+        if end_dt.year != 2026:
+            try: end_dt = end_dt.replace(year=2026)
+            except Exception: pass
+
+        # 시작일 > 종료일 역전 자동 보정
+        if start_dt > end_dt:
+            end_dt = datetime(start_dt.year, start_dt.month, start_dt.day, 23, 59, 59)
+            
+        return start_dt, end_dt
+
     def get_current_config_dict(self):
+        start_dt, end_dt = self.get_selected_date_range()
         # 1. 세션별 설정
         sessions_dict = {}
         for k, v in self.session_inputs.items():
@@ -761,29 +989,52 @@ class ShinseonBacktesterGUI(QMainWindow):
         # 3. 가드레일 설정
         guard_dict = {
             'tp1_split_ratio': float(self.ed_tp1_split.text().strip()),
-            'tp2_split_ratio': float(self.ed_tp2_split.text().strip())
+            'tp2_split_ratio': float(self.ed_tp2_split.text().strip()),
+            'pyramiding_enabled': self.chk_pyramiding.isChecked(),
+            'pyramiding_ratio': float(self.ed_pyramiding_ratio.text().strip()),
+            'mid_guard_trigger': float(self.ed_mid_guard_trigger.text().strip()),
+            'mid_guard_offset': float(self.ed_mid_guard_offset.text().strip())
         }
         for s_k, g_dict in self.guard_inputs.items():
             guard_dict[s_k] = {
                 'tp1': float(g_dict['tp1'].text().strip()),
                 'tp2': float(g_dict['tp2'].text().strip()),
-                'be_guard': float(g_dict['be_guard'].text().strip())
+                'be_guard': float(g_dict['be_guard'].text().strip()),
+                'enabled': g_dict['enabled'].isChecked()
             }
 
+        # 4. OI 진입 모드
+        oi_mode = self.cb_oi_mode.currentData() if hasattr(self, 'cb_oi_mode') and self.cb_oi_mode.currentData() else "POSITIVE_ONLY"
+
         return {
+            'start_date': start_dt.strftime("%Y-%m-%d %H:%M:%S"),
+            'end_date': end_dt.strftime("%Y-%m-%d %H:%M:%S"),
             'initial_balance': float(self.ed_initial_balance.text().strip()),
             'fee_rate': float(self.ed_custom_fee.text().strip()),
             'sessions': sessions_dict,
             'trading': trading_dict,
-            'guardrails': guard_dict
+            'guardrails': guard_dict,
+            'oi_direction_mode': oi_mode
         }
 
     def on_run_backtest(self):
         try:
-            cfg = self.get_current_config_dict()
-            start_dt = self.dt_start.dateTime().toPython()
-            end_dt = self.dt_end.dateTime().toPython()
+            # 1. 포커스 강제 커밋 및 정밀 날짜 추출
+            start_dt, end_dt = self.get_selected_date_range()
 
+            # 계산 중 시각적 로딩 상태 전환 (즉시 반응)
+            self.btn_run.setText(f"⏳ {start_dt.strftime('%m/%d')}~{end_dt.strftime('%m/%d')} 실측 오더플로우 정밀 연산 중...")
+            self.btn_run.setEnabled(False)
+            self.btn_run.setStyleSheet("background-color: #d97706; color: #ffffff; border: 1px solid #fbbf24; font-weight: bold; border-radius: 6px; padding: 6px 14px;")
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            
+            if hasattr(self, 'cards_grp'):
+                self.cards_grp.setTitle(f"⏳ 백테스팅 정밀 시뮬레이션 계산 중... ({start_dt.strftime('%Y-%m-%d %H:%M')} ~ {end_dt.strftime('%Y-%m-%d %H:%M')})")
+            
+            QApplication.processEvents() # 즉시 1프레임 렌더링
+
+            # 2. 연산 수행
+            cfg = self.get_current_config_dict()
             res = run_backtest_simulation(cfg, start_dt, end_dt)
             if 'error' in res:
                 QMessageBox.critical(self, "오류", res['error'])
@@ -791,8 +1042,18 @@ class ShinseonBacktesterGUI(QMainWindow):
 
             self.last_results = res
             self.render_results(res)
+            if hasattr(self, 'cards_grp'):
+                self.cards_grp.setTitle(f"📊 백테스팅 성과 대시보드 [분석 기간: {start_dt.strftime('%Y-%m-%d %H:%M')} ~ {end_dt.strftime('%Y-%m-%d %H:%M')}]")
         except Exception as e:
             QMessageBox.critical(self, "백테스트 예외", f"시뮬레이션 실행 중 오류 발생: {e}")
+        finally:
+            # 3. 완료 후 원래 버튼 상태로 자동 복원
+            self.btn_run.setText("🚀 백테스트 실행 (Run Backtest)")
+            self.btn_run.setEnabled(True)
+            self.btn_run.setStyleSheet("")
+            QApplication.restoreOverrideCursor()
+
+
 
     def render_results(self, res):
         init_b = res['initial_balance']
@@ -887,12 +1148,19 @@ class ShinseonBacktesterGUI(QMainWindow):
 
     def on_save_config(self):
         try:
+            # 1. UI 최신 데이터 추출
             cfg = self.get_current_config_dict()
-            with open("shinseon_backtest_config.json", "w", encoding="utf-8") as f:
+
+            # 2. 백테스터 전용 설정 파일 원클릭 즉시 저장 (실전 봇 shinseon_config.json과는 100% 완전 격리!)
+            backtest_cfg_file = "shinseon_backtest_config.json"
+            with open(backtest_cfg_file, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=4, ensure_ascii=False)
-            QMessageBox.information(self, "저장 완료", "현재 백테스터 설정이 'shinseon_backtest_config.json' 파일에 안전하게 저장되었습니다!")
+
+            QMessageBox.information(self, "저장 완료", "백테스터 전용 설정(shinseon_backtest_config.json)이 안전하게 저장되었습니다!\n(실전 봇 설정에는 일체 영향을 주지 않습니다)")
         except Exception as e:
             QMessageBox.critical(self, "오류", f"설정 저장 실패: {e}")
+
+
 
     def apply_config_to_ui(self, data):
         """shinseon_config.json 또는 백테스터 json 데이터를 GUI 위젯들에 100% 자동 매핑"""
@@ -949,24 +1217,96 @@ class ShinseonBacktesterGUI(QMainWindow):
 
         # 3. 탭 3: 가드레일 설정 매핑 (guardrail_configs 또는 session_guardrails 또는 guardrails)
         g_map = data.get("guardrail_configs") or data.get("session_guardrails") or data.get("guardrails") or {}
+        # 대문자 키 매핑
+        guard_rev_map = {
+            "ASIA": "asia", "LONDON": "europe", "NY": "us", "PACIFIC": "pacific",
+            "WEEKEND_ASIA": "weekend_asia", "WEEKEND_LONDON": "weekend_europe",
+            "WEEKEND_NY": "weekend_us", "WEEKEND_PACIFIC": "weekend_pacific"
+        }
         for s_key, g_cfg in g_map.items():
-            if isinstance(g_cfg, dict) and s_key in self.guard_inputs:
-                widgets = self.guard_inputs[s_key]
-                if "tp1" in g_cfg and "tp1" in widgets:
+            norm_key = guard_rev_map.get(s_key, s_key)
+            if isinstance(g_cfg, dict) and norm_key in self.guard_inputs:
+                widgets = self.guard_inputs[norm_key]
+                if "trigger" in g_cfg and "tp1" in widgets:
+                    widgets["tp1"].setText(f"{float(g_cfg['trigger']):.2f}")
+                elif "tp1" in g_cfg and "tp1" in widgets:
                     widgets["tp1"].setText(f"{float(g_cfg['tp1']):.2f}")
-                if "tp2" in g_cfg and "tp2" in widgets:
+
+                if "trigger_2" in g_cfg and "tp2" in widgets:
+                    widgets["tp2"].setText(f"{float(g_cfg['trigger_2']):.2f}")
+                elif "tp2" in g_cfg and "tp2" in widgets:
                     widgets["tp2"].setText(f"{float(g_cfg['tp2']):.2f}")
-                if "be_guard" in g_cfg and "be_guard" in widgets:
+
+                if "guard" in g_cfg and "be_guard" in widgets:
+                    widgets["be_guard"].setText(f"{float(g_cfg['guard']):.2f}")
+                elif "be_guard" in g_cfg and "be_guard" in widgets:
                     widgets["be_guard"].setText(f"{float(g_cfg['be_guard']):.2f}")
+
+                if "enabled" in g_cfg and "enabled" in widgets:
+                    widgets["enabled"].setChecked(bool(g_cfg["enabled"]))
+
+        # 공통 분할 익절 비율 복원
+        tp1_s = data.get("tp1_split_ratio") or (g_map.get("tp1_split_ratio") if isinstance(g_map, dict) else None) or data.get("half_exit_close_ratio")
+        if tp1_s is not None:
+            self.ed_tp1_split.setText(f"{float(tp1_s):.1f}")
+        tp2_s = data.get("tp2_split_ratio") or (g_map.get("tp2_split_ratio") if isinstance(g_map, dict) else None) or data.get("half_exit_close_ratio_2")
+        if tp2_s is not None:
+            self.ed_tp2_split.setText(f"{float(tp2_s):.1f}")
+
+        # 추세 추종 불타기 (Pyramiding) 복원
+        pyra_en = data.get("pyramiding_enabled") or (g_map.get("pyramiding_enabled") if isinstance(g_map, dict) else None)
+        if pyra_en is not None:
+            self.chk_pyramiding.setChecked(bool(pyra_en))
+        pyra_rat = data.get("pyramiding_ratio") or (g_map.get("pyramiding_ratio") if isinstance(g_map, dict) else None)
+        if pyra_rat is not None:
+            self.ed_pyramiding_ratio.setText(f"{float(pyra_rat):.1f}")
+
+        # 중간 보존 가드 복원
+        mid_trig = data.get("mid_guard_trigger") or (g_map.get("mid_guard_trigger") if isinstance(g_map, dict) else None)
+        if mid_trig is not None:
+            self.ed_mid_guard_trigger.setText(f"{float(mid_trig):.2f}")
+        mid_off = data.get("mid_guard_offset") or (g_map.get("mid_guard_offset") if isinstance(g_map, dict) else None)
+        if mid_off is not None:
+            self.ed_mid_guard_offset.setText(f"{float(mid_off):.2f}")
 
         # 4. 자금 & 수수료
         if "initial_balance" in data:
             self.ed_initial_balance.setText(str(data["initial_balance"]))
         if "fee_rate" in data:
-            self.ed_custom_fee.setText(f"{float(data['fee_rate']):.5f}")
+            fr = float(data['fee_rate'])
+            self.ed_custom_fee.setText(f"{fr:.5f}")
+            self.on_custom_fee_text_changed(f"{fr:.5f}")
+
+        # 5. 상단 시작/종료 일시 복원
+        if "start_date" in data:
+            try:
+                dt_s = QDateTime.fromString(data["start_date"], "yyyy-MM-dd HH:mm:ss")
+                if dt_s.isValid():
+                    self.dt_start.setDateTime(dt_s)
+            except Exception:
+                pass
+        if "end_date" in data:
+            try:
+                dt_e = QDateTime.fromString(data["end_date"], "yyyy-MM-dd HH:mm:ss")
+                if dt_e.isValid():
+                    self.dt_end.setDateTime(dt_e)
+            except Exception:
+                pass
+
+        # 6. 🎯 OI 진입 모드 복원
+        if hasattr(self, 'cb_oi_mode'):
+            oi_mode = str(data.get("oi_direction_mode", "POSITIVE_ONLY")).upper()
+            idx = self.cb_oi_mode.findData(oi_mode)
+            if idx >= 0:
+                self.cb_oi_mode.setCurrentIndex(idx)
+            else:
+                if "POS" in oi_mode or "PLUS" in oi_mode:
+                    self.cb_oi_mode.setCurrentIndex(0)
+                else:
+                    self.cb_oi_mode.setCurrentIndex(1)
 
     def on_load_config_file(self):
-        fpath, _ = QFileDialog.getOpenFileName(self, "설정 파일 불러오기", "shinseon_config.json", "JSON Files (*.json)")
+        fpath, _ = QFileDialog.getOpenFileName(self, "설정 파일 불러오기", "shinseon_backtest_config.json", "JSON Files (*.json)")
         if not fpath:
             return
         try:
@@ -979,23 +1319,41 @@ class ShinseonBacktesterGUI(QMainWindow):
             QMessageBox.critical(self, "오류", f"설정 불러오기 실패: {e}")
 
     def load_config_defaults(self):
-        # 1. 날짜 기본값
-        self.set_date_preset("full")
-        # 2. 로컬 shinseon_config.json이 존재하면 자동 로드
-        if os.path.exists("shinseon_config.json"):
+        # 1. 날짜 기본값 (초고속 시동을 위해 최근 3일 기본 세팅)
+        self.set_date_preset("3d")
+        # 2. 수수료율 기본값 (비트겟 0.040% / 0.00040)
+        self.ed_custom_fee.setText("0.00040")
+        self.on_custom_fee_text_changed("0.00040")
+        
+        # 3. 1순위: 사용자가 마지막으로 저장한 백테스터 전용 설정 로드
+        loaded = False
+        if os.path.exists("shinseon_backtest_config.json"):
+            try:
+                with open("shinseon_backtest_config.json", "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self.apply_config_to_ui(data)
+                loaded = True
+            except Exception:
+                loaded = False
+
+        # 4. 2순위: 백테스트 설정이 없을 경우 실전 shinseon_config.json 로드
+        if not loaded and os.path.exists("shinseon_config.json"):
             try:
                 with open("shinseon_config.json", "r", encoding="utf-8") as f:
                     data = json.load(f)
                 self.apply_config_to_ui(data)
             except Exception:
                 pass
-        # 3. 1회 백테스트 실행
-        self.on_run_backtest()
+
+        # 5. 창이 먼저 즉각 뜬 후(0.05초) 비동기로 1회 백테스트 가동
+        QTimer.singleShot(50, self.on_run_backtest)
 
 def main():
     app = QApplication(sys.argv)
     window = ShinseonBacktesterGUI()
     window.show()
+    window.raise_()
+    window.activateWindow()
     sys.exit(app.exec())
 
 if __name__ == "__main__":
