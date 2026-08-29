@@ -860,7 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.71"
+        self.CURRENT_VERSION = "V7.72"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -2819,7 +2819,7 @@ class ShinseonV35Engine:
         bot_state_val = binance_ws_frame.get('bot_state', 'RUNNING')
         
         # --------------------------------------------------------------------------
-        # 🎯 [신선 V7.65: 기획서 339 V2.55 황금 4대 저격 매트릭스 100% 정통 복원 코드]
+        # 🎯 [신선 V7.72: 기획서 369 삼위일체 3대 AND 동조 진입 절대 헌법]
         # --------------------------------------------------------------------------
         price_delta_5s = binance_ws_frame.get('price_delta_5s', 0.0)
         price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
@@ -2827,37 +2827,29 @@ class ShinseonV35Engine:
         direction = None
         strategy_name = ""
 
-        deadband_val = binance_mid * 0.00035  # 0.035% 동적 불감대 (약 $27달러, 개미 짤짤이 100% 차단)
-        
-        is_price_up = (price_delta_5s >= deadband_val) or (price_delta_1m > 0 and price_slope_1m >= +0.30)
-        is_price_down = (price_delta_5s <= -deadband_val) or (price_delta_1m < 0 and price_slope_1m <= -0.30)
-        
         # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= target_liq AND |OI속도| >= target_oi)
-        if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
-            # [Case A]: 하락(-OI) ➔ V자 바닥 반등 롱 저격!
-            if is_price_down and oi_delta_1m < 0:
+        stage0_passed = (rolling_1m_liq_usd >= target_liq) and (abs(oi_delta_1m) >= target_oi)
+        all_zero = (price_delta_5s == 0.0) and (price_delta_1m == 0.0) and (price_slope_1m == 0.0)
+
+        if stage0_passed and not all_zero:
+            # 🟢 찐 롱: 5s >= 0 AND 1m >= 0 AND Slope >= 0
+            if (price_delta_5s >= 0.0) and (price_delta_1m >= 0.0) and (price_slope_1m >= 0.0):
                 direction = "LONG"
-                strategy_name = "🟢 롱 저격 (개미 털기 V자 바닥 반등 / -OI)"
-                
-            # [Case B]: 상승(-OI) ➔ 역V자 천장 덤핑 숏 저격!
-            elif is_price_up and oi_delta_1m < 0:
-                direction = "SHORT"
-                strategy_name = "🔴 숏 저격 (숏커버 털기 역V자 천장 덤핑 / -OI)"
-                
-            # [Case C & D]: +OI (세력의 진짜 양수 자금 유입) ➔ 5초/1분 가격 추세 방향 탑승!
-            elif oi_delta_1m > 0:
-                if is_price_up:
-                    direction = "LONG"
-                    strategy_name = "🟢 강력한 불장 돌파 롱 (+OI / 상방 추세)"
-                elif is_price_down:
-                    direction = "SHORT"
-                    strategy_name = "🔴 강력한 폭락 추세 숏 (+OI / 하방 추세)"
+                if oi_delta_1m > 0:
+                    strategy_name = "🟢 강력한 불장 돌파 롱 (삼위일체 3대 AND / +OI)"
                 else:
-                    direction = None
+                    strategy_name = "🟢 V자 바닥 반등 저격 롱 (삼위일체 3대 AND / -OI)"
+            # 🔴 찐 숏: 5s <= 0 AND 1m <= 0 AND Slope <= 0
+            elif (price_delta_5s <= 0.0) and (price_delta_1m <= 0.0) and (price_slope_1m <= 0.0):
+                direction = "SHORT"
+                if oi_delta_1m > 0:
+                    strategy_name = "🔴 강력한 폭락 추세 숏 (삼위일체 3대 AND / +OI)"
+                else:
+                    strategy_name = "🔴 역V자 천장 덤핑 저격 숏 (삼위일체 3대 AND / -OI)"
             else:
                 direction = None
         else:
-            direction = None  # 임계치 미달 시 100% NONE 기각!
+            direction = None  # 임계치 미달 또는 3대 지표 미동조 시 100% NONE 기각!
 
         # --------------------------------------------------------------------------
         # [상시 1초 초고밀도 딥다이브 로깅 모드] (4대 헌법 100% 실시간 직송 동기화)

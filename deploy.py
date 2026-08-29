@@ -159,6 +159,8 @@ def main():
             "client_config.json",
             "server_config.json",
             "core_logic.py",
+            "backtest_engine.py",
+            "shinseon_backtester.pyw",
             "deploy.py",
             "Start_Sejong.bat",
             "신선_비트겟_클라이언트.bat"
@@ -170,6 +172,7 @@ def main():
                 run_cmd(f"git add \"{f}\"")
                 
         run_cmd("git add docs/")
+        run_cmd("git add downloads/")
         print("🚀 [배포 준비] Git 스테이징 완료!")
     except Exception as copy_err:
         print(f"배포 준비 중 오류 발생: {copy_err}")

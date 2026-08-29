@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.69
-- 기획서 365: 백테스터 엔진 1분 델타 및 추세 판정식 실전 서버 100% 완전 일치화 (0.035% 불감대 & 1분 델타/EMA 슬로프)
-- [오더플로우 4대 저격 헌법: 청산액 + OI속도 + 0.035% 동적 불감대(delta_5s) + 1분 델타 및 1분 EMA 추세 슬로프]
+신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.72
+- 기획서 369: 삼위일체 3대 AND 동조 진입 및 정통 청산(Close to Flat) 아키텍처 실전 서버 100% 완전 일치화
+- [오더플로우 3대 AND 헌법: 청산액 + OI속도 + 5초/1분/1분회귀기울기 삼위일체 동조 판정]
 - [2단계 50% 분할 익절 & 본전가드 & 스탑로스 & 60초 반대신호 탈출 & 쿨타임]
 - [2차 즉시 물타기 & 3차 900초 물타기 & 눌림목 30% 불타기 & 중간수익보존/2시간무위험 가드]
 """
@@ -346,39 +346,32 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
         be_guard_ratio = be_guard_pct / 100.0
 
         # -------------------------------------------------------------
-        # 🎯 [신선 V7.68: 백테스터 엔진 1분 델타 및 추세 판정식 실전서버 100% 완전 일치화]
+        # 🎯 [신선 V7.72: 백테스터 엔진 기획서 369 삼위일체 3대 AND 동조 진입 절대 헌법]
         # -------------------------------------------------------------
         price_delta_1m = cp - history_60s[0][1] if history_60s else 0.0
-        deadband_val = cp * 0.00035  # 0.035% 동적 불감대 (약 $27달러)
-        
-        is_price_up = (price_delta_5s >= deadband_val) or (price_delta_1m > 0 and price_slope_1m >= +0.30)
-        is_price_down = (price_delta_5s <= -deadband_val) or (price_delta_1m < 0 and price_slope_1m <= -0.30)
         
         sig_dir = None
         strat_name = ""
         
         # [0단계]: 필수 듀얼 임계치 검사 (청산액 >= t_liq AND |OI속도| >= t_oi)
-        if liq_total >= t_liq and abs(oi_speed) >= t_oi:
-            # [Case A]: 하락(-OI) ➔ V자 바닥 반등 롱 저격!
-            if is_price_down and oi_speed < 0:
+        stage0_passed = (liq_total >= t_liq) and (abs(oi_speed) >= t_oi)
+        all_zero = (price_delta_5s == 0.0) and (price_delta_1m == 0.0) and (price_slope_1m == 0.0)
+        
+        if stage0_passed and not all_zero:
+            # 🟢 찐 롱: 5s >= 0 AND 1m >= 0 AND Slope >= 0
+            if (price_delta_5s >= 0.0) and (price_delta_1m >= 0.0) and (price_slope_1m >= 0.0):
                 sig_dir = "LONG"
-                strat_name = "🟢 롱 저격 (개미 털기 V자 바닥 반등 / -OI)"
-                
-            # [Case B]: 상승(-OI) ➔ 역V자 천장 덤핑 숏 저격!
-            elif is_price_up and oi_speed < 0:
-                sig_dir = "SHORT"
-                strat_name = "🔴 숏 저격 (숏커버 털기 역V자 천장 덤핑 / -OI)"
-                
-            # [Case C & D]: +OI (세력의 진짜 양수 자금 유입) ➔ 5초/10초/1분 가격 추세 방향 탑승!
-            elif oi_speed > 0:
-                if is_price_up:
-                    sig_dir = "LONG"
-                    strat_name = "🟢 강력한 불장 돌파 롱 (+OI / 상방 추세)"
-                elif is_price_down:
-                    sig_dir = "SHORT"
-                    strat_name = "🔴 강력한 폭락 추세 숏 (+OI / 하방 추세)"
+                if oi_speed > 0:
+                    strat_name = "🟢 강력한 불장 돌파 롱 (삼위일체 3대 AND / +OI)"
                 else:
-                    sig_dir = None
+                    strat_name = "🟢 V자 바닥 반등 저격 롱 (삼위일체 3대 AND / -OI)"
+            # 🔴 찐 숏: 5s <= 0 AND 1m <= 0 AND Slope <= 0
+            elif (price_delta_5s <= 0.0) and (price_delta_1m <= 0.0) and (price_slope_1m <= 0.0):
+                sig_dir = "SHORT"
+                if oi_speed > 0:
+                    strat_name = "🔴 강력한 폭락 추세 숏 (삼위일체 3대 AND / +OI)"
+                else:
+                    strat_name = "🔴 역V자 천장 덤핑 저격 숏 (삼위일체 3대 AND / -OI)"
             else:
                 sig_dir = None
         else:
