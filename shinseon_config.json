@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V7.64",
+    "CURRENT_VERSION": "V7.65",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -32,25 +32,25 @@
         },
         "weekend_asia": {
             "liq": 200000.0,
-            "oi": 0.04,
+            "oi": 0.12,
             "sl": -0.6,
             "enabled": true
         },
         "weekend_europe": {
             "liq": 300000.0,
-            "oi": 0.05,
+            "oi": 0.15,
             "sl": -0.6,
             "enabled": true
         },
         "weekend_us": {
             "liq": 500000.0,
-            "oi": 0.04,
+            "oi": 0.18,
             "sl": -0.8,
             "enabled": true
         },
         "weekend_pacific": {
             "liq": 150000.0,
-            "oi": 0.03,
+            "oi": 0.11,
             "sl": -0.5,
             "enabled": false
         }
