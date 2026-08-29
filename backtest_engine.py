@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.20
-- 기획서 310: 4대 완성형 오더플로우 저격 헌법 (0.04% 동적 불감대 & 1분 EMA 슬로프 & V자 반등) 100% 디지털 트윈 완결
-- [오더플로우 4대 저격 헌법: 청산액 + OI속도 + 0.04% 동적 불감대(delta_5s) + 1분 EMA 추세 슬로프]
+신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.68
+- 기획서 365: 백테스터 엔진 1분 델타 및 추세 판정식 실전 서버 100% 완전 일치화 (0.035% 불감대 & 1분 델타/EMA 슬로프)
+- [오더플로우 4대 저격 헌법: 청산액 + OI속도 + 0.035% 동적 불감대(delta_5s) + 1분 델타 및 1분 EMA 추세 슬로프]
 - [2단계 50% 분할 익절 & 본전가드 & 스탑로스 & 60초 반대신호 탈출 & 쿨타임]
 - [2차 즉시 물타기 & 3차 900초 물타기 & 눌림목 30% 불타기 & 중간수익보존/2시간무위험 가드]
 """
@@ -347,12 +347,13 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
         be_guard_ratio = be_guard_pct / 100.0
 
         # -------------------------------------------------------------
-        # 🎯 [신선 V7.67: 백테스터 엔진 V2.55 황금 4대 매트릭스 100% 실전서버 동기화]
+        # 🎯 [신선 V7.68: 백테스터 엔진 1분 델타 및 추세 판정식 실전서버 100% 완전 일치화]
         # -------------------------------------------------------------
+        price_delta_1m = cp - history_60s[0][1] if history_60s else 0.0
         deadband_val = cp * 0.00035  # 0.035% 동적 불감대 (약 $27달러)
         
-        is_price_up = (price_delta_5s >= deadband_val) or (price_delta_10s >= deadband_val) or (price_slope_1m >= +0.30)
-        is_price_down = (price_delta_5s <= -deadband_val) or (price_delta_10s <= -deadband_val) or (price_slope_1m <= -0.30)
+        is_price_up = (price_delta_5s >= deadband_val) or (price_delta_1m > 0 and price_slope_1m >= +0.30)
+        is_price_down = (price_delta_5s <= -deadband_val) or (price_delta_1m < 0 and price_slope_1m <= -0.30)
         
         sig_dir = None
         strat_name = ""
