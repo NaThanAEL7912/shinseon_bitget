@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.70 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.71 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
