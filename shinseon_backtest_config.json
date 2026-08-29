@@ -1,0 +1,186 @@
+{
+    "start_date": "2026-08-08 00:00:00",
+    "end_date": "2026-08-24 23:59:59",
+    "initial_balance": 18000.0,
+    "fee_rate": 0.0004,
+    "sessions": {
+        "asia": {
+            "enabled": true,
+            "liq": 600000.0,
+            "oi": 0.19,
+            "sl": -0.6
+        },
+        "europe": {
+            "enabled": true,
+            "liq": 1400000.0,
+            "oi": 0.28,
+            "sl": -0.8
+        },
+        "us": {
+            "enabled": true,
+            "liq": 3000000.0,
+            "oi": 0.28,
+            "sl": -0.8
+        },
+        "pacific": {
+            "enabled": true,
+            "liq": 800000.0,
+            "oi": 0.17,
+            "sl": -0.6
+        },
+        "weekend_asia": {
+            "enabled": true,
+            "liq": 15000000.0,
+            "oi": 0.32,
+            "sl": -0.8
+        },
+        "weekend_europe": {
+            "enabled": true,
+            "liq": 800000.0,
+            "oi": 0.2,
+            "sl": -0.8
+        },
+        "weekend_us": {
+            "enabled": true,
+            "liq": 500000.0,
+            "oi": 0.2,
+            "sl": -0.8
+        },
+        "weekend_pacific": {
+            "enabled": true,
+            "liq": 500000.0,
+            "oi": 0.22,
+            "sl": -0.5
+        }
+    },
+    "trading": {
+        "asia": {
+            "leverage": 30.0,
+            "buy1_ratio": 1500.0,
+            "buy2_ratio": 700.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "europe": {
+            "leverage": 30.0,
+            "buy1_ratio": 1500.0,
+            "buy2_ratio": 700.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "us": {
+            "leverage": 30.0,
+            "buy1_ratio": 1500.0,
+            "buy2_ratio": 700.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "pacific": {
+            "leverage": 30.0,
+            "buy1_ratio": 1500.0,
+            "buy2_ratio": 700.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "weekend_asia": {
+            "leverage": 30.0,
+            "buy1_ratio": 700.0,
+            "buy2_ratio": 350.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "weekend_europe": {
+            "leverage": 30.0,
+            "buy1_ratio": 700.0,
+            "buy2_ratio": 350.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "weekend_us": {
+            "leverage": 30.0,
+            "buy1_ratio": 1500.0,
+            "buy2_ratio": 350.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        },
+        "weekend_pacific": {
+            "leverage": 30.0,
+            "buy1_ratio": 700.0,
+            "buy2_ratio": 350.0,
+            "dca_drop": -0.3,
+            "dca_time_limit": 900.0,
+            "sl_cooldown": 30.0,
+            "tp_cooldown": 10.0
+        }
+    },
+    "guardrails": {
+        "tp1_split_ratio": 50.0,
+        "tp2_split_ratio": 50.0,
+        "pyramiding_enabled": true,
+        "pyramiding_ratio": 30.0,
+        "mid_guard_trigger": 0.6,
+        "mid_guard_offset": 0.2,
+        "asia": {
+            "tp1": 0.8,
+            "tp2": 1.2,
+            "be_guard": 0.5,
+            "enabled": true
+        },
+        "europe": {
+            "tp1": 1.0,
+            "tp2": 1.2,
+            "be_guard": 0.5,
+            "enabled": true
+        },
+        "us": {
+            "tp1": 1.2,
+            "tp2": 1.5,
+            "be_guard": 1.0,
+            "enabled": true
+        },
+        "pacific": {
+            "tp1": 0.4,
+            "tp2": 0.6,
+            "be_guard": 0.2,
+            "enabled": true
+        },
+        "weekend_asia": {
+            "tp1": 0.5,
+            "tp2": 0.8,
+            "be_guard": 0.1,
+            "enabled": true
+        },
+        "weekend_europe": {
+            "tp1": 0.4,
+            "tp2": 0.6,
+            "be_guard": 0.1,
+            "enabled": true
+        },
+        "weekend_us": {
+            "tp1": 0.8,
+            "tp2": 1.2,
+            "be_guard": 0.1,
+            "enabled": true
+        },
+        "weekend_pacific": {
+            "tp1": 0.4,
+            "tp2": 0.5,
+            "be_guard": 0.1,
+            "enabled": true
+        }
+    }
+}

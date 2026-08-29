@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.68
+신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.69
 - 기획서 365: 백테스터 엔진 1분 델타 및 추세 판정식 실전 서버 100% 완전 일치화 (0.035% 불감대 & 1분 델타/EMA 슬로프)
 - [오더플로우 4대 저격 헌법: 청산액 + OI속도 + 0.035% 동적 불감대(delta_5s) + 1분 델타 및 1분 EMA 추세 슬로프]
 - [2단계 50% 분할 익절 & 본전가드 & 스탑로스 & 60초 반대신호 탈출 & 쿨타임]
@@ -239,7 +239,6 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
     pyramiding_ratio = float(guard_cfg.get('pyramiding_ratio', 30.0))
     mid_guard_trigger = float(guard_cfg.get('mid_guard_trigger', 0.60)) / 100.0
     mid_guard_offset = float(guard_cfg.get('mid_guard_offset', 0.20)) / 100.0
-    oi_direction_mode = str(config.get('oi_direction_mode', 'POSITIVE_ONLY')).upper()
     
     # 8대 세션 성과 요약 테이블 초기화
     session_keys = [

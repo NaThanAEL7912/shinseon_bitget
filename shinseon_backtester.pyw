@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.68)
+신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.69)
 - 3대 설정 탭(세션별 설정, 트레이딩 핵심 설정, 가드레일 설정) 100% 연동
 - 시작일시~종료일시 기간 필터링 및 원클릭 프리셋
 - 실시간 성과 대시보드, 세션별 성과표, 초단위 매매일지, CSV 내보내기, 황금 파라미터 자동 최적화 탑재
@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.68 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.69 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
@@ -253,26 +253,9 @@ class ShinseonBacktesterGUI(QMainWindow):
         layout.setSpacing(8)
 
         top_h = QHBoxLayout()
-        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.68 (downloads 21일 전수 실측 오더플로우 연동)</span>")
+        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.69 (downloads 21일 전수 실측 오더플로우 연동)</span>")
         top_h.addWidget(title_lbl)
         top_h.addStretch()
-
-        # 🎯 OI 진입 모드 선택기
-        top_h.addWidget(QLabel("<b style='color: #ffd700;'>🎯 OI 진입 모드:</b>"))
-        self.cb_oi_mode = QComboBox()
-        self.cb_oi_mode.addItem("🟢 +OI (양수 자금유입 전용 - 추천)", "POSITIVE_ONLY")
-        self.cb_oi_mode.addItem("⚪ abs(OI) (절댓값 전수 진입 - 고빈도)", "ALL")
-        self.cb_oi_mode.setStyleSheet("""
-            QComboBox {
-                background-color: #161922;
-                border: 1px solid #ffd700;
-                border-radius: 5px;
-                padding: 6px 12px;
-                color: #ffffff;
-                font-weight: bold;
-            }
-        """)
-        top_h.addWidget(self.cb_oi_mode)
 
         # 액션 버튼들
         self.btn_run = QPushButton("🚀 백테스트 실행 (Run Backtest)")
@@ -1003,9 +986,6 @@ class ShinseonBacktesterGUI(QMainWindow):
                 'enabled': g_dict['enabled'].isChecked()
             }
 
-        # 4. OI 진입 모드
-        oi_mode = self.cb_oi_mode.currentData() if hasattr(self, 'cb_oi_mode') and self.cb_oi_mode.currentData() else "POSITIVE_ONLY"
-
         return {
             'start_date': start_dt.strftime("%Y-%m-%d %H:%M:%S"),
             'end_date': end_dt.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1013,8 +993,7 @@ class ShinseonBacktesterGUI(QMainWindow):
             'fee_rate': float(self.ed_custom_fee.text().strip()),
             'sessions': sessions_dict,
             'trading': trading_dict,
-            'guardrails': guard_dict,
-            'oi_direction_mode': oi_mode
+            'guardrails': guard_dict
         }
 
     def on_run_backtest(self):
@@ -1292,18 +1271,6 @@ class ShinseonBacktesterGUI(QMainWindow):
                     self.dt_end.setDateTime(dt_e)
             except Exception:
                 pass
-
-        # 6. 🎯 OI 진입 모드 복원
-        if hasattr(self, 'cb_oi_mode'):
-            oi_mode = str(data.get("oi_direction_mode", "POSITIVE_ONLY")).upper()
-            idx = self.cb_oi_mode.findData(oi_mode)
-            if idx >= 0:
-                self.cb_oi_mode.setCurrentIndex(idx)
-            else:
-                if "POS" in oi_mode or "PLUS" in oi_mode:
-                    self.cb_oi_mode.setCurrentIndex(0)
-                else:
-                    self.cb_oi_mode.setCurrentIndex(1)
 
     def on_load_config_file(self):
         fpath, _ = QFileDialog.getOpenFileName(self, "설정 파일 불러오기", "shinseon_backtest_config.json", "JSON Files (*.json)")
