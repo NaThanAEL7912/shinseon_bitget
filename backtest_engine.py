@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.73
-- 기획서 371: 삼위일체 3대 AND 동조 진입 및 정통 청산(Close to Flat) 아키텍처 실전 서버 100% 완전 일치화 (60초 락 완전 삭제)
+신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.74
+- 기획서 372: 백테스터 엔진 0나누기 오류(ZeroDivisionError) 전수 원천 방어 및 정통 청산 모드 UI 동기화
 - [오더플로우 3대 AND 헌법: 청산액 + OI속도 + 5초/1분/1분회귀기울기 삼위일체 동조 판정]
 - [2단계 50% 분할 익절 & 본전가드 & 스탑로스 & 반대신호 즉시 전량 청산 & 쿨타임]
 - [2차 즉시 물타기 & 3차 900초 물타기 & 눌림목 30% 불타기 & 중간수익보존/2시간무위험 가드]
@@ -430,8 +430,8 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 }
         else:
             # 포지션 보유 중: 진입 시점 세션 파라미터 기반 연속 관리
-            pnl1 = (cp - ep1) / ep1 if direction == "LONG" else (ep1 - cp) / ep1
-            pnl_cur = (cp - ep) / ep if direction == "LONG" else (ep - cp) / ep
+            pnl1 = ((cp - ep1) / ep1 if direction == "LONG" else (ep1 - cp) / ep1) if ep1 > 0 else 0.0
+            pnl_cur = ((cp - ep) / ep if direction == "LONG" else (ep - cp) / ep) if ep > 0 else 0.0
             peak_pnl = max(peak_pnl, pnl_cur)
             min_pnl = min(min_pnl, pnl_cur)
 
@@ -457,7 +457,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 if pnl1 <= t_dca_drop and sig_dir == direction:
                     has_2nd = True
                     ep2 = cp
-                    ep = (ep1 * t_buy1 + ep2 * t_buy2) / (t_buy1 + t_buy2)
+                    ep = (ep1 * t_buy1 + ep2 * t_buy2) / max(0.0001, (t_buy1 + t_buy2))
                     last_split_entry_time = cts
                     current_trade['has_2nd'] = True
                     current_trade['effective_lev'] = t_buy1 + t_buy2
@@ -467,7 +467,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 if pnl1 <= t_dca_drop_3 and sig_dir == direction and (cts - last_split_entry_time >= t_dca_limit):
                     has_3rd = True
                     ep3 = cp
-                    ep = (ep1 * t_buy1 + ep2 * t_buy2 + ep3 * t_buy3) / (t_buy1 + t_buy2 + t_buy3)
+                    ep = (ep1 * t_buy1 + ep2 * t_buy2 + ep3 * t_buy3) / max(0.0001, (t_buy1 + t_buy2 + t_buy3))
                     last_split_entry_time = cts
                     current_trade['has_3rd'] = True
                     current_trade['effective_lev'] = t_buy1 + t_buy2 + t_buy3
@@ -489,7 +489,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 rem_lev = current_trade['orig_lev'] * ((1.0 - tp1_split_ratio) if t_half_exit else 1.0)
                 pyra_lev = pyramiding_ratio
                 new_lev = rem_lev + pyra_lev
-                ep = (rem_lev * ep + pyra_lev * cp) / new_lev
+                ep = (rem_lev * ep + pyra_lev * cp) / max(0.0001, new_lev)
                 current_trade['effective_lev'] = new_lev
                 current_trade['be_guard_ratio'] = 0.0
 
@@ -527,7 +527,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
             elif not is_tp1 and pnl1 <= -t_sl_ratio:
                 closed = True
                 exit_p = ep1 * (1.0 - t_sl_ratio) if direction == "LONG" else ep1 * (1.0 + t_sl_ratio)
-                fp = (exit_p - ep) / ep if direction == "LONG" else (ep - exit_p) / ep
+                fp = ((exit_p - ep) / ep if direction == "LONG" else (ep - exit_p) / ep) if ep > 0 else 0.0
                 cd = t_sl_cd
                 reason = f"손절 (-{abs(t_sl_pct):.2f}%)"
             elif sig_dir and (sig_dir != direction):
@@ -549,12 +549,12 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 act_lev = current_trade['effective_lev']
 
                 if is_pyra:
-                    actual_pnl = fp / (1.0 - tp1_split_ratio)
+                    actual_pnl = fp / max(0.0001, (1.0 - tp1_split_ratio))
                     rem_profit = initial_balance * actual_pnl * act_lev
                     rem_notional = (initial_balance * act_lev) * (2.0 + actual_pnl)
                 else:
                     rem_profit = initial_balance * fp * act_lev
-                    actual_pnl = fp / (1.0 - tp1_split_ratio) if is_tp1 else fp
+                    actual_pnl = fp / max(0.0001, (1.0 - tp1_split_ratio)) if is_tp1 else fp
                     rem_notional = (initial_balance * act_lev * ((1.0 - tp1_split_ratio) if is_tp1 else 1.0)) * (2.0 + actual_pnl)
 
                 gross_profit = tp1_profit + rem_profit
@@ -625,7 +625,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
     loss_nets = [abs(t['net']) for t in all_trade_logs if t['net'] < 0]
     total_win_amt = sum(win_nets)
     total_loss_amt = sum(loss_nets)
-    profit_factor = (total_win_amt / total_loss_amt) if total_loss_amt > 0 else 999.99
+    profit_factor = (total_win_amt / total_loss_amt) if total_loss_amt > 0 else (999.99 if total_win_amt > 0 else 0.0)
 
     return {
         'initial_balance': initial_balance,

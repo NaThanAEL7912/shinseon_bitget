@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.73)
+신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.74)
 - 3대 설정 탭(세션별 설정, 트레이딩 핵심 설정, 가드레일 설정) 100% 연동
 - 시작일시~종료일시 기간 필터링 및 원클릭 프리셋
 - 실시간 성과 대시보드, 세션별 성과표, 초단위 매매일지, CSV 내보내기, 황금 파라미터 자동 최적화 탑재
@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.73 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.74 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
@@ -253,7 +253,7 @@ class ShinseonBacktesterGUI(QMainWindow):
         layout.setSpacing(8)
 
         top_h = QHBoxLayout()
-        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.73 (기획서 371 삼위일체 정통청산 개편)</span>")
+        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.74 (기획서 372 0나누기 원천방어 및 정통청산 동기화)</span>")
         top_h.addWidget(title_lbl)
         top_h.addStretch()
 
@@ -463,16 +463,16 @@ class ShinseonBacktesterGUI(QMainWindow):
         self.session_inputs = {}
         sessions_def = [
             ("평일 4대 세션", [
-                ("asia", "아시아 (09:00 ~ 16:30)", 250000, 0.0400, -0.6, True),
-                ("europe", "유럽 (16:30 ~ 22:30)", 600000, 0.0600, -0.8, True),
-                ("us", "미국 본장 (22:30 ~ 05:00)", 650000, 0.1800, -1.3, True),
-                ("pacific", "태평양 횡보 (05:00 ~ 09:00)", 50000, 0.0100, -0.8, False),
+                ("asia", "아시아 (09:00 ~ 16:30)", 300000, 0.1200, -0.6, True),
+                ("europe", "유럽 (16:30 ~ 22:30)", 600000, 0.1200, -0.8, True),
+                ("us", "미국 본장 (22:30 ~ 05:00)", 1000000, 0.1500, -0.8, True),
+                ("pacific", "태평양 횡보 (05:00 ~ 09:00)", 400000, 0.1200, -0.6, False),
             ]),
             ("주말 4대 세션", [
-                ("weekend_asia", "주말 아시아 (09:00 ~ 16:30)", 20000, 0.0400, -0.6, True),
-                ("weekend_europe", "주말 유럽 (16:30 ~ 22:30)", 30000, 0.0500, -0.6, True),
-                ("weekend_us", "주말 미국 본장 (22:30 ~ 05:00)", 50000, 0.0400, -0.8, True),
-                ("weekend_pacific", "주말 태평양 (05:00 ~ 09:00)", 15000, 0.0300, -0.5, False),
+                ("weekend_asia", "주말 아시아 (09:00 ~ 16:30)", 200000, 0.1200, -0.6, True),
+                ("weekend_europe", "주말 유럽 (16:30 ~ 22:30)", 300000, 0.1500, -0.6, True),
+                ("weekend_us", "주말 미국 본장 (22:30 ~ 05:00)", 500000, 0.1800, -0.8, True),
+                ("weekend_pacific", "주말 태평양 (05:00 ~ 09:00)", 150000, 0.1100, -0.5, False),
             ])
         ]
 
