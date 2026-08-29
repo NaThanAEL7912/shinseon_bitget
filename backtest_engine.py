@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.72
-- 기획서 369: 삼위일체 3대 AND 동조 진입 및 정통 청산(Close to Flat) 아키텍처 실전 서버 100% 완전 일치화
+신선(SHINSEON) 오더플로우 24시간 연속 통합 백테스팅 코어 엔진 V7.73
+- 기획서 371: 삼위일체 3대 AND 동조 진입 및 정통 청산(Close to Flat) 아키텍처 실전 서버 100% 완전 일치화 (60초 락 완전 삭제)
 - [오더플로우 3대 AND 헌법: 청산액 + OI속도 + 5초/1분/1분회귀기울기 삼위일체 동조 판정]
-- [2단계 50% 분할 익절 & 본전가드 & 스탑로스 & 60초 반대신호 탈출 & 쿨타임]
+- [2단계 50% 분할 익절 & 본전가드 & 스탑로스 & 반대신호 즉시 전량 청산 & 쿨타임]
 - [2차 즉시 물타기 & 3차 900초 물타기 & 눌림목 30% 불타기 & 중간수익보존/2시간무위험 가드]
 """
 
@@ -530,7 +530,7 @@ def run_backtest_simulation(config, start_dt=None, end_dt=None):
                 fp = (exit_p - ep) / ep if direction == "LONG" else (ep - exit_p) / ep
                 cd = t_sl_cd
                 reason = f"손절 (-{abs(t_sl_pct):.2f}%)"
-            elif (cts - last_entry_time >= 60.0) and sig_dir and (sig_dir != direction):
+            elif sig_dir and (sig_dir != direction):
                 closed = True
                 rem = (1.0 - tp1_split_ratio) if is_tp1 else 1.0
                 fp = pnl_cur * rem
