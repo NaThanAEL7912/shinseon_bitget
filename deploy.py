@@ -154,6 +154,7 @@ def main():
         files_to_deploy = [
             "shinseon_server.py",
             "shinseon_client.pyw",
+            "shinseon_cockpit.pyw",
             "shinseon_updater.py",
             "shinseon_config.json",
             "client_config.json",

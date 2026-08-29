@@ -857,7 +857,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.76"
+        self.CURRENT_VERSION = "V7.77"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -4048,6 +4048,160 @@ class WsServer:
             logger.error(err_log)
             await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_log})
 
+    async def handle_trigger_be_shield(self, websocket):
+        logger.info("🛡️ [CMD_TRIGGER_BE_SHIELD] 클라이언트 무위험 본전가드(BE Shield) 요청 수신")
+        try:
+            api_key, secret_key, passphrase = ("", "", "")
+            if self.bot_core and self.bot_core.v35_engine:
+                api_key, secret_key, passphrase = self.bot_core.v35_engine.get_bitget_api_credentials()
+            if not (api_key and secret_key and passphrase):
+                env_vars = getattr(self.bot_core, "env_vars", {}) or load_server_config()
+                api_key = env_vars.get("BITGET_API_KEY", "")
+                secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+                passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+
+            if not (api_key and secret_key and passphrase):
+                err_msg = "⚠️ [무위험 본전가드] 비트겟 API 키 설정이 누락되었습니다."
+                logger.warning(err_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_msg})
+                return
+
+            # 1. 비트겟 V2 REST API로 현재 포지션 조회
+            url_base = "https://api.bitget.com"
+            path_pos = "/api/v2/mix/position/all-position?productType=USDT-FUTURES"
+            ts = str(int(time.time() * 1000))
+            msg = ts + "GET" + path_pos
+            mac = hmac.new(secret_key.encode('utf-8'), msg.encode('utf-8'), hashlib.sha256)
+            sign = base64.b64encode(mac.digest()).decode('utf-8')
+            headers = {
+                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign, 'ACCESS-TIMESTAMP': ts,
+                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url_base + path_pos, headers=headers, timeout=aiohttp.ClientTimeout(total=3.0)) as resp:
+                    res = await resp.json()
+                    positions = res.get("data", []) or []
+
+            active_pos = next((p for p in positions if float(p.get('total', 0.0) or p.get('contracts', 0.0) or 0.0) > 0.0 and 'BTC' in (p.get('symbol', '') or '')), None)
+
+            if not active_pos or float(active_pos.get('total', 0.0) or active_pos.get('contracts', 0.0) or 0.0) <= 0.0:
+                no_pos_msg = "⚠️ [무위험 본전가드] 현재 보유 중인 포지션이 없습니다."
+                logger.warning(no_pos_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": no_pos_msg})
+                return
+
+            entry_price = float(active_pos.get('openPriceAvg', 0.0) or active_pos.get('entryPrice', 0.0) or 0.0)
+            total_qty = float(active_pos.get('total', 0.0) or active_pos.get('contracts', 0.0) or 0.0)
+            hold_side_raw = str(active_pos.get('holdSide', 'long')).lower()
+            side_str = "LONG" if hold_side_raw == "long" else "SHORT"
+
+            if entry_price <= 0.0 or total_qty <= 0.0:
+                err_msg = f"⚠️ [무위험 본전가드] 포지션 정보 파싱 실패 (평단가: {entry_price}, 수량: {total_qty})"
+                logger.warning(err_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_msg})
+                return
+
+            # 2. 기존 플랜 주문 전량 취소 후 본전 스탑 발주
+            if self.bot_core and self.bot_core.v35_engine:
+                await self.bot_core.v35_engine.cancel_all_open_plan_orders()
+
+            path_plan = "/api/v2/mix/order/place-tpsl-order"
+            sl_body = {
+                "symbol": "BTCUSDT",
+                "productType": "USDT-FUTURES",
+                "marginCoin": "USDT",
+                "planType": "loss_plan",
+                "triggerPrice": str(round(entry_price, 1)),
+                "triggerType": "mark_price",
+                "size": str(round(total_qty, 4)),
+                "holdSide": hold_side_raw
+            }
+            sl_json = json.dumps(sl_body)
+            ts_o = str(int(time.time() * 1000))
+            msg_o = ts_o + "POST" + path_plan + sl_json
+            mac_o = hmac.new(secret_key.encode('utf-8'), msg_o.encode('utf-8'), hashlib.sha256)
+            sign_o = base64.b64encode(mac_o.digest()).decode('utf-8')
+            headers_o = {
+                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_o, 'ACCESS-TIMESTAMP': ts_o,
+                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url_base + path_plan, headers=headers_o, data=sl_json) as resp_o:
+                    res_o = await resp_o.json()
+                    if res_o.get("code") == "00000":
+                        succ_msg = f"🛡️ [무위험 본전가드 장착 완료] {side_str} {total_qty} BTC @ ${entry_price:,.1f} 본전 스탑로스 안착 완료 (0원 무손실 보장)!"
+                        logger.info(succ_msg)
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": succ_msg})
+                        write_trade_history_log(f"🛡️ [무위험 본전가드 장착] {side_str} {total_qty} BTC @ ${entry_price:,.1f} BEP 스탑로스")
+                    else:
+                        fail_msg = f"⚠️ [무위험 본전가드 실패]: {res_o.get('msg')} ({res_o.get('code')})"
+                        logger.warning(fail_msg)
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": fail_msg})
+        except Exception as e:
+            err_log = f"❌ [무위험 본전가드 오류] {e}"
+            logger.error(err_log)
+            await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_log})
+
+    async def handle_market_entry(self, websocket, side, qty):
+        logger.info(f"🚀 [CMD_MARKET_ENTRY] 클라이언트 원클릭 초고속 시장가 진입 요청 수신: {side} {qty} BTC")
+        try:
+            api_key, secret_key, passphrase = ("", "", "")
+            if self.bot_core and self.bot_core.v35_engine:
+                api_key, secret_key, passphrase = self.bot_core.v35_engine.get_bitget_api_credentials()
+            if not (api_key and secret_key and passphrase):
+                env_vars = getattr(self.bot_core, "env_vars", {}) or load_server_config()
+                api_key = env_vars.get("BITGET_API_KEY", "")
+                secret_key = env_vars.get("BITGET_SECRET_KEY", "")
+                passphrase = env_vars.get("BITGET_PASSPHRASE", "")
+
+            if not (api_key and secret_key and passphrase):
+                err_msg = "⚠️ [원클릭 시장가 진입] 비트겟 API 키 설정이 누락되었습니다."
+                logger.warning(err_msg)
+                await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_msg})
+                return
+
+            url_base = "https://api.bitget.com"
+            path_ord = "/api/v2/mix/order/place-order"
+            body_ord_dict = {
+                "symbol": "BTCUSDT",
+                "productType": "USDT-FUTURES",
+                "marginMode": "crossed",
+                "marginCoin": "USDT",
+                "size": str(round(qty, 4)),
+                "side": "buy" if side == "LONG" else "sell",
+                "orderType": "market",
+                "tradeSide": "open",
+                "holdSide": "long" if side == "LONG" else "short"
+            }
+            body_ord_json = json.dumps(body_ord_dict)
+            ts_ord = str(int(time.time() * 1000))
+            msg_ord = ts_ord + "POST" + path_ord + body_ord_json
+            mac_ord = hmac.new(secret_key.encode('utf-8'), msg_ord.encode('utf-8'), hashlib.sha256)
+            sign_ord = base64.b64encode(mac_ord.digest()).decode('utf-8')
+            headers_ord = {
+                'ACCESS-KEY': api_key, 'ACCESS-SIGN': sign_ord, 'ACCESS-TIMESTAMP': ts_ord,
+                'ACCESS-PASSPHRASE': passphrase, 'Content-Type': 'application/json', 'locale': 'en-US'
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url_base + path_ord, headers=headers_ord, data=body_ord_json) as resp_ord:
+                    res_ord = await resp_ord.json()
+                    if res_ord.get("code") == "00000":
+                        succ_msg = f"🟢 [원클릭 시장가 진입 성공] {side} {qty} BTC 시장가 주문 체결 완료!"
+                        logger.info(succ_msg)
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": succ_msg})
+                        write_trade_history_log(f"🚀 [황실 콕핏 원클릭 시장가 진입] {side} {qty} BTC")
+                        await asyncio.sleep(0.5)
+                        asyncio.create_task(self.handle_sync_position(websocket))
+                    else:
+                        fail_msg = f"❌ [원클릭 시장가 진입 실패] 비트겟 응답: {res_ord.get('msg')} ({res_ord.get('code')})"
+                        logger.error(fail_msg)
+                        await self.broadcast_event("EVT_RESPONSE_LOG", {"message": fail_msg})
+        except Exception as e:
+            err_log = f"❌ [원클릭 시장가 진입 에러] {e}"
+            logger.error(err_log)
+            await self.broadcast_event("EVT_RESPONSE_LOG", {"message": err_log})
+
     async def register(self, websocket):
         self.clients.add(websocket)
         client_addr = getattr(websocket, "remote_address", "Unknown")
@@ -4069,6 +4223,12 @@ class WsServer:
                     logger.info(f"🌐 [WEB_COMMAND] 클라이언트 패킷 수신: {cmd}")
                     if cmd == "CMD_SYNC_POSITION":
                         asyncio.create_task(self.handle_sync_position(websocket))
+                    elif cmd == "CMD_MARKET_ENTRY":
+                        side = payload.get("side", "LONG").upper()
+                        qty = float(payload.get("qty", 0.5))
+                        asyncio.create_task(self.handle_market_entry(websocket, side, qty))
+                    elif cmd == "CMD_TRIGGER_BE_SHIELD":
+                        asyncio.create_task(self.handle_trigger_be_shield(websocket))
                     elif cmd == "CMD_TRIGGER_AUTO_GUARD_4STAGE":
                         asyncio.create_task(self.handle_trigger_auto_guard_4stage(websocket))
                     elif cmd == "CMD_REQ_STATS_DETAIL":
