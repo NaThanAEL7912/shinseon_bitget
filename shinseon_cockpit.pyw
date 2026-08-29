@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 수동매매 초슬림 미니 콕핏 위젯 (Cockpit Widget V7.79)
+[神選 : SHINSEON] 국왕 폐하 전용 수동매매 초슬림 미니 콕핏 위젯 (Cockpit Widget V7.80)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
+기능: 1분/5분/15분 3중 RSI 실시간 신호등 뱃지 및 3중 극점 동조 사운드 비프음 알림 탑재
 """
 
 import sys
@@ -13,6 +14,7 @@ import time
 import socket
 import urllib.request
 import ssl
+import threading
 from datetime import datetime
 
 # Windows winsound 지원 (사운드 알림용)
@@ -27,7 +29,7 @@ from PySide6.QtWidgets import (
     QFrame, QGridLayout, QPlainTextEdit, QGraphicsDropShadowEffect,
     QSizePolicy
 )
-from PySide6.QtCore import Qt, QTimer, Signal, QObject
+from PySide6.QtCore import Qt, QTimer, Signal, QObject, QThread
 from PySide6.QtGui import QColor, QFont, QPalette, QLinearGradient, QBrush, QPainter
 import websockets
 from qasync import QEventLoop
@@ -38,7 +40,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V7.79"
+VERSION = "V7.80"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -78,6 +80,95 @@ def custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
 socket.getaddrinfo = custom_getaddrinfo
 
 
+def compute_rsi(closes, period=14):
+    """Wilder's Smoothing 방식 정통 RSI(14) 연산"""
+    if not closes or len(closes) < period + 1:
+        return 50.0
+    gains = []
+    losses = []
+    for i in range(1, len(closes)):
+        diff = closes[i] - closes[i-1]
+        if diff >= 0:
+            gains.append(diff)
+            losses.append(0.0)
+        else:
+            gains.append(0.0)
+            losses.append(-diff)
+    if len(gains) < period:
+        return 50.0
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+    if avg_loss == 0:
+        return 100.0 if avg_gain > 0 else 50.0
+    rs = avg_gain / avg_loss
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    return round(rsi, 1)
+
+
+class MultiRsiWorker(QThread):
+    """1분, 5분, 15분 멀티 타임프레임 실시간 RSI(14) 백그라운드 수집/연산 스레드"""
+    rsi_updated = Signal(float, float, float)  # rsi_1m, rsi_5m, rsi_15m
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.running = True
+
+    def fetch_closes(self, gran):
+        # 1차: Bitget REST API 시도
+        try:
+            url = f"https://api.bitget.com/api/v2/mix/market/candles?symbol=BTCUSDT&granularity={gran}&productType=USDT-FUTURES&limit=30"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=2.5, context=ssl_ctx) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                raw = data.get('data', [])
+                if raw:
+                    # [ts, open, high, low, close, ...]
+                    sorted_raw = sorted(raw, key=lambda x: int(x[0]))
+                    return [float(c[4]) for c in sorted_raw]
+        except Exception:
+            pass
+
+        # 2차 대안: Binance Futures REST API 백업 시도
+        try:
+            url = f"https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval={gran}&limit=30"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=2.5, context=ssl_ctx) as resp:
+                raw = json.loads(resp.read().decode('utf-8'))
+                if isinstance(raw, list) and raw:
+                    return [float(k[4]) for k in raw]
+        except Exception:
+            pass
+
+        return []
+
+    def run(self):
+        while self.running:
+            try:
+                c_1m = self.fetch_closes("1m")
+                c_5m = self.fetch_closes("5m")
+                c_15m = self.fetch_closes("15m")
+
+                if c_1m and c_5m and c_15m:
+                    rsi_1m = compute_rsi(c_1m, 14)
+                    rsi_5m = compute_rsi(c_5m, 14)
+                    rsi_15m = compute_rsi(c_15m, 14)
+                    self.rsi_updated.emit(rsi_1m, rsi_5m, rsi_15m)
+            except Exception:
+                pass
+
+            # 3.5초 주기 대기 (중간 중단 감지)
+            for _ in range(35):
+                if not self.running:
+                    break
+                time.sleep(0.1)
+
+    def stop(self):
+        self.running = False
+
+
 class ShinseonCockpit(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -96,9 +187,16 @@ class ShinseonCockpit(QMainWindow):
         self.smart_stop_active = False
         self._last_signal_direction = None
         self._last_beep_time = 0
+        self._prev_rsi_1m = None
+        self._last_rsi_alert_time = 0.0
 
         self.init_ui()
         self.load_config()
+
+        # 3중 멀티 타임프레임 RSI 백그라운드 수집 스레드 시작
+        self.rsi_worker = MultiRsiWorker(self)
+        self.rsi_worker.rsi_updated.connect(self.on_rsi_updated)
+        self.rsi_worker.start()
 
     def init_ui(self):
         self.setWindowTitle(f"👑 [SHINSEON] 황실 콕핏 {self.CURRENT_VERSION} (가로 500px 초슬림)")
@@ -226,6 +324,28 @@ class ShinseonCockpit(QMainWindow):
         radar_title_layout.addWidget(self.chk_sound)
 
         radar_layout.addLayout(radar_title_layout)
+
+        # 🚦 1분 / 5분 / 15분 3중 RSI 실시간 신호등 뱃지 바
+        rsi_layout = QHBoxLayout()
+        rsi_layout.setSpacing(6)
+
+        self.lbl_rsi_1m = QLabel("1m RSI: --.-% ⚪")
+        self.lbl_rsi_1m.setAlignment(Qt.AlignCenter)
+        self.lbl_rsi_1m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
+
+        self.lbl_rsi_5m = QLabel("5m RSI: --.-% ⚪")
+        self.lbl_rsi_5m.setAlignment(Qt.AlignCenter)
+        self.lbl_rsi_5m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
+
+        self.lbl_rsi_15m = QLabel("15m RSI: --.-% ⚪")
+        self.lbl_rsi_15m.setAlignment(Qt.AlignCenter)
+        self.lbl_rsi_15m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
+
+        rsi_layout.addWidget(self.lbl_rsi_1m)
+        rsi_layout.addWidget(self.lbl_rsi_5m)
+        rsi_layout.addWidget(self.lbl_rsi_15m)
+
+        radar_layout.addLayout(rsi_layout)
 
         # 3색 실시간 힌트 뱃지 (가장 중요한 오더플로우 나침반)
         self.lbl_hint_badge = QLabel("⚪ 지금은 관망이 유리하다")
@@ -922,15 +1042,78 @@ class ShinseonCockpit(QMainWindow):
         except ValueError:
             offset_val = 0.6
 
-        packet = {
-            "cmd": "CMD_SET_SMART_STOP",
-            "active": new_active,
-            "offset_val": offset_val,
-            "ratio": 100.0
-        }
-        asyncio.create_task(self.ws.send(json.dumps(packet)))
-        act_str = f"설정 (+{offset_val:.2f}%)" if new_active else "해제"
-        self.add_log(f"🛡️ [스마트 스탑] {act_str} 명령 전송 완료")
+    # ----------------------------------------------------
+    # 3중 RSI 실시간 신호등 & 극점 동조 사운드 알림
+    # ----------------------------------------------------
+    def on_rsi_updated(self, rsi_1m, rsi_5m, rsi_15m):
+        def get_badge_info(prefix, rsi_val):
+            if rsi_val >= 70.0:
+                style = "background-color: rgba(255, 82, 82, 0.3); border: 1px solid #FF5252; color: #FF6666; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
+                text = f"{prefix}: {rsi_val:.1f}% 🔴"
+            elif rsi_val <= 30.0:
+                style = "background-color: rgba(0, 230, 118, 0.3); border: 1px solid #00E676; color: #00FFCC; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
+                text = f"{prefix}: {rsi_val:.1f}% 🟢"
+            else:
+                style = "background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
+                text = f"{prefix}: {rsi_val:.1f}% ⚪"
+            return style, text
+
+        s_1m, t_1m = get_badge_info("1m RSI", rsi_1m)
+        self.lbl_rsi_1m.setStyleSheet(s_1m)
+        self.lbl_rsi_1m.setText(t_1m)
+
+        s_5m, t_5m = get_badge_info("5m RSI", rsi_5m)
+        self.lbl_rsi_5m.setStyleSheet(s_5m)
+        self.lbl_rsi_5m.setText(t_5m)
+
+        s_15m, t_15m = get_badge_info("15m RSI", rsi_15m)
+        self.lbl_rsi_15m.setStyleSheet(s_15m)
+        self.lbl_rsi_15m.setText(t_15m)
+
+        # 3중 극점 동조 사운드 알림 체크
+        self.check_rsi_sound_alert(rsi_1m, rsi_5m, rsi_15m)
+        self._prev_rsi_1m = rsi_1m
+
+    def check_rsi_sound_alert(self, rsi_1m, rsi_5m, rsi_15m):
+        if not self.sound_enabled or self._prev_rsi_1m is None:
+            return
+
+        now = time.time()
+        # 1. 3중 RSI 과매수 상단 꺾임 ➔ 숏 저격 알림 (15m>75 AND 5m>70 AND 1m>75, 1m 하방 꺾임)
+        if rsi_15m > 75.0 and rsi_5m > 70.0 and rsi_1m > 75.0 and self._prev_rsi_1m > rsi_1m:
+            if now - self._last_rsi_alert_time >= 60.0:
+                self._last_rsi_alert_time = now
+                self.add_log(f"🔔 [3중 RSI 극점 저격 알림] 상단 과매수 꺾임 포착 (1m:{rsi_1m:.1f}% 5m:{rsi_5m:.1f}% 15m:{rsi_15m:.1f}%) ➔ 숏 유리!")
+                self._play_double_beep(1500, 150)
+
+        # 2. 3중 RSI 과매도 바닥 반등 ➔ 롱 저격 알림 (15m<25 AND 5m<30 AND 1m<25, 1m 상방 반등)
+        elif rsi_15m < 25.0 and rsi_5m < 30.0 and rsi_1m < 25.0 and self._prev_rsi_1m < rsi_1m:
+            if now - self._last_rsi_alert_time >= 60.0:
+                self._last_rsi_alert_time = now
+                self.add_log(f"🔔 [3중 RSI 극점 저격 알림] 바닥 과매도 반등 포착 (1m:{rsi_1m:.1f}% 5m:{rsi_5m:.1f}% 15m:{rsi_15m:.1f}%) ➔ 롱 유리!")
+                self._play_double_beep(800, 150)
+
+    def _play_double_beep(self, freq, dur_ms):
+        def _beep_thread():
+            try:
+                if winsound:
+                    winsound.Beep(freq, dur_ms)
+                    time.sleep(0.08)
+                    winsound.Beep(freq, dur_ms)
+                else:
+                    QApplication.beep()
+            except Exception:
+                pass
+        threading.Thread(target=_beep_thread, daemon=True).start()
+
+    def closeEvent(self, event):
+        try:
+            if hasattr(self, 'rsi_worker') and self.rsi_worker.isRunning():
+                self.rsi_worker.stop()
+                self.rsi_worker.wait(500)
+        except Exception:
+            pass
+        event.accept()
 
 
 def main():

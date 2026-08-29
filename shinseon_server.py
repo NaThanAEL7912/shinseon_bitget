@@ -857,7 +857,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.79"
+        self.CURRENT_VERSION = "V7.80"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
