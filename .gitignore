@@ -10,5 +10,6 @@ __pycache__/
 backup/
 scratch/
 ChromeDebugProfile/
+docs/web_cache/
 output.txt
 error.txt
