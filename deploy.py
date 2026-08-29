@@ -40,7 +40,7 @@ def increment_version(version_str):
     return version_str + "_new"
 
 def update_app_version(new_version):
-    targets = ["shinseon_client.pyw", "shinseon_server.py"]
+    targets = ["shinseon_client.pyw", "shinseon_server.py", "shinseon_cockpit.pyw"]
     for target in targets:
         path = os.path.join(BASE_DIR, target)
         if os.path.exists(path):
@@ -49,6 +49,9 @@ def update_app_version(new_version):
             import re
             pattern = r"(self\.CURRENT_VERSION\s*=\s*[\"'])([^\"']*)([\"'])"
             new_content = re.sub(pattern, rf"\g<1>{new_version}\g<3>", content)
+            if target == "shinseon_cockpit.pyw":
+                pattern2 = r"(VERSION\s*=\s*[\"'])([^\"']*)([\"'])"
+                new_content = re.sub(pattern2, rf"\g<1>{new_version}\g<3>", new_content)
             with open(path, "w", encoding="utf-8") as f:
                 f.write(new_content)
             print(f"{target} 버전 업데이트 완료: {new_version}")
@@ -164,7 +167,8 @@ def main():
             "shinseon_backtester.pyw",
             "deploy.py",
             "Start_Sejong.bat",
-            "신선_비트겟_클라이언트.bat"
+            "신선_비트겟_클라이언트.bat",
+            "신선_수동매매_콕핏.bat"
         ]
         
         for f in files_to_deploy:

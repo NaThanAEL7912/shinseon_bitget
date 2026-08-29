@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 수동매매 초슬림 미니 콕핏 위젯 (Cockpit Widget V7.77)
+[神選 : SHINSEON] 국왕 폐하 전용 수동매매 초슬림 미니 콕핏 위젯 (Cockpit Widget V7.78)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 """
@@ -38,7 +38,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V7.77"
+VERSION = "V7.78"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
