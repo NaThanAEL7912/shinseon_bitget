@@ -860,7 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.65"
+        self.CURRENT_VERSION = "V7.66"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1440,25 +1440,27 @@ class BotCore:
                     has_real_force = (time.time() - getattr(self, "last_real_forceorder_time", 0.0)) <= 60.0
                     liq_wss_connected = getattr(self, "liq_wss_connected", True)
 
-                    # [V6.87 / 기획서 309 / 백서 20260824]: 4대 완성형 저격 매트릭스 기반 '롱 유리 / 숏 유리 / 관망' 연산 (0.04% 동적 불감대 적용)
-                    if direction in ["LONG", "SHORT"]:
-                        flow_bias = "LONG_FAVORED" if direction == "LONG" else "SHORT_FAVORED"
-                    elif oi_delta_1m > 0 and price_delta_5s >= dynamic_deadband_5s and price_slope_1m >= 0.0:
+                    # [V7.66 / 기획서 363 / 백서 20260829]: V2.55 황금 4대 저격 매트릭스 & 0.035% 불감대 기반 초단순 오더플로우 레이더 연동
+                    binance_mid = self.current_price
+                    deadband_5s = binance_mid * 0.00035
+                    is_up = (price_delta_5s >= deadband_5s) or (price_delta_1m > 0 and price_slope_1m >= 0.30)
+                    is_down = (price_delta_5s <= -deadband_5s) or (price_delta_1m < 0 and price_slope_1m <= -0.30)
+                    
+                    if is_down and oi_delta_1m < 0:
                         flow_bias = "LONG_FAVORED"
-                    elif oi_delta_1m > 0 and price_delta_5s <= -dynamic_deadband_5s and price_slope_1m <= 0.0:
+                    elif is_up and oi_delta_1m < 0:
                         flow_bias = "SHORT_FAVORED"
-                    elif oi_delta_1m < 0 and price_delta_5s >= dynamic_deadband_5s:
-                        flow_bias = "LONG_FAVORED"
-                    elif oi_delta_1m < 0 and price_delta_5s <= -dynamic_deadband_5s:
-                        flow_bias = "SHORT_FAVORED"
+                    elif oi_delta_1m > 0:
+                        if is_up:
+                            flow_bias = "LONG_FAVORED"
+                        elif is_down:
+                            flow_bias = "SHORT_FAVORED"
+                        else:
+                            flow_bias = "NEUTRAL"
                     else:
-                        flow_bias = "NEUTRAL_CHOP"
-
-                    if self.v35_engine and self.v35_engine.is_position_active:
-                        # 포지션 보유 중
-                        is_safe = (direction_active == "LONG" and price_delta_5s >= 0) or (direction_active == "SHORT" and price_delta_5s <= 0)
-                        hint_val = f"HOLD_{direction_active}_{'SAFE' if is_safe else 'WARN'}"
-                    elif direction in ["LONG", "SHORT"]:
+                        flow_bias = "NEUTRAL"
+                    
+                    if direction in ["LONG", "SHORT"]:
                         hint_val = f"SNIPE_{direction}"
                     else:
                         hint_val = f"BIAS_{flow_bias}"

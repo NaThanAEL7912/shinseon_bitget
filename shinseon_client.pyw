@@ -548,7 +548,7 @@ class CumulativeReportDialog(QDialog):
 class ShinseonDashboard(QMainWindow):
     def __init__(self, bot_core):
         super().__init__()
-        self.CURRENT_VERSION = "V7.65"
+        self.CURRENT_VERSION = "V7.66"
         self.auto_start = False
         self.ws_reconnect_event = asyncio.Event()
         self.ws_task = None
@@ -2822,6 +2822,50 @@ class ShinseonDashboard(QMainWindow):
                 summary_list.append(f"${a['target']:,.1f}({dir_sym})")
             self.lbl_active_price_alerts.setText(f"🔔 감시 중 ({len(self.price_alerts)}건): " + ", ".join(summary_list))
 
+    def _apply_radar_hint(self, expected_dir):
+        if not hasattr(self, "lbl_hint") or not self.lbl_hint:
+            return
+        e_str = str(expected_dir or "")
+        if "LONG" in e_str or "BULLISH" in e_str:
+            self.lbl_hint.setText("[ 🟢 지금은 롱이 유리하다 ]")
+            self.lbl_hint.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(0, 230, 118, 0.35);
+                    border: 2px solid #00E676;
+                    border-radius: 6px;
+                    color: #00FFCC;
+                    font-family: 'Malgun Gothic', 'Consolas', 'Segoe UI';
+                    font-size: 13px;
+                    font-weight: bold;
+                }
+            """)
+        elif "SHORT" in e_str or "BEARISH" in e_str:
+            self.lbl_hint.setText("[ 🔴 지금은 숏이 유리하다 ]")
+            self.lbl_hint.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(255, 82, 82, 0.35);
+                    border: 2px solid #FF5252;
+                    border-radius: 6px;
+                    color: #FF6666;
+                    font-family: 'Malgun Gothic', 'Consolas', 'Segoe UI';
+                    font-size: 13px;
+                    font-weight: bold;
+                }
+            """)
+        else:
+            self.lbl_hint.setText("[ ⚪ 지금은 관망이 유리하다 ]")
+            self.lbl_hint.setStyleSheet("""
+                QLabel {
+                    background-color: rgba(97, 97, 97, 0.3);
+                    border: 1px solid #757575;
+                    border-radius: 6px;
+                    color: #BDBDBD;
+                    font-family: 'Malgun Gothic', 'Consolas', 'Segoe UI';
+                    font-size: 13px;
+                    font-weight: bold;
+                }
+            """)
+
     def update_live_ui(self, price, guardrail_stage, signal_text, liq_10s=0.0, oi_speed=0.0, ping_ms=0.0, poison_status="정상 가동 중", current_session="로딩 중", target_liq=2000000.0, target_oi=1.00, long_liq=0.0, short_liq=0.0, expected_dir="LONG", liq_wss_connected=None, has_real_force=None, custom_stop_active=None, custom_stop_offset=None, custom_stop_ratio=None):
         # 텔레그램 원격 제어 정보 조회용 인스턴스 캐시 업데이트 (개발계획서_178)
         self.last_price = price
@@ -2964,104 +3008,12 @@ class ShinseonDashboard(QMainWindow):
                     }
                 """)
             
-        # [과부하 박멸 2]: QLabel 힌트 스타일시트 캐싱 가드 (LONG, SHORT, HOLD, 대기 4대 정밀 상태)
-        # [V6.60]: 실시간 오더플로우 시장 기세(Flow Bias) 나침반 상시 표출 렌더러
+
+        # [과부하 박멸 2]: QLabel 힌트 스타일시트 캐싱 가드
+        # [V7.66]: 실시간 오더플로우 레이더 초단순 3색 뱃지 (롱 유리 / 숏 유리 / 관망 유리)
         if getattr(self, "_last_applied_hint_dir", "UNSET") != expected_dir:
             self._last_applied_hint_dir = expected_dir
-            e_str = str(expected_dir or "")
-            
-            # 1. 💥 100% 임계치 돌파 타점 격발
-            if e_str in ["SNIPE_LONG", "LONG"]:
-                self.lbl_hint.setText("[ 🟢 지금은 롱(LONG)이 절대 유리 ↗ (저격 진입) ]")
-                self.lbl_hint.setStyleSheet("""
-                    QLabel {
-                        background-color: rgba(0, 230, 118, 0.4);
-                        border: 2px solid #00E676;
-                        border-radius: 4px;
-                        color: #00FFCC;
-                        font-family: 'Consolas', 'Segoe UI';
-                        font-size: 13px;
-                        font-weight: bold;
-                    }
-                """)
-            elif e_str in ["SNIPE_SHORT", "SHORT"]:
-                self.lbl_hint.setText("[ 🔴 지금은 숏(SHORT)이 절대 유리 ↘ (저격 진입) ]")
-                self.lbl_hint.setStyleSheet("""
-                    QLabel {
-                        background-color: rgba(255, 82, 82, 0.4);
-                        border: 2px solid #FF5252;
-                        border-radius: 4px;
-                        color: #FF6666;
-                        font-family: 'Consolas', 'Segoe UI';
-                        font-size: 13px;
-                        font-weight: bold;
-                    }
-                """)
-            # 2. 🛡️ 포지션 보유 중
-            elif e_str.startswith("HOLD_"):
-                side = "LONG" if "HOLD_LONG" in e_str else "SHORT"
-                if "SAFE" in e_str or "BULLISH" in e_str:
-                    txt = f"[ 🛡️ {side} 보유 중 | 수익 순항 중 ↗ (가드레일 감시) ]" if side == "LONG" else f"[ 🛡️ {side} 보유 중 | 수익 순항 중 ↘ (가드레일 감시) ]"
-                    bg = "rgba(46, 125, 50, 0.5)" if side == "LONG" else "rgba(183, 28, 28, 0.5)"
-                    bd = "#4CAF50" if side == "LONG" else "#E53935"
-                    col = "#00FFCC" if side == "LONG" else "#FF6666"
-                else:
-                    txt = f"[ 🛡️ {side} 보유 중 | ⚠️ 시세 꺾임 주의 ↘ (스탑로스 대기) ]" if side == "LONG" else f"[ 🛡️ {side} 보유 중 | ⚠️ 반등 턴 주의 ↗ (스탑로스 대기) ]"
-                    bg = "rgba(230, 81, 0, 0.4)"
-                    bd = "#FF9800"
-                    col = "#FFB74D"
-                self.lbl_hint.setText(txt)
-                self.lbl_hint.setStyleSheet(f"""
-                    QLabel {{
-                        background-color: {bg};
-                        border: 1px solid {bd};
-                        border-radius: 4px;
-                        color: {col};
-                        font-family: 'Consolas', 'Segoe UI';
-                        font-size: 12px;
-                        font-weight: bold;
-                    }}
-                """)
-            # 3. 🧭 현금 대기 중 (롱 유리 / 숏 유리 / 관망)
-            elif "LONG_FAVORED" in e_str or "BULLISH" in e_str:
-                self.lbl_hint.setText("[ 🟢 지금은 롱(LONG)이 유리 ↗ ]")
-                self.lbl_hint.setStyleSheet("""
-                    QLabel {
-                        background-color: rgba(46, 125, 50, 0.35);
-                        border: 1px solid #4CAF50;
-                        border-radius: 4px;
-                        color: #00FFCC;
-                        font-family: 'Consolas', 'Segoe UI';
-                        font-size: 12px;
-                        font-weight: bold;
-                    }
-                """)
-            elif "SHORT_FAVORED" in e_str or "BEARISH" in e_str:
-                self.lbl_hint.setText("[ 🔴 지금은 숏(SHORT)이 유리 ↘ ]")
-                self.lbl_hint.setStyleSheet("""
-                    QLabel {
-                        background-color: rgba(183, 28, 28, 0.35);
-                        border: 1px solid #E53935;
-                        border-radius: 4px;
-                        color: #FF6666;
-                        font-family: 'Consolas', 'Segoe UI';
-                        font-size: 12px;
-                        font-weight: bold;
-                    }
-                """)
-            else:
-                self.lbl_hint.setText("[ ⚪ 지금은 관망/대기 ⏸ ]")
-                self.lbl_hint.setStyleSheet("""
-                    QLabel {
-                        background-color: rgba(50, 45, 40, 0.6);
-                        border: 1px solid #DEBA9D;
-                        border-radius: 4px;
-                        color: #B0BEC5;
-                        font-family: 'Consolas', 'Segoe UI';
-                        font-size: 12px;
-                        font-weight: bold;
-                    }
-                """)
+            self._apply_radar_hint(expected_dir)
             
         # 2. 미결제약정(OI) 양방향 프로그레스바 수치 반영
         self.bar_oi.setRange(0.0, target_oi)
