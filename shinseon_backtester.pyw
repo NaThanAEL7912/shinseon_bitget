@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.78)
+신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.79)
 - 미국 본장 단독 스나이퍼 및 삼위일체 3대 AND 동조 진입 / 정통 청산
 - 8대 세션별 독립 임계치 및 트레이딩 파라미터 백테스트
 - 틱 데이터 시뮬레이션 및 성과 지표(승률, PnL, MDD, 샤프지수 등) 산출
@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.78 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.79 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
@@ -253,7 +253,7 @@ class ShinseonBacktesterGUI(QMainWindow):
         layout.setSpacing(8)
 
         top_h = QHBoxLayout()
-        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.78 (황실 콕핏 원클릭 런처 연동 & 마스터 백서 동기화)</span>")
+        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.79 (황실 콕핏 qasync 딜레이 보정 & 마스터 백서 동기화)</span>")
         top_h.addWidget(title_lbl)
         top_h.addStretch()
 
