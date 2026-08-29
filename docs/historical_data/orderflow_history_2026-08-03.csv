@@ -1,1 +1,1 @@
-Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State
+﻿Timestamp(KST),BTC_Price($),1m_Rolling_Liq($),1m_Long_Liq($),1m_Short_Liq($),Liq_Threshold($),1m_OI_Speed(%),OI_Speed_Threshold(%),1m_Price_Delta($),1m_Price_Slope,Signal,Bot_State
