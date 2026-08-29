@@ -1,5 +1,5 @@
 {
-    "CURRENT_VERSION": "V7.74",
+    "CURRENT_VERSION": "V7.75",
     "auto_start": false,
     "manual_threshold": false,
     "target_liq": "400000",
@@ -8,20 +8,20 @@
     "session_thresholds": {
         "asia": {
             "liq": 600000.0,
-            "oi": 0.12,
-            "sl": -0.6,
-            "enabled": true
+            "oi": 0.15,
+            "sl": -1.0,
+            "enabled": false
         },
         "europe": {
             "liq": 1000000.0,
-            "oi": 0.15,
-            "sl": -0.8,
-            "enabled": true
+            "oi": 0.2,
+            "sl": -1.0,
+            "enabled": false
         },
         "us": {
-            "liq": 1400000.0,
-            "oi": 0.18,
-            "sl": -1.3,
+            "liq": 1000000.0,
+            "oi": 0.17,
+            "sl": -0.8,
             "enabled": true
         },
         "pacific": {
@@ -34,19 +34,19 @@
             "liq": 200000.0,
             "oi": 0.12,
             "sl": -0.6,
-            "enabled": true
+            "enabled": false
         },
         "weekend_europe": {
             "liq": 300000.0,
             "oi": 0.15,
             "sl": -0.6,
-            "enabled": true
+            "enabled": false
         },
         "weekend_us": {
             "liq": 500000.0,
             "oi": 0.18,
             "sl": -0.8,
-            "enabled": true
+            "enabled": false
         },
         "weekend_pacific": {
             "liq": 150000.0,
@@ -82,14 +82,14 @@
         },
         "us": {
             "leverage": 30,
-            "betting_ratio": 1200.0,
-            "split_entry_1_ratio": 800.0,
-            "split_entry_2_ratio": 400.0,
+            "betting_ratio": 2250.0,
+            "split_entry_1_ratio": 1500.0,
+            "split_entry_2_ratio": 750.0,
             "split_entry_2_trigger_pct": -0.3,
             "split_entry_3_ratio": 0.0,
             "split_entry_3_trigger_pct": 0.0,
-            "split_cooldown_seconds": 900.0,
-            "cooldown_seconds": 300.0,
+            "split_cooldown_seconds": 10.0,
+            "cooldown_seconds": 10.0,
             "profit_cooldown_seconds": 10.0
         },
         "pacific": {
@@ -169,31 +169,31 @@
     "sound_enabled": true,
     "half_exit_enabled": true,
     "half_exit_trigger_pct": 0.6,
-    "half_exit_close_ratio": 50.0,
-    "half_exit_close_ratio_2": 50.0,
+    "half_exit_close_ratio": 99.0,
+    "half_exit_close_ratio_2": 1.0,
     "entry_sl_guard_pct": 0.0,
     "session_guardrails": {
         "ASIA": {
-            "trigger": 1.5,
-            "trigger_2": 2.0,
+            "trigger": 10.0,
+            "trigger_2": 10.0,
             "guard": 0.5,
             "enabled": true
         },
         "LONDON": {
-            "trigger": 1.5,
-            "trigger_2": 2.0,
+            "trigger": 10.0,
+            "trigger_2": 10.0,
             "guard": 0.5,
             "enabled": true
         },
         "NY": {
-            "trigger": 1.5,
-            "trigger_2": 2.0,
+            "trigger": 10.0,
+            "trigger_2": 10.0,
             "guard": 1.0,
             "enabled": true
         },
         "PACIFIC": {
-            "trigger": 1.5,
-            "trigger_2": 0.6,
+            "trigger": 10.0,
+            "trigger_2": 10.0,
             "guard": 0.2,
             "enabled": true
         },
@@ -222,8 +222,8 @@
             "enabled": true
         }
     },
-    "pyramiding_enabled": true,
+    "pyramiding_enabled": false,
     "pyramiding_ratio": 30.0,
-    "mid_guard_trigger": 0.6,
+    "mid_guard_trigger": 1.2,
     "mid_guard_offset": 0.2
 }

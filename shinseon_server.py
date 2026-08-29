@@ -860,7 +860,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.74"
+        self.CURRENT_VERSION = "V7.75"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -2819,7 +2819,7 @@ class ShinseonV35Engine:
         bot_state_val = binance_ws_frame.get('bot_state', 'RUNNING')
         
         # --------------------------------------------------------------------------
-        # 🎯 [신선 V7.72: 기획서 369 삼위일체 3대 AND 동조 진입 절대 헌법]
+        # 🎯 [신선 V7.75: 기획서 373 삼위일체 3대 AND 동조 진입 및 정통 청산 절대 헌법]
         # --------------------------------------------------------------------------
         price_delta_5s = binance_ws_frame.get('price_delta_5s', 0.0)
         price_delta_1m = binance_ws_frame.get('price_delta_1m', 0.0)
@@ -2932,89 +2932,6 @@ class ShinseonV35Engine:
                     f"🤖 <b>봇 상태:</b> {bot_stat_str}"
                 )
                 asyncio.create_task(send_telegram_notification_server(tg_sig_msg))
-
-        # --------------------------------------------------------------------------
-        # 🚨 [2단계]: 실전 집행 및 포지션 보유 중 반대 청산 감시 (60초 안전 락다운 포함)
-        # --------------------------------------------------------------------------
-        is_opposite = False
-        if self.is_position_active and direction:
-            raw_opposite = (self.entry_direction == "LONG" and direction == "SHORT") or (self.entry_direction == "SHORT" and direction == "LONG")
-            if raw_opposite:
-                elapsed_entry = time.time() - getattr(self, "last_entry_time", 0.0)
-                if elapsed_entry < 60.0:
-                    is_opposite = False
-                    now_t = time.time()
-                    if now_t - getattr(self, "last_entry_lock_log_time", 0.0) >= 1.0:
-                        self.last_entry_lock_log_time = now_t
-                        rem_sec = 60.0 - elapsed_entry
-                        if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log(f"🛡️ [진입 60초 안전 락다운] 진입 직후 60초간 반대 청산 무조건 유예 중 (남은 시간: {rem_sec:.1f}초) ➡️ 휩소 청산 100% 차단")
-                else:
-                    is_opposite = True
-            
-        if self.is_position_active and is_opposite:
-            # [V6.58 헌법]: 봇이 정지(STOPPED) 상태이면 어떠한 자동 반대 청산도 100% 원천 차단!
-            if getattr(self, "bot_state", "RUNNING") == "STOPPED" or not getattr(self, "is_snipe_active", True):
-                return
-
-            # OI > 0 and oi_delta_1m >= target_oi (진짜 자금 유입) 조건 충족 시에만 진짜 스위칭 청산 발동! (Case 2-3, Case 3-3)
-            if oi_delta_1m > 0 and oi_delta_1m >= target_oi:
-                if not getattr(self, "exit_in_progress", False):
-                    self.exit_in_progress = True
-                    self.exit_reason = f"반대 세력 저격 신호 감지 (스위칭 청산) (보유: {self.entry_direction} / 신호: {direction}) (청산: ${rolling_1m_liq_usd:,.0f}, OI속도: {oi_delta_1m:+.4f}%)"
-                    self.last_exit_trigger_price = binance_mid
-                    self.last_exit_signal_time = __import__("time").strftime("%Y-%m-%d %H:%M:%S")
-                    self.last_exit_signal_qty = float(getattr(self, "position_volume", 0)) / 1000.0
-                    
-                    if getattr(self.bot, "dashboard", None):
-                        self.bot.dashboard.add_log(f"🚨 [1단계: 반대 청산 포착] 보유: {self.entry_direction} ➡️ 신호: {direction} | 청산 패킷 직송 개시!")
-
-                    
-                    # 쿨다운 선제 부여
-                    dashboard = getattr(self.bot, "dashboard", None) or self.bot
-                    profit_cd_sec = float(getattr(dashboard, "profit_cooldown_seconds", 15.0)) if dashboard else 15.0
-                    loss_cd_sec = float(getattr(dashboard, "cooldown_seconds", 300.0)) if dashboard else 300.0
-
-                    exit_reason_text = getattr(self, "exit_reason", "")
-                    is_loss = ("손절" in exit_reason_text) or ("Stop Loss" in exit_reason_text) or ("스탑" in exit_reason_text and "익절" not in exit_reason_text)
-
-                    if is_loss:
-                        target_cooldown = loss_cd_sec
-                        label = "손절 쿨타임"
-                    else:
-                        target_cooldown = profit_cd_sec
-                        label = "익절/스위칭 쿨타임"
-
-                    self.cooldown_until_time = max(getattr(self, "cooldown_until_time", 0.0), time.time() + target_cooldown)
-                    if getattr(self, "cooldown_timer_task", None) and not self.cooldown_timer_task.done():
-                        self.cooldown_timer_task.cancel()
-                    self.cooldown_timer_task = asyncio.create_task(self.start_cooldown_countdown_timer(target_cooldown, label))
-                    try:
-                        if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log("⚡ [2단계: REST API 패킷 청산] execute_bitget_internal_packet(side=CLEAR) 호출 중...")
-                        clear_ok = await self.execute_bitget_internal_packet(side="CLEAR", order_type="FORCE_MARKET_UNCAPPED")
-                        if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log(f"📋 [3단계: 청산 결과 반환] clear_ok: {clear_ok}")
-                        if clear_ok:
-                            if getattr(self.bot, "dashboard", None):
-                                self.bot.dashboard.add_log("✅ [4단계: 청산 완료] 반대 방향 선제 청산 성공!")
-                        else:
-                            if getattr(self.bot, "dashboard", None):
-                                self.bot.dashboard.add_log("⚠️ [4단계: 1차 실패] 2중 비상 마스터 청산 격발 시도...")
-                            await asyncio.sleep(0.5)
-                            await self.bot.dashboard.execute_bitget_emergency_master_internal()
-                    except Exception as clear_err:
-                        if getattr(self.bot, "dashboard", None):
-                            self.bot.dashboard.add_log(f"❌ [청산 예외] {clear_err}")
-                        try:
-                            await asyncio.sleep(0.5)
-                            await self.bot.dashboard.execute_bitget_emergency_master_internal()
-                        except Exception:
-                            pass
-                    finally:
-                        self.is_position_active = False
-                        self.exit_in_progress = False
-                    return
 
         # [사운드 최우선 직송]: 임계치 조건 충족 시 단 0.000ms 지연도 없이 사운드 1순위 격발 (1.0초 디바운싱 적용)
         if rolling_1m_liq_usd >= target_liq and abs(oi_delta_1m) >= target_oi:
