@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.69)
+신선(SHINSEON) 오더플로우 전문 독립 전략 백테스터 GUI (ShinSeon Strategy Backtester V7.70)
 - 3대 설정 탭(세션별 설정, 트레이딩 핵심 설정, 가드레일 설정) 100% 연동
 - 시작일시~종료일시 기간 필터링 및 원클릭 프리셋
 - 실시간 성과 대시보드, 세션별 성과표, 초단위 매매일지, CSV 내보내기, 황금 파라미터 자동 최적화 탑재
@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.69 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.70 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
