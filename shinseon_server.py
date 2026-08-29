@@ -110,10 +110,7 @@ def load_server_config():
                     line = line.strip()
                     if line and not line.startswith("#") and "=" in line:
                         k, v = line.split("=", 1)
-                        k = k.strip()
-                        v = v.strip().strip('"').strip("'")
-                        if k not in cfg or not cfg[k]:
-                            cfg[k] = v
+                        cfg[k] = v
         except Exception as e:
             logger.error(f".env load error: {e}")
     return cfg
@@ -2232,7 +2229,7 @@ class ShinseonV35Engine:
                         else:
                             logger.warning(f"⚠️ [서버사이드 {plan_name} 선주문 응답]: {res.get('msg')} (코드: {res.get('code')})")
             
-            log_msg = f"🛡️ [3대 안전가드 선주문 완비] {direction} {qty_btc} BTC @ ${entry_price:,.1f} ➡️ 1차TP(${tp1_price:,.1f}), 2차TP(${tp2_price:,.1f}), SL(${sl_price:,.1f})"
+            log_msg = f"🛡️ [3대 안전가드 선주문 완비] {direction} {qty_btc} BTC @ ${entry_price:,.1f} ➡️ 1차TP(${tp1_price:,.1f}), 2차TP(${tp2_price:,.1f}), 1차SL(${sl1_price:,.1f}), 2차SL(${sl2_price:,.1f})"
             if hasattr(self.bot, "broadcast_event"):
                 asyncio.create_task(self.bot.broadcast_event("EVT_RESPONSE_LOG", {"message": log_msg}))
         except Exception as err:
