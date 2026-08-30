@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.11)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.12)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -48,7 +48,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.11"
+VERSION = "V1.12"
 
 def play_position_sound():
     def _worker():
@@ -658,39 +658,73 @@ class BitgetMainDirectWorker(QThread):
                 return
             contracts = float(pos.get('total', 0) or 0.0)
             hold_side = str(pos.get('holdSide', 'long')).lower()
+            margin_mode = str(pos.get('marginMode', 'isolated')).lower()
             side_str = "LONG" if hold_side == "long" else "SHORT"
             close_side = "sell" if hold_side == "long" else "buy"
             half_qty = max(0.0001, round(contracts * 0.5, 4))
 
+            success = False
+            last_err = ""
+
+            # 1단계: 비트겟 V2 정격 place-order (marginMode 필수 + tradeSide: close)
             try:
-                # 1. CCXT 표준 create_order (최우선 정공법)
-                order = self.exchange.create_order(
-                    'BTC/USDT:USDT',
-                    'market',
-                    close_side,
-                    half_qty,
-                    params={'tradeSide': 'close', 'holdSide': hold_side, 'marginCoin': 'USDT'}
-                )
-                self.order_result.emit(f"✂️ [본 계정 50% 분할 청산 성공] {side_str} {half_qty} BTC 시장가 분할 청산 체결 완료!")
-            except Exception as e1:
-                # 2. 비트겟 V2 직통 폴백 안전망
+                res = self.exchange.private_mix_post_v2_mix_order_place_order({
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginMode": margin_mode,
+                    "marginCoin": "USDT",
+                    "size": str(half_qty),
+                    "side": close_side,
+                    "orderType": "market",
+                    "tradeSide": "close"
+                })
+                if res.get("code") == "00000":
+                    self.order_result.emit(f"✂️ [본 계정 50% 분할 청산 성공] {side_str} {half_qty} BTC 시장가 분할 청산 체결 완료!")
+                    success = True
+                else:
+                    last_err = f"{res.get('msg')} ({res.get('code')})"
+            except Exception as e:
+                last_err = str(e)
+
+            # 2단계: reduceOnly 안전망 폴백
+            if not success:
                 try:
                     res = self.exchange.private_mix_post_v2_mix_order_place_order({
                         "symbol": "BTCUSDT",
                         "productType": "USDT-FUTURES",
+                        "marginMode": margin_mode,
                         "marginCoin": "USDT",
                         "size": str(half_qty),
                         "side": close_side,
                         "orderType": "market",
                         "tradeSide": "close",
-                        "holdSide": hold_side
+                        "reduceOnly": "YES"
                     })
                     if res.get("code") == "00000":
-                        self.order_result.emit(f"✂️ [본 계정 50% 분할 청산 성공] {side_str} {half_qty} BTC 체결 완료!")
+                        self.order_result.emit(f"✂️ [본 계정 50% 분할 청산 성공] {side_str} {half_qty} BTC 체결 완료 (폴백)!")
+                        success = True
                     else:
-                        self.order_result.emit(f"❌ [50% 청산 실패] {res.get('msg')} ({res.get('code')})")
-                except Exception as e2:
-                    self.order_result.emit(f"❌ [50% 분할 청산 에러] {e1} / {e2}")
+                        last_err += f" / {res.get('msg')} ({res.get('code')})"
+                except Exception as e:
+                    last_err += f" / {e}"
+
+            # 3단계: CCXT create_order 폴백
+            if not success:
+                try:
+                    self.exchange.create_order(
+                        'BTC/USDT:USDT',
+                        'market',
+                        close_side,
+                        half_qty,
+                        params={'tradeSide': 'close', 'holdSide': hold_side, 'marginMode': margin_mode, 'marginCoin': 'USDT'}
+                    )
+                    self.order_result.emit(f"✂️ [본 계정 50% 분할 청산 성공] {side_str} {half_qty} BTC 체결 완료 (CCXT)!")
+                    success = True
+                except Exception as e:
+                    last_err += f" / {e}"
+
+            if not success:
+                self.order_result.emit(f"❌ [50% 분할 청산 실패] {last_err}")
 
         elif action_type == "EMERGENCY":
             try:
@@ -713,35 +747,47 @@ class BitgetMainDirectWorker(QThread):
                 if pos:
                     contracts = float(pos.get('total', 0) or 0.0)
                     hold_side = str(pos.get('holdSide', 'long')).lower()
+                    margin_mode = str(pos.get('marginMode', 'isolated')).lower()
                     side_str = "LONG" if hold_side == "long" else "SHORT"
                     close_side = "sell" if hold_side == "long" else "buy"
+
+                    success = False
+                    last_err = ""
                     try:
-                        self.exchange.create_order(
-                            'BTC/USDT:USDT',
-                            'market',
-                            close_side,
-                            contracts,
-                            params={'tradeSide': 'close', 'holdSide': hold_side, 'marginCoin': 'USDT'}
-                        )
-                        self.order_result.emit(f"🚨 [본 계정 EMERGENCY 전량 청산 완료] {side_str} {contracts} BTC 100% 시장가 청산 완료!")
-                    except Exception as e1:
+                        res = self.exchange.private_mix_post_v2_mix_order_place_order({
+                            "symbol": "BTCUSDT",
+                            "productType": "USDT-FUTURES",
+                            "marginMode": margin_mode,
+                            "marginCoin": "USDT",
+                            "size": str(contracts),
+                            "side": close_side,
+                            "orderType": "market",
+                            "tradeSide": "close"
+                        })
+                        if res.get("code") == "00000":
+                            self.order_result.emit(f"🚨 [본 계정 EMERGENCY 전량 청산 완료] {side_str} {contracts} BTC 100% 시장가 청산 완료!")
+                            success = True
+                        else:
+                            last_err = f"{res.get('msg')} ({res.get('code')})"
+                    except Exception as e:
+                        last_err = str(e)
+
+                    if not success:
                         try:
-                            res = self.exchange.private_mix_post_v2_mix_order_place_order({
-                                "symbol": "BTCUSDT",
-                                "productType": "USDT-FUTURES",
-                                "marginCoin": "USDT",
-                                "size": str(contracts),
-                                "side": close_side,
-                                "orderType": "market",
-                                "tradeSide": "close",
-                                "holdSide": hold_side
-                            })
-                            if res.get("code") == "00000":
-                                self.order_result.emit(f"🚨 [본 계정 EMERGENCY 전량 청산 완료] {side_str} {contracts} BTC 체결!")
-                            else:
-                                self.order_result.emit(f"❌ [EMERGENCY 청산 실패] {res.get('msg')} ({res.get('code')})")
-                        except Exception as e2:
-                            self.order_result.emit(f"❌ [EMERGENCY 청산 에러] {e1} / {e2}")
+                            self.exchange.create_order(
+                                'BTC/USDT:USDT',
+                                'market',
+                                close_side,
+                                contracts,
+                                params={'tradeSide': 'close', 'holdSide': hold_side, 'marginMode': margin_mode, 'marginCoin': 'USDT'}
+                            )
+                            self.order_result.emit(f"🚨 [본 계정 EMERGENCY 전량 청산 완료] {side_str} {contracts} BTC 체결 (CCXT)!")
+                            success = True
+                        except Exception as e:
+                            last_err += f" / {e}"
+
+                    if not success:
+                        self.order_result.emit(f"❌ [EMERGENCY 청산 실패] {last_err}")
                 else:
                     self.order_result.emit("🚨 [비상 탈출] 주문 전수 취소 완료 (보유 포지션 없음)")
             except Exception as e:
