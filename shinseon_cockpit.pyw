@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 수동매매 초슬림 미니 콕핏 위젯 (Cockpit Widget V7.80)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.00)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
-기능: 1분/5분/15분 3중 RSI 실시간 신호등 뱃지 및 3중 극점 동조 사운드 비프음 알림 탑재
+기능:
+1. 5분봉/15분봉 정규 다이버전스(Bearish/Bullish) 자동 탐지 및 실시간 저격 뱃지 점등
+2. 1분/5분/15분 3중 RSI 실시간 신호등 뱃지
+3. 비트겟 본 계정 API 직접 통신 5대 황실 원클릭 주문 및 실시간 포지션 HUD
+4. 청산액 & OI 속도 듀얼 임계치 100% 동시 충족 시에만 맑은 저격 사운드 비프음 송출
+5. 실시간 임계치(청산액, OI속도) 콕핏 화면 내 직접 수정 및 영구 저장 패널
 """
 
 import sys
@@ -42,7 +47,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V7.81"
+VERSION = "V1.00"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -110,37 +115,164 @@ def compute_rsi(closes, period=14):
     return round(rsi, 1)
 
 
+def compute_rsi_series(closes, period=14):
+    """전체 캔들 시리즈에 대한 RSI(14) 배열 연산"""
+    if not closes or len(closes) < period + 1:
+        return [50.0] * len(closes)
+    rsi_series = [50.0] * len(closes)
+    gains = []
+    losses = []
+    for i in range(1, len(closes)):
+        diff = closes[i] - closes[i-1]
+        gains.append(max(diff, 0.0))
+        losses.append(max(-diff, 0.0))
+    if len(gains) < period:
+        return rsi_series
+    avg_gain = sum(gains[:period]) / period
+    avg_loss = sum(losses[:period]) / period
+    rsi_series[period] = 100.0 if avg_loss == 0 else (100.0 - (100.0 / (1.0 + (avg_gain / avg_loss))))
+    for i in range(period, len(gains)):
+        avg_gain = (avg_gain * (period - 1) + gains[i]) / period
+        avg_loss = (avg_loss * (period - 1) + losses[i]) / period
+        if avg_loss == 0:
+            rsi_series[i+1] = 100.0 if avg_gain > 0 else 50.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi_series[i+1] = 100.0 - (100.0 / (1.0 + rs))
+    return rsi_series
+
+
+def compute_stoch_rsi_series(closes, rsi_period=14, stoch_period=14, k_period=3, d_period=3):
+    """Stoch RSI (14, 14, 3, 3) %K, %D 시리즈 연산"""
+    rsi_list = compute_rsi_series(closes, rsi_period)
+    n = len(rsi_list)
+    if n < rsi_period + stoch_period:
+        return [50.0] * n, [50.0] * n
+    raw_stoch = [50.0] * n
+    for i in range(rsi_period + stoch_period - 1, n):
+        window = rsi_list[i - stoch_period + 1 : i + 1]
+        min_rsi = min(window)
+        max_rsi = max(window)
+        if max_rsi > min_rsi:
+            raw_stoch[i] = ((rsi_list[i] - min_rsi) / (max_rsi - min_rsi)) * 100.0
+        else:
+            raw_stoch[i] = 50.0
+    k_series = [50.0] * n
+    for i in range(k_period - 1, n):
+        k_series[i] = sum(raw_stoch[i - k_period + 1 : i + 1]) / k_period
+    d_series = [50.0] * n
+    for i in range(k_period + d_period - 2, n):
+        d_series[i] = sum(k_series[i - d_period + 1 : i + 1]) / d_period
+    return k_series, d_series
+
+
+def detect_regular_divergence(candles):
+    """
+    최근 30개 캔들 내 정규 다이버전스(Bearish/Bullish) 자동 탐지 엔진
+    - 정규 하락 다이버전스 (Bearish): 가격 고점 상승(Price High2 > High1) BUT Stoch RSI 고점 하락(RSI High2 < High1 & High1 >= 65)
+    - 정규 상승 다이버전스 (Bullish): 가격 저점 하락(Price Low2 < Low1) BUT Stoch RSI 저점 상승(RSI Low2 > Low1 & Low1 <= 35)
+    """
+    if not candles or len(candles) < 25:
+        return None
+    closes = [c['close'] for c in candles]
+    highs = [c['high'] for c in candles]
+    lows = [c['low'] for c in candles]
+    k_series, _ = compute_stoch_rsi_series(closes, 14, 14, 3, 3)
+    rsi_series = compute_rsi_series(closes, 14)
+
+    n = len(candles)
+    peaks = []
+    troughs = []
+
+    for i in range(max(2, n - 25), n - 1):
+        # High Peak (가격 고점 또는 Stoch RSI 고점)
+        if (highs[i] >= highs[i-1] and highs[i] >= highs[i+1] and highs[i] >= highs[i-2]) or (k_series[i] >= k_series[i-1] and k_series[i] >= k_series[i+1] and k_series[i] >= 60):
+            peaks.append((i, highs[i], k_series[i], rsi_series[i]))
+        # Low Trough (가격 저점 또는 Stoch RSI 저점)
+        if (lows[i] <= lows[i-1] and lows[i] <= lows[i+1] and lows[i] <= lows[i-2]) or (k_series[i] <= k_series[i-1] and k_series[i] <= k_series[i+1] and k_series[i] <= 40):
+            troughs.append((i, lows[i], k_series[i], rsi_series[i]))
+
+    # 1. Bearish Divergence 검사
+    if len(peaks) >= 2:
+        distinct_peaks = []
+        for p in peaks:
+            if not distinct_peaks or (p[0] - distinct_peaks[-1][0] >= 2):
+                distinct_peaks.append(p)
+            elif p[1] > distinct_peaks[-1][1]:
+                distinct_peaks[-1] = p
+        if len(distinct_peaks) >= 2:
+            p1 = distinct_peaks[-2]
+            p2 = distinct_peaks[-1]
+            if (n - 1 - p2[0]) <= 6:
+                if p2[1] > p1[1] and (p2[2] < p1[2] or p2[3] < p1[3]) and (p1[2] >= 65 or p1[3] >= 60):
+                    return 'BEARISH'
+
+    # 2. Bullish Divergence 검사
+    if len(troughs) >= 2:
+        distinct_troughs = []
+        for t in troughs:
+            if not distinct_troughs or (t[0] - distinct_troughs[-1][0] >= 2):
+                distinct_troughs.append(t)
+            elif t[1] < distinct_troughs[-1][1]:
+                distinct_troughs[-1] = t
+        if len(distinct_troughs) >= 2:
+            t1 = distinct_troughs[-2]
+            t2 = distinct_troughs[-1]
+            if (n - 1 - t2[0]) <= 6:
+                if t2[1] < t1[1] and (t2[2] > t1[2] or t2[3] > t1[3]) and (t1[2] <= 35 or t1[3] <= 40):
+                    return 'BULLISH'
+
+    return None
+
+
 class MultiRsiWorker(QThread):
-    """1분, 5분, 15분 멀티 타임프레임 실시간 RSI(14) 백그라운드 수집/연산 스레드"""
-    rsi_updated = Signal(float, float, float)  # rsi_1m, rsi_5m, rsi_15m
+    """1분, 5분, 15분 멀티 타임프레임 실시간 RSI & 5m/15m 다이버전스 백그라운드 수집/연산 스레드"""
+    rsi_updated = Signal(float, float, float, str, str)  # rsi_1m, rsi_5m, rsi_15m, div_5m, div_15m
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.running = True
 
-    def fetch_closes(self, gran):
+    def fetch_candles(self, gran, limit=50):
         # 1차: Bitget REST API 시도
         try:
-            url = f"https://api.bitget.com/api/v2/mix/market/candles?symbol=BTCUSDT&granularity={gran}&productType=USDT-FUTURES&limit=30"
+            url = f"https://api.bitget.com/api/v2/mix/market/candles?symbol=BTCUSDT&granularity={gran}&productType=USDT-FUTURES&limit={limit}"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=2.5, context=ssl_ctx) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
                 raw = data.get('data', [])
                 if raw:
-                    # [ts, open, high, low, close, ...]
                     sorted_raw = sorted(raw, key=lambda x: int(x[0]))
-                    return [float(c[4]) for c in sorted_raw]
+                    return [
+                        {
+                            "ts": int(c[0]),
+                            "open": float(c[1]),
+                            "high": float(c[2]),
+                            "low": float(c[3]),
+                            "close": float(c[4])
+                        }
+                        for c in sorted_raw
+                    ]
         except Exception:
             pass
 
         # 2차 대안: Binance Futures REST API 백업 시도
         try:
-            url = f"https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval={gran}&limit=30"
+            url = f"https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval={gran}&limit={limit}"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=2.5, context=ssl_ctx) as resp:
                 raw = json.loads(resp.read().decode('utf-8'))
                 if isinstance(raw, list) and raw:
-                    return [float(k[4]) for k in raw]
+                    return [
+                        {
+                            "ts": int(k[0]),
+                            "open": float(k[1]),
+                            "high": float(k[2]),
+                            "low": float(k[3]),
+                            "close": float(k[4])
+                        }
+                        for k in raw
+                    ]
         except Exception:
             pass
 
@@ -149,15 +281,22 @@ class MultiRsiWorker(QThread):
     def run(self):
         while self.running:
             try:
-                c_1m = self.fetch_closes("1m")
-                c_5m = self.fetch_closes("5m")
-                c_15m = self.fetch_closes("15m")
+                candles_1m = self.fetch_candles("1m", 30)
+                candles_5m = self.fetch_candles("5m", 50)
+                candles_15m = self.fetch_candles("15m", 50)
 
-                if c_1m and c_5m and c_15m:
-                    rsi_1m = compute_rsi(c_1m, 14)
-                    rsi_5m = compute_rsi(c_5m, 14)
-                    rsi_15m = compute_rsi(c_15m, 14)
-                    self.rsi_updated.emit(rsi_1m, rsi_5m, rsi_15m)
+                closes_1m = [c['close'] for c in candles_1m]
+                closes_5m = [c['close'] for c in candles_5m]
+                closes_15m = [c['close'] for c in candles_15m]
+
+                rsi_1m = compute_rsi(closes_1m, 14) if closes_1m else 50.0
+                rsi_5m = compute_rsi(closes_5m, 14) if closes_5m else 50.0
+                rsi_15m = compute_rsi(closes_15m, 14) if closes_15m else 50.0
+
+                div_5m = detect_regular_divergence(candles_5m) or ""
+                div_15m = detect_regular_divergence(candles_15m) or ""
+
+                self.rsi_updated.emit(rsi_1m, rsi_5m, rsi_15m, div_5m, div_15m)
             except Exception:
                 pass
 
@@ -566,6 +705,7 @@ class BitgetMainDirectWorker(QThread):
 class ShinseonCockpit(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.COCKPIT_VERSION = VERSION
         self.CURRENT_VERSION = VERSION
         self.ws = None
         self.ws_url = "ws://13.192.187.244:8765"
@@ -579,15 +719,26 @@ class ShinseonCockpit(QMainWindow):
         self.position_liq_price = 0.0
         self.sound_enabled = True
         self.smart_stop_active = False
-        self._last_signal_direction = None
-        self._last_beep_time = 0
-        self._prev_rsi_1m = None
-        self._last_rsi_alert_time = 0.0
+
+        # 듀얼 임계치 및 실시간 레이더 변수
+        self.target_liq = 200000.0
+        self.target_oi = 0.12
+        self.rolling_1m_liq = 0.0
+        self.oi_delta_1m = 0.0
+        self.expected_dir = None
+        self.long_liq = 0.0
+        self.short_liq = 0.0
+        self.div_5m = ""
+        self.div_15m = ""
+        self._prev_div_5m = ""
+        self._prev_div_15m = ""
+
+        self._last_beep_time = 0.0
 
         self.init_ui()
         self.load_config()
 
-        # 3중 멀티 타임프레임 RSI 백그라운드 수집 스레드 시작
+        # 3중 멀티 타임프레임 RSI & 5m/15m 다이버전스 백그라운드 수집 스레드 시작
         self.rsi_worker = MultiRsiWorker(self)
         self.rsi_worker.rsi_updated.connect(self.on_rsi_updated)
         self.rsi_worker.start()
@@ -599,8 +750,8 @@ class ShinseonCockpit(QMainWindow):
         self.bitget_worker.start()
 
     def init_ui(self):
-        self.setWindowTitle(f"👑 [SHINSEON] 황실 콕핏 {self.CURRENT_VERSION} (가로 500px 초슬림)")
-        self.resize(500, 830)
+        self.setWindowTitle(f"[SHINSEON] 황실 수동 콕핏 {self.COCKPIT_VERSION} (가로 500px 초슬림 · 비트겟 직통)")
+        self.resize(500, 850)
         self.setMinimumWidth(480)
         self.setMaximumWidth(540)
 
@@ -685,7 +836,7 @@ class ShinseonCockpit(QMainWindow):
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
 
-        lbl_crown = QLabel(f"👑 <b style='color:#DEBA9D; font-size:14px;'>황실 콕핏 {self.CURRENT_VERSION}</b>")
+        lbl_crown = QLabel(f"👑 <b style='color:#DEBA9D; font-size:14px;'>황실 수동 콕핏 {self.COCKPIT_VERSION}</b>")
         header_layout.addWidget(lbl_crown)
 
         header_layout.addStretch()
@@ -747,7 +898,7 @@ class ShinseonCockpit(QMainWindow):
 
         radar_layout.addLayout(rsi_layout)
 
-        # 3색 실시간 힌트 뱃지 (가장 중요한 오더플로우 나침반)
+        # 3색 실시간 힌트 뱃지 & 정규 다이버전스 자동 탐지 뱃지 (가장 중요한 오더플로우 나침반)
         self.lbl_hint_badge = QLabel("⚪ 지금은 관망이 유리하다")
         self.lbl_hint_badge.setAlignment(Qt.AlignCenter)
         self.lbl_hint_badge.setStyleSheet("""
@@ -761,11 +912,64 @@ class ShinseonCockpit(QMainWindow):
         """)
         radar_layout.addWidget(self.lbl_hint_badge)
 
+        # ⚙️ 실시간 임계치 직접 수정 바
+        thresh_layout = QHBoxLayout()
+        thresh_layout.setSpacing(4)
+
+        lbl_thresh_title = QLabel("⚙️ <b>임계치:</b>")
+        lbl_thresh_title.setStyleSheet("color: #DEBA9D; font-size: 11px; font-weight: bold;")
+        thresh_layout.addWidget(lbl_thresh_title)
+
+        lbl_liq_tag = QLabel("청산 $")
+        lbl_liq_tag.setStyleSheet("color: #CBD5E1; font-size: 11px;")
+        thresh_layout.addWidget(lbl_liq_tag)
+
+        self.edit_target_liq = QLineEdit("200000")
+        self.edit_target_liq.setFixedWidth(75)
+        self.edit_target_liq.setAlignment(Qt.AlignCenter)
+        self.edit_target_liq.setStyleSheet("background-color: #080a0f; border: 1px solid #b8860b; color: #FFD700; font-size: 11px; font-weight: bold; padding: 2px;")
+        thresh_layout.addWidget(self.edit_target_liq)
+
+        lbl_oi_tag = QLabel("OI")
+        lbl_oi_tag.setStyleSheet("color: #CBD5E1; font-size: 11px;")
+        thresh_layout.addWidget(lbl_oi_tag)
+
+        self.edit_target_oi = QLineEdit("0.12")
+        self.edit_target_oi.setFixedWidth(50)
+        self.edit_target_oi.setAlignment(Qt.AlignCenter)
+        self.edit_target_oi.setStyleSheet("background-color: #080a0f; border: 1px solid #0088cc; color: #00FFCC; font-size: 11px; font-weight: bold; padding: 2px;")
+        thresh_layout.addWidget(self.edit_target_oi)
+
+        lbl_oi_pct = QLabel("%")
+        lbl_oi_pct.setStyleSheet("color: #CBD5E1; font-size: 11px;")
+        thresh_layout.addWidget(lbl_oi_pct)
+
+        self.btn_apply_threshold = QPushButton("💾 적용")
+        self.btn_apply_threshold.setStyleSheet("""
+            QPushButton {
+                background-color: #1e2638;
+                border: 1px solid #38BDF8;
+                border-radius: 4px;
+                color: #38BDF8;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 2px 8px;
+            }
+            QPushButton:hover {
+                background-color: #0284C7;
+                color: #FFFFFF;
+            }
+        """)
+        self.btn_apply_threshold.clicked.connect(self.apply_thresholds)
+        thresh_layout.addWidget(self.btn_apply_threshold)
+
+        radar_layout.addLayout(thresh_layout)
+
         # 게이지 1: 1분 청산액
         self.bar_liq = QProgressBar()
-        self.bar_liq.setRange(0, 1000000)
+        self.bar_liq.setRange(0, int(self.target_liq))
         self.bar_liq.setValue(0)
-        self.bar_liq.setFormat("1분 누적 청산: $0 / $1,000,000")
+        self.bar_liq.setFormat(f"1분 누적 청산: $0 / ${int(self.target_liq):,}")
         self.bar_liq.setStyleSheet("""
             QProgressBar::chunk {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #b8860b, stop:1 #ffd700);
@@ -778,7 +982,7 @@ class ShinseonCockpit(QMainWindow):
         self.bar_oi = QProgressBar()
         self.bar_oi.setRange(0, 100)
         self.bar_oi.setValue(0)
-        self.bar_oi.setFormat("1분 OI 속도: +0.0000% / +0.1700%")
+        self.bar_oi.setFormat(f"1분 OI 속도: +0.0000% / {self.target_oi:+.4f}%")
         self.bar_oi.setStyleSheet("""
             QProgressBar::chunk {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0088cc, stop:1 #00ffcc);
@@ -1113,8 +1317,34 @@ class ShinseonCockpit(QMainWindow):
         self.txt_log = QPlainTextEdit()
         self.txt_log.setReadOnly(True)
         self.txt_log.setFixedHeight(80)
-        self.txt_log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] 👑 [SHINSEON] 초슬림 콕핏 {self.CURRENT_VERSION} 가동 준비 완료.")
+        self.txt_log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] 👑 [SHINSEON] 황실 수동 콕핏 {self.COCKPIT_VERSION} 가동 준비 완료.")
         main_layout.addWidget(self.txt_log)
+
+    def apply_thresholds(self):
+        try:
+            new_liq = float(self.edit_target_liq.text().replace(',', '').strip())
+            new_oi = float(self.edit_target_oi.text().replace('%', '').strip())
+            if new_liq <= 0 or new_oi <= 0:
+                self.add_log("❌ [오류] 임계치 값은 0보다 커야 합니다.")
+                return
+
+            self.target_liq = new_liq
+            self.target_oi = new_oi
+
+            # 게이지 즉시 반영
+            self.bar_liq.setRange(0, max(1, int(self.target_liq)))
+            self.bar_liq.setValue(min(int(self.target_liq), int(self.rolling_1m_liq)))
+            self.bar_liq.setFormat(f"1분 누적 청산: ${int(self.rolling_1m_liq):,} / ${int(self.target_liq):,}")
+
+            pct_oi = int(min(100.0, max(0.0, (abs(self.oi_delta_1m) / self.target_oi if self.target_oi > 0 else 0) * 100)))
+            self.bar_oi.setValue(pct_oi)
+            self.bar_oi.setFormat(f"1분 OI 속도: {self.oi_delta_1m:+.4f}% / {self.target_oi:+.4f}%")
+
+            # config 파일 저장
+            self.save_config_thresholds(new_liq, new_oi)
+            self.add_log(f"💾 [임계치 갱신 완료] 청산액: ${int(new_liq):,}, OI속도: {new_oi:.4f}% 적용됨")
+        except ValueError:
+            self.add_log("❌ [오류] 숫자 형식이 올바르지 않습니다.")
 
     def load_config(self):
         config_path = os.path.join(BASE_DIR, "shinseon_config.json")
@@ -1124,8 +1354,30 @@ class ShinseonCockpit(QMainWindow):
                     cfg = json.load(f)
                     self.sound_enabled = cfg.get("sound_enabled", True)
                     self.chk_sound.setChecked(self.sound_enabled)
+
+                    if "target_liq" in cfg:
+                        self.target_liq = float(cfg["target_liq"])
+                    if "target_oi" in cfg:
+                        self.target_oi = float(cfg["target_oi"])
+
+                    self.edit_target_liq.setText(str(int(self.target_liq)))
+                    self.edit_target_oi.setText(str(self.target_oi))
             except Exception:
                 pass
+
+    def save_config_thresholds(self, new_liq, new_oi):
+        config_path = os.path.join(BASE_DIR, "shinseon_config.json")
+        try:
+            cfg = {}
+            if os.path.exists(config_path):
+                with open(config_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+            cfg["target_liq"] = str(int(new_liq))
+            cfg["target_oi"] = str(new_oi)
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            self.add_log(f"⚠️ [설정 저장 실패] {e}")
 
     def add_log(self, text):
         t_str = datetime.now().strftime("%H:%M:%S")
@@ -1150,26 +1402,24 @@ class ShinseonCockpit(QMainWindow):
         stat = "ON 🔔" if checked else "OFF 🔕"
         self.add_log(f"사운드 알림: {stat}")
 
-    def play_alert_sound(self, sound_type="SIGNAL"):
+    def check_dual_threshold_sound(self):
+        """오직 청산액과 OI 속도 두 임계치가 100% 동시 충족될 때만 맑은 저격 비프음 송출 (60초 쿨타임)"""
         if not self.sound_enabled:
             return
-        now = time.time()
-        if now - self._last_beep_time < 2.0:
-            return
-        self._last_beep_time = now
-
-        try:
-            if winsound:
-                if sound_type == "LONG":
-                    winsound.Beep(1500, 200)
-                elif sound_type == "SHORT":
-                    winsound.Beep(900, 200)
-                else:
-                    winsound.Beep(1200, 250)
-            else:
-                QApplication.beep()
-        except Exception:
-            pass
+        if self.rolling_1m_liq >= self.target_liq and abs(self.oi_delta_1m) >= self.target_oi:
+            now = time.time()
+            if now - self._last_beep_time >= 60.0:
+                self._last_beep_time = now
+                self.add_log(f"🎯 [황실 듀얼 저격 알림] 청산액(${int(self.rolling_1m_liq):,} >= ${int(self.target_liq):,}) & OI속도({self.oi_delta_1m:+.4f}% >= {self.target_oi:+.4f}%) 100% 동시 충족!")
+                def _beep_bg():
+                    try:
+                        if winsound:
+                            winsound.Beep(1200, 200)
+                        else:
+                            QApplication.beep()
+                    except Exception:
+                        pass
+                threading.Thread(target=_beep_bg, daemon=True).start()
 
     # ----------------------------------------------------
     # 웹소켓 및 데이터 통신
@@ -1237,66 +1487,32 @@ class ShinseonCockpit(QMainWindow):
         current_sess = payload.get("current_session", "US 세션")
         self.lbl_session.setText(f"<span style='color:#DEBA9D; font-weight:bold;'>{current_sess}</span>")
 
-        # 1분 누적 청산 게이지
-        t_liq = float(payload.get("target_liq", 1000000.0))
-        l_10s = float(payload.get("liq_10s", 0.0))
-        self.bar_liq.setRange(0, max(1, int(t_liq)))
-        self.bar_liq.setValue(min(int(t_liq), int(l_10s)))
-        self.bar_liq.setFormat(f"1분 누적 청산: ${int(l_10s):,} / ${int(t_liq):,}")
+        # 1분 누적 청산액 및 OI 속도 수신
+        l_10s = float(payload.get("liq_10s", 0.0) or payload.get("rolling_1m_liq", 0.0))
+        o_spd = float(payload.get("oi_speed", 0.0) or payload.get("oi_delta_1m", 0.0))
+        self.rolling_1m_liq = l_10s
+        self.oi_delta_1m = o_spd
 
-        # 1분 OI 속도 게이지
-        t_oi = float(payload.get("target_oi", 0.17))
-        o_spd = float(payload.get("oi_speed", 0.0))
-        pct_oi = int(min(100.0, max(0.0, (o_spd / t_oi if t_oi > 0 else 0) * 100)))
+        # 1분 누적 청산 게이지 갱신
+        self.bar_liq.setRange(0, max(1, int(self.target_liq)))
+        self.bar_liq.setValue(min(int(self.target_liq), int(self.rolling_1m_liq)))
+        self.bar_liq.setFormat(f"1분 누적 청산: ${int(self.rolling_1m_liq):,} / ${int(self.target_liq):,}")
+
+        # 1분 OI 속도 게이지 갱신
+        pct_oi = int(min(100.0, max(0.0, (abs(self.oi_delta_1m) / self.target_oi if self.target_oi > 0 else 0) * 100)))
         self.bar_oi.setValue(pct_oi)
-        self.bar_oi.setFormat(f"1분 OI 속도: {o_spd:+.4f}% / {t_oi:+.4f}%")
+        self.bar_oi.setFormat(f"1분 OI 속도: {self.oi_delta_1m:+.4f}% / {self.target_oi:+.4f}%")
 
-        # 3색 실시간 힌트 뱃지 & 사운드 알림 판정
-        exp_dir = payload.get("expected_dir", None)
-        long_l = float(payload.get("long_liq", 0.0))
-        short_l = float(payload.get("short_liq", 0.0))
-        has_real_force = payload.get("has_real_force", False)
+        # 레이더 방향 신호 수신
+        self.expected_dir = payload.get("expected_dir", None)
+        self.long_liq = float(payload.get("long_liq", 0.0))
+        self.short_liq = float(payload.get("short_liq", 0.0))
 
-        if exp_dir == "LONG" or (short_l > long_l and short_l >= t_liq * 0.7):
-            self.lbl_hint_badge.setText("🟢 지금은 롱이 유리하다 (3대 AND 동조)")
-            self.lbl_hint_badge.setStyleSheet("""
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #008947);
-                border: 2px solid #00FFCC;
-                border-radius: 6px;
-                color: #FFFFFF;
-                font-size: 14px;
-                font-weight: 900;
-                padding: 6px;
-            """)
-            if self._last_signal_direction != "LONG":
-                self.play_alert_sound("LONG")
-                self._last_signal_direction = "LONG"
-        elif exp_dir == "SHORT" or (long_l > short_l and long_l >= t_liq * 0.7):
-            self.lbl_hint_badge.setText("🔴 지금은 숏이 유리하다 (3대 AND 동조)")
-            self.lbl_hint_badge.setStyleSheet("""
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #660018, stop:1 #A8002B);
-                border: 2px solid #FF3366;
-                border-radius: 6px;
-                color: #FFFFFF;
-                font-size: 14px;
-                font-weight: 900;
-                padding: 6px;
-            """)
-            if self._last_signal_direction != "SHORT":
-                self.play_alert_sound("SHORT")
-                self._last_signal_direction = "SHORT"
-        else:
-            self.lbl_hint_badge.setText("⚪ 지금은 관망이 유리하다")
-            self.lbl_hint_badge.setStyleSheet("""
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1a2232, stop:1 #0f1624);
-                border: 1px solid #334155;
-                border-radius: 6px;
-                color: #94A3B8;
-                font-size: 14px;
-                font-weight: 900;
-                padding: 6px;
-            """)
-            self._last_signal_direction = None
+        # 힌트/다이버전스 뱃지 갱신
+        self.update_hint_badge()
+
+        # 듀얼 임계치 100% 동시 충족 사운드 알림 판정
+        self.check_dual_threshold_sound()
 
         # 스마트 스탑 상태
         c_active = payload.get("custom_stop_active", None)
@@ -1315,8 +1531,95 @@ class ShinseonCockpit(QMainWindow):
         # HUD 손익 및 안전거리 실시간 재연산
         self.update_hud_pnl()
 
+    def update_hint_badge(self):
+        """5분봉/15분봉 정규 다이버전스 자동 탐지 뱃지 점등 & 일반 추세 뱃지 렌더링"""
+        # 1. 5분봉/15분봉 정규 다이버전스 최우선 점등
+        if self.div_5m == "BEARISH":
+            self.lbl_hint_badge.setText("🐻 5m 하락 다이버전스 감지! (숏 저격)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #660018, stop:1 #A8002B);
+                border: 2px solid #FF3366;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+        elif self.div_15m == "BEARISH":
+            self.lbl_hint_badge.setText("🐻 15m 하락 다이버전스 감지! (숏 저격)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #660018, stop:1 #A8002B);
+                border: 2px solid #FF3366;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+        elif self.div_5m == "BULLISH":
+            self.lbl_hint_badge.setText("🐂 5m 상승 다이버전스 감지! (롱 저격)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #008947);
+                border: 2px solid #00FFCC;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+        elif self.div_15m == "BULLISH":
+            self.lbl_hint_badge.setText("🐂 15m 상승 다이버전스 감지! (롱 저격)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #008947);
+                border: 2px solid #00FFCC;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+
+        # 2. 다이버전스 미감지 시 기존 추세 뱃지 렌더링
+        if self.expected_dir == "LONG" or (self.short_liq > self.long_liq and self.short_liq >= self.target_liq * 0.7):
+            self.lbl_hint_badge.setText("🟢 지금은 롱이 유리하다 (3대 AND 동조)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #008947);
+                border: 2px solid #00FFCC;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+        elif self.expected_dir == "SHORT" or (self.long_liq > self.short_liq and self.long_liq >= self.target_liq * 0.7):
+            self.lbl_hint_badge.setText("🔴 지금은 숏이 유리하다 (3대 AND 동조)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #660018, stop:1 #A8002B);
+                border: 2px solid #FF3366;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+        else:
+            self.lbl_hint_badge.setText("⚪ 지금은 관망이 유리하다")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1a2232, stop:1 #0f1624);
+                border: 1px solid #334155;
+                border-radius: 6px;
+                color: #94A3B8;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+
     def handle_direct_position_update(self, payload):
-        """비트겟 본 계정 API에서 수신한 실시간 포지션 정보를 HUD에 0.05초 만에 렌더링"""
+        """비트겟 본 계정 API에서 수신한 실시간 포지션 정보를 HUD에 0.05초 만에 렌더링 (포지션 변경음 완전 음소거)"""
         has_pos = payload.get("has_position", False)
         self.has_position = has_pos
         c_price = payload.get("current_price", 0.0)
@@ -1486,10 +1789,19 @@ class ShinseonCockpit(QMainWindow):
         except ValueError:
             offset_val = 0.6
 
+        packet = {
+            "cmd": "CMD_SET_CUSTOM_STOP",
+            "active": new_active,
+            "offset": offset_val
+        }
+        asyncio.create_task(self.ws.send(json.dumps(packet)))
+        act_str = "설정" if new_active else "해제"
+        self.add_log(f"🛡️ [스마트 스탑] 오프셋 {offset_val:.2f}% {act_str} 요청 전송!")
+
     # ----------------------------------------------------
-    # 3중 RSI 실시간 신호등 & 극점 동조 사운드 알림
+    # 3중 RSI 실시간 신호등 & 정규 다이버전스 자동 탐지 갱신
     # ----------------------------------------------------
-    def on_rsi_updated(self, rsi_1m, rsi_5m, rsi_15m):
+    def on_rsi_updated(self, rsi_1m, rsi_5m, rsi_15m, div_5m, div_15m):
         def get_badge_info(prefix, rsi_val):
             if rsi_val >= 70.0:
                 style = "background-color: rgba(255, 82, 82, 0.3); border: 1px solid #FF5252; color: #FF6666; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
@@ -1514,41 +1826,26 @@ class ShinseonCockpit(QMainWindow):
         self.lbl_rsi_15m.setStyleSheet(s_15m)
         self.lbl_rsi_15m.setText(t_15m)
 
-        # 3중 극점 동조 사운드 알림 체크
-        self.check_rsi_sound_alert(rsi_1m, rsi_5m, rsi_15m)
-        self._prev_rsi_1m = rsi_1m
+        # 다이버전스 상태 변경 감지 및 로깅
+        if div_5m != self._prev_div_5m:
+            if div_5m == "BEARISH":
+                self.add_log("🐻 [다이버전스 탐지] 5분봉 정규 하락 다이버전스 포착! (숏 저격 찬스)")
+            elif div_5m == "BULLISH":
+                self.add_log("🐂 [다이버전스 탐지] 5분봉 정규 상승 다이버전스 포착! (롱 저격 찬스)")
+            self._prev_div_5m = div_5m
 
-    def check_rsi_sound_alert(self, rsi_1m, rsi_5m, rsi_15m):
-        if not self.sound_enabled or self._prev_rsi_1m is None:
-            return
+        if div_15m != self._prev_div_15m:
+            if div_15m == "BEARISH":
+                self.add_log("🐻 [다이버전스 탐지] 15분봉 정규 하락 다이버전스 포착! (숏 저격 찬스)")
+            elif div_15m == "BULLISH":
+                self.add_log("🐂 [다이버전스 탐지] 15분봉 정규 상승 다이버전스 포착! (롱 저격 찬스)")
+            self._prev_div_15m = div_15m
 
-        now = time.time()
-        # 1. 3중 RSI 과매수 상단 꺾임 ➔ 숏 저격 알림 (15m>75 AND 5m>70 AND 1m>75, 1m 하방 꺾임)
-        if rsi_15m > 75.0 and rsi_5m > 70.0 and rsi_1m > 75.0 and self._prev_rsi_1m > rsi_1m:
-            if now - self._last_rsi_alert_time >= 60.0:
-                self._last_rsi_alert_time = now
-                self.add_log(f"🔔 [3중 RSI 극점 저격 알림] 상단 과매수 꺾임 포착 (1m:{rsi_1m:.1f}% 5m:{rsi_5m:.1f}% 15m:{rsi_15m:.1f}%) ➔ 숏 유리!")
-                self._play_double_beep(1500, 150)
+        self.div_5m = div_5m
+        self.div_15m = div_15m
 
-        # 2. 3중 RSI 과매도 바닥 반등 ➔ 롱 저격 알림 (15m<25 AND 5m<30 AND 1m<25, 1m 상방 반등)
-        elif rsi_15m < 25.0 and rsi_5m < 30.0 and rsi_1m < 25.0 and self._prev_rsi_1m < rsi_1m:
-            if now - self._last_rsi_alert_time >= 60.0:
-                self._last_rsi_alert_time = now
-                self.add_log(f"🔔 [3중 RSI 극점 저격 알림] 바닥 과매도 반등 포착 (1m:{rsi_1m:.1f}% 5m:{rsi_5m:.1f}% 15m:{rsi_15m:.1f}%) ➔ 롱 유리!")
-                self._play_double_beep(800, 150)
-
-    def _play_double_beep(self, freq, dur_ms):
-        def _beep_thread():
-            try:
-                if winsound:
-                    winsound.Beep(freq, dur_ms)
-                    time.sleep(0.08)
-                    winsound.Beep(freq, dur_ms)
-                else:
-                    QApplication.beep()
-            except Exception:
-                pass
-        threading.Thread(target=_beep_thread, daemon=True).start()
+        # 뱃지 즉시 갱신
+        self.update_hint_badge()
 
     def closeEvent(self, event):
         try:
