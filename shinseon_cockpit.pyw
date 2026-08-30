@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.04)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.05)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -47,7 +47,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.04"
+VERSION = "V1.05"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -1544,13 +1544,13 @@ class ShinseonCockpit(QMainWindow):
         self.update_hud_pnl()
 
     def update_hint_badge(self):
-        """5분봉/15분봉 정규 다이버전스 자동 탐지 뱃지 점등 & 일반 추세 뱃지 렌더링"""
-        # 1. 5분봉/15분봉 정규 다이버전스 최우선 점등
-        if self.div_5m == "BEARISH":
-            self.lbl_hint_badge.setText("🐻 5m 하락 다이버전스 감지! (숏 저격)")
+        """5분봉/15분봉 정규 다이버전스 스마트 4대 매트릭스(2중 동조/상충 충돌/단독 발생) & 일반 추세 뱃지 렌더링"""
+        # 1. 2중 하락 동조 (5m BEARISH + 15m BEARISH)
+        if self.div_5m == "BEARISH" and self.div_15m == "BEARISH":
+            self.lbl_hint_badge.setText("🔥 5m+15m 강력 하락 다이버전스! (숏 저격)")
             self.lbl_hint_badge.setStyleSheet("""
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #660018, stop:1 #A8002B);
-                border: 2px solid #FF3366;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #800020, stop:1 #C80036);
+                border: 2px solid #FF0055;
                 border-radius: 6px;
                 color: #FFFFFF;
                 font-size: 14px;
@@ -1558,6 +1558,50 @@ class ShinseonCockpit(QMainWindow):
                 padding: 6px;
             """)
             return
+
+        # 2. 2중 상승 동조 (5m BULLISH + 15m BULLISH)
+        elif self.div_5m == "BULLISH" and self.div_15m == "BULLISH":
+            self.lbl_hint_badge.setText("🔥 5m+15m 강력 상승 다이버전스! (롱 저격)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #00B050);
+                border: 2px solid #00FFCC;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+
+        # 3. 충돌 Case A: 15m 하락(본세) vs 5m 상승(단기반등)
+        elif self.div_15m == "BEARISH" and self.div_5m == "BULLISH":
+            self.lbl_hint_badge.setText("⚠️ 15m 하락본세 vs 5m 단기반등 충돌! (관망)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4A3B00, stop:1 #806000);
+                border: 2px solid #FFD700;
+                border-radius: 6px;
+                color: #FFF8DC;
+                font-size: 13px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+
+        # 4. 충돌 Case B: 15m 상승(본세) vs 5m 하락(단기눌림)
+        elif self.div_15m == "BULLISH" and self.div_5m == "BEARISH":
+            self.lbl_hint_badge.setText("⚠️ 15m 상승본세 vs 5m 단기눌림 충돌! (관망)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4A3B00, stop:1 #806000);
+                border: 2px solid #FFD700;
+                border-radius: 6px;
+                color: #FFF8DC;
+                font-size: 13px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+
+        # 5. 단독 발생 (15m 우선 ➔ 5m 순)
         elif self.div_15m == "BEARISH":
             self.lbl_hint_badge.setText("🐻 15m 하락 다이버전스 감지! (숏 저격)")
             self.lbl_hint_badge.setStyleSheet("""
@@ -1570,8 +1614,20 @@ class ShinseonCockpit(QMainWindow):
                 padding: 6px;
             """)
             return
-        elif self.div_5m == "BULLISH":
-            self.lbl_hint_badge.setText("🐂 5m 상승 다이버전스 감지! (롱 저격)")
+        elif self.div_5m == "BEARISH":
+            self.lbl_hint_badge.setText("🐻 5m 하락 다이버전스 감지! (숏 저격)")
+            self.lbl_hint_badge.setStyleSheet("""
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #660018, stop:1 #A8002B);
+                border: 2px solid #FF3366;
+                border-radius: 6px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                padding: 6px;
+            """)
+            return
+        elif self.div_15m == "BULLISH":
+            self.lbl_hint_badge.setText("🐂 15m 상승 다이버전스 감지! (롱 저격)")
             self.lbl_hint_badge.setStyleSheet("""
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #008947);
                 border: 2px solid #00FFCC;
@@ -1582,8 +1638,8 @@ class ShinseonCockpit(QMainWindow):
                 padding: 6px;
             """)
             return
-        elif self.div_15m == "BULLISH":
-            self.lbl_hint_badge.setText("🐂 15m 상승 다이버전스 감지! (롱 저격)")
+        elif self.div_5m == "BULLISH":
+            self.lbl_hint_badge.setText("🐂 5m 상승 다이버전스 감지! (롱 저격)")
             self.lbl_hint_badge.setStyleSheet("""
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #005A2E, stop:1 #008947);
                 border: 2px solid #00FFCC;
