@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.12)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.13)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -48,7 +48,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.12"
+VERSION = "V1.13"
 
 def play_position_sound():
     def _worker():
@@ -502,6 +502,34 @@ class BitgetMainDirectWorker(QThread):
             pass
         return None
 
+    def _cancel_all_tpsl_plan_orders(self):
+        """비트겟 본 계정에 대기 중인 모든 미체결 TP/SL 플랜 주문 100% 전수 취소"""
+        try:
+            res = self.exchange.private_mix_get_v2_mix_order_orders_plan_pending({
+                'symbol': 'BTCUSDT',
+                'productType': 'USDT-FUTURES',
+                'planType': 'profit_loss'
+            })
+            entrusted = (res.get('data') or {}).get('entrustedList') or []
+            for o in entrusted:
+                oid = o.get('orderId')
+                plan_type_val = o.get('planType') or 'profit_plan'
+                if oid:
+                    try:
+                        self.exchange.private_mix_post_v2_mix_order_cancel_plan_order({
+                            'symbol': 'BTCUSDT',
+                            'productType': 'USDT-FUTURES',
+                            'marginCoin': 'USDT',
+                            'orderId': str(oid),
+                            'planType': plan_type_val
+                        })
+                    except Exception:
+                        pass
+            if entrusted:
+                self.order_result.emit(f"🧹 [기존 플랜주문 정화] 총 {len(entrusted)}개의 대기 중이던 이전 TP/SL 주문 전수 취소 완료!")
+        except Exception as e:
+            pass
+
     def _process_action(self, action_type, params):
         if not self.exchange:
             self._init_exchange()
@@ -546,18 +574,10 @@ class BitgetMainDirectWorker(QThread):
             side_str = "LONG" if hold_side == "long" else "SHORT"
 
             try:
-                # 기존 손절 플랜 주문 취소
-                try:
-                    self.exchange.private_mix_post_v2_mix_order_cancel_plan_order({
-                        "symbol": "BTCUSDT",
-                        "productType": "USDT-FUTURES",
-                        "marginCoin": "USDT",
-                        "planType": "loss_plan"
-                    })
-                except Exception:
-                    pass
+                # 1단계: 기존 미체결 TP/SL 플랜 주문 100% 전수 취소 정화
+                self._cancel_all_tpsl_plan_orders()
 
-                # 본전 스탑로스 발주
+                # 2단계: 본전 스탑로스 발주
                 sl_res = self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
                     "symbol": "BTCUSDT",
                     "productType": "USDT-FUTURES",
@@ -603,7 +623,10 @@ class BitgetMainDirectWorker(QThread):
                 sl2 = round(entry_price + 600.0, 1)
 
             try:
-                # 1단 TP
+                # 1단계: 기존 미체결 TP/SL 플랜 주문 100% 전수 취소 정화
+                self._cancel_all_tpsl_plan_orders()
+
+                # 2단계: 1단 TP
                 self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
                     "symbol": "BTCUSDT",
                     "productType": "USDT-FUTURES",
