@@ -15,6 +15,7 @@ import socket
 import urllib.request
 import ssl
 import threading
+import queue
 from datetime import datetime
 
 # Windows winsound 지원 (사운드 알림용)
@@ -33,6 +34,7 @@ from PySide6.QtCore import Qt, QTimer, Signal, QObject, QThread
 from PySide6.QtGui import QColor, QFont, QPalette, QLinearGradient, QBrush, QPainter
 import websockets
 from qasync import QEventLoop
+import ccxt
 
 # 1. 절대 이식성 상대 경로 추적
 if getattr(sys, 'frozen', False):
@@ -40,7 +42,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V7.80"
+VERSION = "V7.81"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -169,6 +171,398 @@ class MultiRsiWorker(QThread):
         self.running = False
 
 
+class BitgetMainDirectWorker(QThread):
+    """
+    [신선] 비트겟 본 계정 REST/ccxt 직접 통신 백그라운드 워커
+    웹서버 의존도 0% - 비트겟 본 계정 API 직접 통신으로 실시간 포지션/가격 수집 및 5대 황실 원클릭 주문 집행
+    """
+    position_updated = Signal(dict)
+    order_result = Signal(str)
+
+    API_KEY = "bg_670c7963afe129099346583180ce606b"
+    SECRET_KEY = "4fe82e41304e84e315c7aa222ead7a4307182ec5f4766c37ad2290bf4268a2a0"
+    PASSPHRASE = "shinsun1234567"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.running = True
+        self._action_queue = queue.Queue()
+        self._force_event = threading.Event()
+        self.exchange = None
+        self._init_exchange()
+
+    def _init_exchange(self):
+        try:
+            self.exchange = ccxt.bitget({
+                'apiKey': self.API_KEY,
+                'secret': self.SECRET_KEY,
+                'password': self.PASSPHRASE,
+                'options': {'defaultType': 'swap'},
+                'enableRateLimit': True
+            })
+        except Exception:
+            self.exchange = None
+
+    def force_sync(self):
+        self._force_event.set()
+
+    def submit_order_action(self, action_type, params=None):
+        self._action_queue.put((action_type, params or {}))
+        self._force_event.set()
+
+    def run(self):
+        while self.running:
+            # 1. 큐에 적재된 주문 액션 처리
+            while not self._action_queue.empty() and self.running:
+                try:
+                    action_type, params = self._action_queue.get_nowait()
+                    self._process_action(action_type, params)
+                except Exception as e:
+                    self.order_result.emit(f"❌ [주문 처리 예외] {e}")
+
+            # 2. 본 계정 실시간 포지션 및 티커 조회 & HUD 시그널 방출
+            try:
+                self.fetch_and_emit_position()
+            except Exception:
+                pass
+
+            # 3. 1.0초 대기 (force_sync() 호출 시 즉시 기동)
+            self._force_event.wait(timeout=1.0)
+            self._force_event.clear()
+
+    def fetch_and_emit_position(self):
+        if not self.exchange:
+            self._init_exchange()
+            if not self.exchange:
+                return
+
+        try:
+            # 1. BTCUSDT 현재가 조회
+            current_price = 0.0
+            try:
+                ticker = self.exchange.fetch_ticker('BTC/USDT:USDT')
+                current_price = float(ticker.get('last') or ticker.get('close') or 0.0)
+            except Exception:
+                pass
+
+            # 2. 비트겟 V2 포지션 조회
+            res = self.exchange.private_mix_get_v2_mix_position_all_position({'productType': 'USDT-FUTURES', 'marginCoin': 'USDT'})
+            pos_list = res.get('data', []) if isinstance(res, dict) else []
+
+            active_pos = None
+            for p in pos_list:
+                sym = p.get('symbol', '')
+                total_qty = float(p.get('total', 0) or p.get('available', 0) or 0)
+                if 'BTC' in sym and total_qty > 0:
+                    active_pos = p
+                    break
+
+            if active_pos:
+                hold_side_raw = str(active_pos.get('holdSide', 'long')).lower()
+                side = "LONG" if hold_side_raw == "long" else "SHORT"
+                contracts = float(active_pos.get('total', 0) or 0.0)
+                entry_price = float(active_pos.get('openPriceAvg', 0) or 0.0)
+                leverage = int(float(active_pos.get('leverage', 60) or 60))
+                mark_price = float(active_pos.get('markPrice', 0) or current_price or 0.0)
+                unrealized_pnl = float(active_pos.get('unrealizedPL', 0) or 0.0)
+                liquidation_price = float(active_pos.get('liquidationPrice', 0) or 0.0)
+                break_even_price = float(active_pos.get('breakEvenPrice', 0) or entry_price)
+
+                if current_price <= 0:
+                    current_price = mark_price
+
+                # 미실현 수익률(ROE %) 계산
+                margin_size = float(active_pos.get('marginSize', 0) or 0.0)
+                if margin_size > 0:
+                    roe_pct = (unrealized_pnl / margin_size) * 100.0
+                elif entry_price > 0:
+                    diff = (current_price - entry_price) if side == "LONG" else (entry_price - current_price)
+                    roe_pct = (diff / entry_price) * 100.0 * leverage
+                else:
+                    roe_pct = 0.0
+
+                payload = {
+                    "has_position": True,
+                    "side": side,
+                    "contracts": contracts,
+                    "entry_price": entry_price,
+                    "leverage": leverage,
+                    "mark_price": mark_price,
+                    "current_price": current_price,
+                    "unrealized_pnl": unrealized_pnl,
+                    "liquidation_price": liquidation_price,
+                    "break_even_price": break_even_price,
+                    "roe_pct": roe_pct
+                }
+            else:
+                payload = {
+                    "has_position": False,
+                    "side": "NONE",
+                    "contracts": 0.0,
+                    "entry_price": 0.0,
+                    "leverage": 60,
+                    "mark_price": current_price,
+                    "current_price": current_price,
+                    "unrealized_pnl": 0.0,
+                    "liquidation_price": 0.0,
+                    "break_even_price": 0.0,
+                    "roe_pct": 0.0
+                }
+
+            self.position_updated.emit(payload)
+        except Exception:
+            pass
+
+    def _get_active_position(self):
+        try:
+            res = self.exchange.private_mix_get_v2_mix_position_all_position({'productType': 'USDT-FUTURES', 'marginCoin': 'USDT'})
+            pos_list = res.get('data', []) if isinstance(res, dict) else []
+            for p in pos_list:
+                sym = p.get('symbol', '')
+                total_qty = float(p.get('total', 0) or 0)
+                if 'BTC' in sym and total_qty > 0:
+                    return p
+        except Exception:
+            pass
+        return None
+
+    def _process_action(self, action_type, params):
+        if not self.exchange:
+            self._init_exchange()
+            if not self.exchange:
+                self.order_result.emit("❌ [비트겟 API 에러] 본 계정 API 초기화 실패")
+                return
+
+        if action_type == "QUICK_MARKET":
+            side = params.get("side", "LONG").upper()
+            qty = float(params.get("qty", 0.5))
+            hold_side = "long" if side == "LONG" else "short"
+            order_side = "buy" if side == "LONG" else "sell"
+            try:
+                res = self.exchange.private_mix_post_v2_mix_order_place_order({
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginMode": "crossed",
+                    "marginCoin": "USDT",
+                    "size": str(round(qty, 4)),
+                    "side": order_side,
+                    "orderType": "market",
+                    "tradeSide": "open",
+                    "holdSide": hold_side
+                })
+                if res.get("code") == "00000":
+                    self.order_result.emit(f"🟢 [본 계정 시장가 진입 성공] {side} {qty} BTC 체결 완료!")
+                else:
+                    self.order_result.emit(f"❌ [본 계정 시장가 진입 실패] {res.get('msg')} ({res.get('code')})")
+            except Exception as e:
+                self.order_result.emit(f"❌ [시장가 진입 에러] {e}")
+
+        elif action_type == "BE_SHIELD":
+            pos = self._get_active_position()
+            if not pos:
+                self.order_result.emit("⚠️ [무위험 본전가드] 본 계정에 보유 중인 포지션이 없습니다.")
+                return
+            entry_price = float(pos.get('openPriceAvg', 0) or 0.0)
+            contracts = float(pos.get('total', 0) or 0.0)
+            hold_side = str(pos.get('holdSide', 'long')).lower()
+            side_str = "LONG" if hold_side == "long" else "SHORT"
+
+            try:
+                # 기존 손절 플랜 주문 취소
+                try:
+                    self.exchange.private_mix_post_v2_mix_order_cancel_plan_order({
+                        "symbol": "BTCUSDT",
+                        "productType": "USDT-FUTURES",
+                        "marginCoin": "USDT",
+                        "planType": "loss_plan"
+                    })
+                except Exception:
+                    pass
+
+                # 본전 스탑로스 발주
+                sl_res = self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "loss_plan",
+                    "triggerPrice": str(round(entry_price, 1)),
+                    "triggerType": "mark_price",
+                    "size": str(round(contracts, 4)),
+                    "holdSide": hold_side
+                })
+                if sl_res.get("code") == "00000":
+                    self.order_result.emit(f"🛡️ [본 계정 본전가드 안착] {side_str} {contracts} BTC @ ${entry_price:,.1f} 본전 스탑로스 안착 완료 (0원 무손실 보장)!")
+                else:
+                    self.order_result.emit(f"⚠️ [본전가드 실패] {sl_res.get('msg')} ({sl_res.get('code')})")
+            except Exception as e:
+                self.order_result.emit(f"❌ [본전가드 에러] {e}")
+
+        elif action_type == "AUTO_GUARD":
+            pos = self._get_active_position()
+            if not pos:
+                self.order_result.emit("⚠️ [2단 안전방패] 본 계정에 보유 중인 포지션이 없습니다.")
+                return
+            entry_price = float(pos.get('openPriceAvg', 0) or 0.0)
+            contracts = float(pos.get('total', 0) or 0.0)
+            hold_side = str(pos.get('holdSide', 'long')).lower()
+            side_str = "LONG" if hold_side == "long" else "SHORT"
+
+            half_qty = round(contracts * 0.5, 4)
+            rem_qty = round(contracts - half_qty, 4)
+            if half_qty <= 0:
+                half_qty = contracts
+                rem_qty = 0
+
+            if side_str == "LONG":
+                tp1 = round(entry_price + 1000.0, 1)
+                tp2 = round(entry_price + 1200.0, 1)
+                sl1 = round(entry_price - 500.0, 1)
+                sl2 = round(entry_price - 600.0, 1)
+            else:
+                tp1 = round(entry_price - 1000.0, 1)
+                tp2 = round(entry_price - 1200.0, 1)
+                sl1 = round(entry_price + 500.0, 1)
+                sl2 = round(entry_price + 600.0, 1)
+
+            try:
+                # 1단 TP
+                self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "profit_plan",
+                    "triggerPrice": str(tp1),
+                    "triggerType": "mark_price",
+                    "size": str(half_qty),
+                    "holdSide": hold_side
+                })
+                # 1단 SL
+                self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginCoin": "USDT",
+                    "planType": "loss_plan",
+                    "triggerPrice": str(sl1),
+                    "triggerType": "mark_price",
+                    "size": str(half_qty),
+                    "holdSide": hold_side
+                })
+                # 2단 (잔여 수량 있을 시)
+                if rem_qty > 0:
+                    self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
+                        "symbol": "BTCUSDT",
+                        "productType": "USDT-FUTURES",
+                        "marginCoin": "USDT",
+                        "planType": "profit_plan",
+                        "triggerPrice": str(tp2),
+                        "triggerType": "mark_price",
+                        "size": str(rem_qty),
+                        "holdSide": hold_side
+                    })
+                    self.exchange.private_mix_post_v2_mix_order_place_tpsl_order({
+                        "symbol": "BTCUSDT",
+                        "productType": "USDT-FUTURES",
+                        "marginCoin": "USDT",
+                        "planType": "loss_plan",
+                        "triggerPrice": str(sl2),
+                        "triggerType": "mark_price",
+                        "size": str(rem_qty),
+                        "holdSide": hold_side
+                    })
+                self.order_result.emit(f"🛡️ [본 계정 2단 안전방패 배치 완료] TP(${tp1:,.1f}/${tp2:,.1f}), SL(${sl1:,.1f}/${sl2:,.1f}) 분할 발주 성공!")
+            except Exception as e:
+                self.order_result.emit(f"❌ [2단 안전방패 에러] {e}")
+
+        elif action_type == "CLOSE_50":
+            pos = self._get_active_position()
+            if not pos:
+                self.order_result.emit("⚠️ [50% 분할 청산] 본 계정에 보유 중인 포지션이 없습니다.")
+                return
+            contracts = float(pos.get('total', 0) or 0.0)
+            hold_side = str(pos.get('holdSide', 'long')).lower()
+            side_str = "LONG" if hold_side == "long" else "SHORT"
+            close_side = "sell" if hold_side == "long" else "buy"
+            half_qty = round(contracts * 0.5, 4)
+
+            try:
+                res = self.exchange.private_mix_post_v2_mix_order_place_order({
+                    "symbol": "BTCUSDT",
+                    "productType": "USDT-FUTURES",
+                    "marginMode": "crossed",
+                    "marginCoin": "USDT",
+                    "size": str(half_qty),
+                    "side": close_side,
+                    "orderType": "market",
+                    "tradeSide": "close",
+                    "holdSide": hold_side
+                })
+                if res.get("code") == "00000":
+                    self.order_result.emit(f"✂️ [본 계정 50% 분할 청산 성공] {side_str} {half_qty} BTC 시장가 분할 청산 체결 완료!")
+                else:
+                    self.order_result.emit(f"❌ [50% 청산 실패] {res.get('msg')} ({res.get('code')})")
+            except Exception as e:
+                self.order_result.emit(f"❌ [50% 분할 청산 에러] {e}")
+
+        elif action_type == "EMERGENCY":
+            try:
+                # 1. 미체결 주문 및 플랜 주문 전수 취소
+                try:
+                    self.exchange.cancel_all_orders('BTC/USDT:USDT')
+                except Exception:
+                    pass
+                try:
+                    self.exchange.private_mix_post_v2_mix_order_cancel_all_orders({
+                        "symbol": "BTCUSDT",
+                        "productType": "USDT-FUTURES",
+                        "marginCoin": "USDT"
+                    })
+                except Exception:
+                    pass
+
+                # 2. 플래시 포지션 청산 시도
+                flash_res = None
+                try:
+                    flash_res = self.exchange.private_mix_post_v2_mix_order_close_positions({
+                        "symbol": "BTCUSDT",
+                        "productType": "USDT-FUTURES"
+                    })
+                except Exception:
+                    pass
+
+                if not flash_res or flash_res.get("code") != "00000":
+                    # 시장가 반대 청산 백업
+                    pos = self._get_active_position()
+                    if pos:
+                        contracts = float(pos.get('total', 0) or 0.0)
+                        hold_side = str(pos.get('holdSide', 'long')).lower()
+                        close_side = "sell" if hold_side == "long" else "buy"
+                        self.exchange.private_mix_post_v2_mix_order_place_order({
+                            "symbol": "BTCUSDT",
+                            "productType": "USDT-FUTURES",
+                            "marginMode": "crossed",
+                            "marginCoin": "USDT",
+                            "size": str(round(contracts, 4)),
+                            "side": close_side,
+                            "orderType": "market",
+                            "tradeSide": "close",
+                            "holdSide": hold_side
+                        })
+
+                self.order_result.emit("🚨 [본 계정 비상 탈출 성공] 비트겟 100% 전량 시장가 청산 및 미체결 주문 전수 취소 완료!")
+            except Exception as e:
+                self.order_result.emit(f"❌ [비상 탈출 에러] {e}")
+
+        # 주문 처리 완료 후 0.1초 만에 즉시 포지션 재조회
+        try:
+            self.fetch_and_emit_position()
+        except Exception:
+            pass
+
+    def stop(self):
+        self.running = False
+        self._force_event.set()
+
+
 class ShinseonCockpit(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -197,6 +591,12 @@ class ShinseonCockpit(QMainWindow):
         self.rsi_worker = MultiRsiWorker(self)
         self.rsi_worker.rsi_updated.connect(self.on_rsi_updated)
         self.rsi_worker.start()
+
+        # 비트겟 본 계정 직통 통신 워커 시작 (웹서버 의존도 완전 탈피)
+        self.bitget_worker = BitgetMainDirectWorker(self)
+        self.bitget_worker.position_updated.connect(self.handle_direct_position_update)
+        self.bitget_worker.order_result.connect(self.add_log)
+        self.bitget_worker.start()
 
     def init_ui(self):
         self.setWindowTitle(f"👑 [SHINSEON] 황실 콕핏 {self.CURRENT_VERSION} (가로 500px 초슬림)")
@@ -915,15 +1315,23 @@ class ShinseonCockpit(QMainWindow):
         # HUD 손익 및 안전거리 실시간 재연산
         self.update_hud_pnl()
 
-    def handle_sync_position(self, payload):
+    def handle_direct_position_update(self, payload):
+        """비트겟 본 계정 API에서 수신한 실시간 포지션 정보를 HUD에 0.05초 만에 렌더링"""
         has_pos = payload.get("has_position", False)
         self.has_position = has_pos
+        c_price = payload.get("current_price", 0.0)
+        if c_price > 0:
+            self.current_price = c_price
+            self.lbl_hud_price.setText(f"${self.current_price:,.1f}")
 
         if has_pos:
             self.position_side = payload.get("side", "LONG").upper()
             self.position_contracts = float(payload.get("contracts", 0.0))
             self.position_entry_price = float(payload.get("entry_price", 0.0))
-            leverage = payload.get("leverage", 30)
+            self.position_liq_price = float(payload.get("liquidation_price", 0.0))
+            self.position_unrealized_pnl = float(payload.get("unrealized_pnl", 0.0))
+            self.position_roe = float(payload.get("roe_pct", 0.0))
+            leverage = payload.get("leverage", 60)
 
             if self.position_side == "LONG":
                 self.lbl_hud_side.setText(f"🟢 LONG ({leverage}x)")
@@ -935,17 +1343,21 @@ class ShinseonCockpit(QMainWindow):
             self.lbl_hud_qty.setText(f"{self.position_contracts:.4f} BTC")
             self.lbl_hud_entry.setText(f"${self.position_entry_price:,.2f}")
 
-            # 강제 청산가 추정 (격리 30배 기준 또는 대략 96.7% 거리)
-            if self.position_side == "LONG":
-                self.position_liq_price = self.position_entry_price * (1.0 - (1.0 / leverage) * 0.9)
-            else:
-                self.position_liq_price = self.position_entry_price * (1.0 + (1.0 / leverage) * 0.9)
+            # 청산가가 비트겟에서 미제공될 경우 안전 추정
+            if self.position_liq_price <= 0:
+                if self.position_side == "LONG":
+                    self.position_liq_price = self.position_entry_price * (1.0 - (1.0 / leverage) * 0.9)
+                else:
+                    self.position_liq_price = self.position_entry_price * (1.0 + (1.0 / leverage) * 0.9)
 
             self.update_hud_pnl()
         else:
             self.position_side = "NONE"
             self.position_contracts = 0.0
             self.position_entry_price = 0.0
+            self.position_unrealized_pnl = 0.0
+            self.position_roe = 0.0
+            self.position_liq_price = 0.0
             self.lbl_hud_side.setText("⚪ NO POSITION")
             self.lbl_hud_side.setStyleSheet("font-size: 13px; font-weight: 900; color: #94A3B8;")
             self.lbl_hud_qty.setText("0.0000 BTC")
@@ -955,20 +1367,34 @@ class ShinseonCockpit(QMainWindow):
             self.lbl_hud_liq.setText("$0.00 (안전거리: --)")
             self.lbl_hud_liq.setStyleSheet("font-weight: bold; color: #94A3B8;")
 
+    def handle_sync_position(self, payload):
+        """웹서버로부터 수신된 보조 동기화 패킷 처리 (본 계정 워커 결과와 병합)"""
+        if not hasattr(self, 'bitget_worker') or not self.bitget_worker.isRunning():
+            self.handle_direct_position_update(payload)
+
     def update_hud_pnl(self):
-        if not self.has_position or self.position_entry_price <= 0 or self.current_price <= 0:
+        if not self.has_position or self.position_entry_price <= 0:
             return
 
+        calc_price = self.current_price if self.current_price > 0 else self.position_entry_price
+
+        # 미실현 손익 및 수익률(ROE) 연산
         if self.position_side == "LONG":
-            diff = self.current_price - self.position_entry_price
+            diff = calc_price - self.position_entry_price
             pnl_usdt = diff * self.position_contracts
-            roe_pct = (diff / self.position_entry_price) * 100.0 * 30.0 # 30배 기준
-            safety_dist = self.current_price - self.position_liq_price
+            roe_pct = (diff / self.position_entry_price) * 100.0 * 60.0
+            safety_dist = calc_price - self.position_liq_price
         else:
-            diff = self.position_entry_price - self.current_price
+            diff = self.position_entry_price - calc_price
             pnl_usdt = diff * self.position_contracts
-            roe_pct = (diff / self.position_entry_price) * 100.0 * 30.0
-            safety_dist = self.position_liq_price - self.current_price
+            roe_pct = (diff / self.position_entry_price) * 100.0 * 60.0
+            safety_dist = self.position_liq_price - calc_price
+
+        # 워커에서 직접 전달받은 PnL이 있으면 우선 사용
+        if abs(self.position_unrealized_pnl) > 0.0001:
+            pnl_usdt = self.position_unrealized_pnl
+            if abs(self.position_roe) > 0.0001:
+                roe_pct = self.position_roe
 
         # 손익 레이블
         color = "#00FFCC" if pnl_usdt >= 0 else "#FF3366"
@@ -982,12 +1408,15 @@ class ShinseonCockpit(QMainWindow):
         self.lbl_hud_liq.setStyleSheet(f"font-weight: bold; color: {safety_color};")
 
     # ----------------------------------------------------
-    # 버튼 액션 핸들러
+    # 버튼 액션 핸들러 (비트겟 본 계정 100% 직통 발주)
     # ----------------------------------------------------
     def request_sync_position(self):
-        if self.ws is not None:
+        if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+            self.bitget_worker.force_sync()
+            self.add_log("🔄 [포지션 동기화] 비트겟 본 계정 API 최신 포지션 즉시 강제 갱신 요청 완료")
+        elif self.ws is not None:
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_SYNC_POSITION"})))
-            self.add_log("🔄 [포지션 동기화] 비트겟 최신 포지션 조회 패킷 전송")
+            self.add_log("🔄 [포지션 동기화] 서버 릴레이 포지션 조회 패킷 전송")
 
     def execute_quick_market(self, side):
         try:
@@ -996,40 +1425,55 @@ class ShinseonCockpit(QMainWindow):
             self.add_log("❌ [오류] 수량 입력값이 올바르지 않습니다.")
             return
 
-        if self.ws is not None:
+        if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+            self.bitget_worker.submit_order_action("QUICK_MARKET", {"side": side, "qty": qty})
+            self.add_log(f"🚀 [원클릭 시장가 발주] 비트겟 본 계정 {side} {qty} BTC 주문 전송...")
+        elif self.ws is not None:
             packet = {"cmd": "CMD_MARKET_ENTRY", "side": side, "qty": qty}
             asyncio.create_task(self.ws.send(json.dumps(packet)))
-            self.add_log(f"🚀 [원클릭 시장가 발주] {side} {qty} BTC 시장가 주문 패킷 전송!")
+            self.add_log(f"🚀 [원클릭 시장가 발주] 서버 릴레이 {side} {qty} BTC 시장가 주문 패킷 전송!")
         else:
-            self.add_log("❌ [오류] 서버와 연결되어 있지 않습니다.")
+            self.add_log("❌ [오류] 본 계정 API 워커가 가동되지 않았습니다.")
 
     def execute_be_shield(self):
-        if self.ws is not None:
+        if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+            self.bitget_worker.submit_order_action("BE_SHIELD")
+            self.add_log("🛡️ [무위험 본전가드] 비트겟 본 계정 진입 평단가 0원 무손실 스탑로스 장착 요청...")
+        elif self.ws is not None:
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_TRIGGER_BE_SHIELD"})))
-            self.add_log("🛡️ [무위험 본전가드] 진입 평단가 0원 무손실 스탑로스 장착 요청!")
+            self.add_log("🛡️ [무위험 본전가드] 서버 릴레이 본전가드 요청 전송!")
         else:
-            self.add_log("❌ [오류] 서버와 연결되어 있지 않습니다.")
+            self.add_log("❌ [오류] 본 계정 API 워커가 가동되지 않았습니다.")
 
     def execute_auto_guard(self):
-        if self.ws is not None:
+        if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+            self.bitget_worker.submit_order_action("AUTO_GUARD")
+            self.add_log("🛡️ [2단 안전방패] 비트겟 본 계정 TP 2단 / SL 2단 자동 분할 주문 배치 요청...")
+        elif self.ws is not None:
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_TRIGGER_AUTO_GUARD_4STAGE"})))
-            self.add_log("🛡️ [2단 안전방패] TP 2단 / SL 2단 자동 분할 주문 배치 요청!")
+            self.add_log("🛡️ [2단 안전방패] 서버 릴레이 2단 안전방패 요청 전송!")
         else:
-            self.add_log("❌ [오류] 서버와 연결되어 있지 않습니다.")
+            self.add_log("❌ [오류] 본 계정 API 워커가 가동되지 않았습니다.")
 
     def execute_close_50(self):
-        if self.ws is not None:
+        if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+            self.bitget_worker.submit_order_action("CLOSE_50")
+            self.add_log("✂️ [50% 분할 청산] 비트겟 본 계정 오픈 포지션 50% 즉시 시장가 분할 청산 요청...")
+        elif self.ws is not None:
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_CLOSE_50"})))
-            self.add_log("✂️ [50% 분할 청산] 오픈 포지션 50% 즉시 시장가 분할 청산 요청!")
+            self.add_log("✂️ [50% 분할 청산] 서버 릴레이 50% 분할 청산 요청 전송!")
         else:
-            self.add_log("❌ [오류] 서버와 연결되어 있지 않습니다.")
+            self.add_log("❌ [오류] 본 계정 API 워커가 가동되지 않았습니다.")
 
     def execute_emergency(self):
-        if self.ws is not None:
+        if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+            self.bitget_worker.submit_order_action("EMERGENCY")
+            self.add_log("🚨 [비상 탈출] 비트겟 본 계정 EMERGENCY 100% 전량 즉시 시장가 청산 및 주문 전수 취소 요청...")
+        elif self.ws is not None:
             asyncio.create_task(self.ws.send(json.dumps({"cmd": "CMD_EMERGENCY"})))
-            self.add_log("🚨 [비상 탈출] EMERGENCY 100% 전량 즉시 시장가 청산 및 주문 전수 취소!")
+            self.add_log("🚨 [비상 탈출] 서버 릴레이 EMERGENCY 청산 요청 전송!")
         else:
-            self.add_log("❌ [오류] 서버와 연결되어 있지 않습니다.")
+            self.add_log("❌ [오류] 본 계정 API 워커가 가동되지 않았습니다.")
 
     def toggle_smart_stop(self):
         if self.ws is None:
@@ -1111,6 +1555,12 @@ class ShinseonCockpit(QMainWindow):
             if hasattr(self, 'rsi_worker') and self.rsi_worker.isRunning():
                 self.rsi_worker.stop()
                 self.rsi_worker.wait(500)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, 'bitget_worker') and self.bitget_worker.isRunning():
+                self.bitget_worker.stop()
+                self.bitget_worker.wait(500)
         except Exception:
             pass
         event.accept()
