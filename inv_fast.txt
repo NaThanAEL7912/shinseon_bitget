@@ -1,0 +1,9 @@
+Total trades: 68, Wins: 52 (76.5%), Losses: 16
+Wins with Drawdown (< -0.05%): 40 / 52 (76.9%)
+
+--- Drawdown Depth of 52 Winning Trades ---
+  • 0.00% to -0.10% (No Drawdown): 16회 (30.8%)
+  • -0.10% to -0.25% (Mild Shakeout): 17회 (32.7%)
+  • -0.25% to -0.45% (Medium Pullback / DCA zone): 10회 (19.2%)
+  • -0.45% to -0.70% (Deep Pullback / near SL): 8회 (15.4%)
+  • < -0.70% (Extreme): 1회 (1.9%)

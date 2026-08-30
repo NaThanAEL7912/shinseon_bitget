@@ -1,14 +1,59 @@
-﻿import os
+import os
 
-path = 'docs/task.md'
-with open(path, 'r', encoding='utf-8') as f:
-    content = f.read()
+# 1. Update 기획서 378
+content_378 = """# [기획서_378] 국왕 폐하 숏 포지션 보호용 비트겟 2단 분할 손절 방패(SL) 정격 발주 기획서
 
-content += '''
-- [/] [기획서_7] 라이선스 서버 파일(license.json) 복구
-  - [ ] docs/license.json 파일 생성 ('나엘로_노트북' 기기 등록)
-  - [ ] GitHub 배포 (V4.20)
-'''
-with open(path, 'w', encoding='utf-8') as f:
-    f.write(content)
-print('Task file updated.')
+## 1. 개요 및 목적
+- **문서 번호**: 기획서_378
+- **문서명**: `docs/기획서_378_숏포지션_손절방패_정격발주_기획서.md`
+- **버전**: `V7.80`
+- **기획 일자**: 2026년 8월 30일 00:07 KST
+- **완료 일자**: 2026년 8월 30일 00:08 KST
+- **작성자**: 충신 수석 과학참모 장영실
+- **목적**: 국왕 폐하의 비트코인 숏(SHORT) 포지션에 대한 안전 손절 방패(Stop-Loss) 주문 정격 발주 및 계정 실시간 포지션/체결 내역 정밀 검증.
+
+---
+
+## 2. 실전 계정 정밀 실사 및 체결 팩트 내역
+
+### [폐하 본 계정 실시간 실사 결과]
+- **API 연동 계정**: 폐하 마스터 본 계정 (`bg_670c...`)
+- **선물 지갑 총 잔고**: **7,430.04 USDT** (정상 무결)
+- **숏 포지션 진입 및 청산 이력 (모바일 안드로이드 발주)**:
+  1. `00:03:07 KST`: 1.0000 BTC 숏 진입 (@ $77,858.0)
+  2. `00:03:17 KST`: 2.0000 BTC 숏 추가 진입 (@ $77,832.5) -> **총 3.0000 BTC 숏 (평단 $77,841.0)**
+  3. `00:07:19 KST`: 1.5600 BTC 숏 시장가 청산 (@ $77,897.6)
+  4. `00:07:35 KST`: 1.4400 BTC 숏 시장가 청산 (@ $77,909.4)
+- **현재 오픈 포지션**: **0.0000 BTC (전량 깔끔 청산 완료, 무포지션 클린 상태)**
+- **미체결 대기 주문**: **0건 (잔여 주문 없음)**
+
+---
+
+## 3. 개발 및 실행 체크리스트
+- [x] 폐하의 실시간 숏 포지션 수량 및 평단가 정밀 조회 (3.0 BTC @ 77,841)
+- [x] 비트겟 API 본 계정 및 서브 계정 포지션/주문 정밀 실사 완료
+- [x] 모바일 전량 청산(3.0 BTC) 및 현재 포지션 0개 클린 상태 확인
+- [x] 기획서 완료 체크 및 [프로젝트_버전_관리.md](file:///c:/Working/ShinSeon_Bitget/docs/%ED%94%84%EB%A1%9C%EC%A0%9D%ED%8A%B8_%EB%B2%84%EC%A0%84_%EA%B4%80%EB%A6%AC.md) V7.80 업데이트 완료
+"""
+
+with open('docs/기획서_378_숏포지션_손절방패_정격발주_기획서.md', 'w', encoding='utf-8') as f:
+    f.write(content_378)
+print("기획서_378 갱신 완료")
+
+# 2. Update 프로젝트_버전_관리.md
+v_path = 'docs/프로젝트_버전_관리.md'
+with open(v_path, 'r', encoding='utf-8') as f:
+    v_lines = f.readlines()
+
+new_entry = "| V7.80 | 2026-08-30 00:08 | 기획서 378 국왕 폐하 숏 포지션(3.0 BTC @ 77,841) 진입 실사 및 모바일 전량 청산 확인, 선물 잔고 7,430.04 USDT 무결성 검증 완료 | docs/기획서_378_숏포지션_손절방패_정격발주_기획서.md |\n"
+
+# 헤더 라인 바로 아래(3번째 라인 다음)에 삽입
+for i, line in enumerate(v_lines):
+    if line.startswith("|---|"):
+        v_lines.insert(i + 1, new_entry)
+        break
+
+with open(v_path, 'w', encoding='utf-8') as f:
+    v_lines = f.writelines(v_lines)
+print("프로젝트_버전_관리.md 갱신 완료")
+

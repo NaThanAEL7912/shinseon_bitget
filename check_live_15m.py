@@ -1,0 +1,7 @@
+﻿import urllib.request, json, datetime
+req = urllib.request.Request('https://api.bitget.com/api/v2/mix/market/candles?symbol=BTCUSDT&productType=USDT-FUTURES&granularity=15m&limit=10', headers={'User-Agent': 'Mozilla/5.0'})
+with urllib.request.urlopen(req) as response:
+    res = json.loads(response.read().decode('utf-8'))
+    for c in res['data']:
+        t = datetime.datetime.fromtimestamp(int(c[0])/1000).strftime('%H:%M')
+        print(f'[{t}] O: {c[1]} | H: {c[2]} | L: {c[3]} | C: {c[4]} | Vol: {c[5]}')
