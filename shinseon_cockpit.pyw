@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.06)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.07)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -47,7 +47,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.06"
+VERSION = "V1.07"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -481,11 +481,13 @@ class BitgetMainDirectWorker(QThread):
             qty = float(params.get("qty", 0.5))
             hold_side = "long" if side == "LONG" else "short"
             order_side = "buy" if side == "LONG" else "sell"
+            pos = self._get_active_position()
+            margin_mode = str(pos.get('marginMode', 'isolated')).lower() if pos else "isolated"
             try:
                 res = self.exchange.private_mix_post_v2_mix_order_place_order({
                     "symbol": "BTCUSDT",
                     "productType": "USDT-FUTURES",
-                    "marginMode": "crossed",
+                    "marginMode": margin_mode,
                     "marginCoin": "USDT",
                     "size": str(round(qty, 4)),
                     "side": order_side,
@@ -623,6 +625,7 @@ class BitgetMainDirectWorker(QThread):
                 return
             contracts = float(pos.get('total', 0) or 0.0)
             hold_side = str(pos.get('holdSide', 'long')).lower()
+            margin_mode = str(pos.get('marginMode', 'isolated')).lower()
             side_str = "LONG" if hold_side == "long" else "SHORT"
             close_side = "sell" if hold_side == "long" else "buy"
             half_qty = round(contracts * 0.5, 4)
@@ -631,7 +634,7 @@ class BitgetMainDirectWorker(QThread):
                 res = self.exchange.private_mix_post_v2_mix_order_place_order({
                     "symbol": "BTCUSDT",
                     "productType": "USDT-FUTURES",
-                    "marginMode": "crossed",
+                    "marginMode": margin_mode,
                     "marginCoin": "USDT",
                     "size": str(half_qty),
                     "side": close_side,
@@ -678,11 +681,12 @@ class BitgetMainDirectWorker(QThread):
                     if pos:
                         contracts = float(pos.get('total', 0) or 0.0)
                         hold_side = str(pos.get('holdSide', 'long')).lower()
+                        margin_mode = str(pos.get('marginMode', 'isolated')).lower()
                         close_side = "sell" if hold_side == "long" else "buy"
                         self.exchange.private_mix_post_v2_mix_order_place_order({
                             "symbol": "BTCUSDT",
                             "productType": "USDT-FUTURES",
-                            "marginMode": "crossed",
+                            "marginMode": margin_mode,
                             "marginCoin": "USDT",
                             "size": str(round(contracts, 4)),
                             "side": close_side,
