@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.01)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.02)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
 1. 5분봉/15분봉 정규 다이버전스(Bearish/Bullish) 자동 탐지 및 실시간 저격 뱃지 점등
-2. 1분/5분/15분 3중 RSI 실시간 신호등 뱃지
+2. 1분/5분/15분 3중 스토캐스틱 RSI (Stoch RSI 14, 14, 3, 3) %K 실시간 신호등 뱃지
 3. 비트겟 본 계정 API 직접 통신 5대 황실 원클릭 주문 및 실시간 포지션 HUD
 4. 청산액 & OI 속도 듀얼 임계치 100% 동시 충족 시에만 맑은 저격 사운드 비프음 송출
 5. 실시간 임계치(청산액, OI속도) 콕핏 화면 내 직접 수정 및 영구 저장 패널
@@ -47,7 +47,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.01"
+VERSION = "V1.02"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -226,14 +226,14 @@ def detect_regular_divergence(candles):
 
 
 class MultiRsiWorker(QThread):
-    """1분, 5분, 15분 멀티 타임프레임 실시간 RSI & 5m/15m 다이버전스 백그라운드 수집/연산 스레드"""
-    rsi_updated = Signal(float, float, float, str, str)  # rsi_1m, rsi_5m, rsi_15m, div_5m, div_15m
+    """1분, 5분, 15분 멀티 타임프레임 실시간 Stoch RSI (14, 14, 3, 3) %K & 5m/15m 다이버전스 백그라운드 수집/연산 스레드"""
+    rsi_updated = Signal(float, float, float, str, str)  # k_1m, k_5m, k_15m, div_5m, div_15m
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.running = True
 
-    def fetch_candles(self, gran, limit=50):
+    def fetch_candles(self, gran, limit=100):
         # 1차: Bitget REST API 시도
         try:
             url = f"https://api.bitget.com/api/v2/mix/market/candles?symbol=BTCUSDT&granularity={gran}&productType=USDT-FUTURES&limit={limit}"
@@ -281,27 +281,31 @@ class MultiRsiWorker(QThread):
     def run(self):
         while self.running:
             try:
-                candles_1m = self.fetch_candles("1m", 30)
-                candles_5m = self.fetch_candles("5m", 50)
-                candles_15m = self.fetch_candles("15m", 50)
+                candles_1m = self.fetch_candles("1m", 100)
+                candles_5m = self.fetch_candles("5m", 100)
+                candles_15m = self.fetch_candles("15m", 100)
 
                 closes_1m = [c['close'] for c in candles_1m]
                 closes_5m = [c['close'] for c in candles_5m]
                 closes_15m = [c['close'] for c in candles_15m]
 
-                rsi_1m = compute_rsi(closes_1m, 14) if closes_1m else 50.0
-                rsi_5m = compute_rsi(closes_5m, 14) if closes_5m else 50.0
-                rsi_15m = compute_rsi(closes_15m, 14) if closes_15m else 50.0
+                k_1m_series, _ = compute_stoch_rsi_series(closes_1m, 14, 14, 3, 3)
+                k_5m_series, _ = compute_stoch_rsi_series(closes_5m, 14, 14, 3, 3)
+                k_15m_series, _ = compute_stoch_rsi_series(closes_15m, 14, 14, 3, 3)
+
+                k_1m = k_1m_series[-1] if k_1m_series else 50.0
+                k_5m = k_5m_series[-1] if k_5m_series else 50.0
+                k_15m = k_15m_series[-1] if k_15m_series else 50.0
 
                 div_5m = detect_regular_divergence(candles_5m) or ""
                 div_15m = detect_regular_divergence(candles_15m) or ""
 
-                self.rsi_updated.emit(rsi_1m, rsi_5m, rsi_15m, div_5m, div_15m)
+                self.rsi_updated.emit(k_1m, k_5m, k_15m, div_5m, div_15m)
             except Exception:
                 pass
 
-            # 3.5초 주기 대기 (중간 중단 감지)
-            for _ in range(35):
+            # 1.0초 주기 대기 (중간 중단 감지)
+            for _ in range(10):
                 if not self.running:
                     break
                 time.sleep(0.1)
@@ -880,21 +884,21 @@ class ShinseonCockpit(QMainWindow):
 
         radar_layout.addLayout(radar_title_layout)
 
-        # 🚦 1분 / 5분 / 15분 3중 RSI 실시간 신호등 뱃지 바
+        # 🚦 1분 / 5분 / 15분 3중 스토캐스틱 RSI 실시간 신호등 뱃지 바
         rsi_layout = QHBoxLayout()
         rsi_layout.setSpacing(6)
 
-        self.lbl_rsi_1m = QLabel("1m RSI: --.-% ⚪")
+        self.lbl_rsi_1m = QLabel("1m Stoch: --.-% ⚪")
         self.lbl_rsi_1m.setAlignment(Qt.AlignCenter)
-        self.lbl_rsi_1m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
+        self.lbl_rsi_1m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #CBD5E1; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
 
-        self.lbl_rsi_5m = QLabel("5m RSI: --.-% ⚪")
+        self.lbl_rsi_5m = QLabel("5m Stoch: --.-% ⚪")
         self.lbl_rsi_5m.setAlignment(Qt.AlignCenter)
-        self.lbl_rsi_5m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
+        self.lbl_rsi_5m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #CBD5E1; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
 
-        self.lbl_rsi_15m = QLabel("15m RSI: --.-% ⚪")
+        self.lbl_rsi_15m = QLabel("15m Stoch: --.-% ⚪")
         self.lbl_rsi_15m.setAlignment(Qt.AlignCenter)
-        self.lbl_rsi_15m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
+        self.lbl_rsi_15m.setStyleSheet("background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #CBD5E1; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;")
 
         rsi_layout.addWidget(self.lbl_rsi_1m)
         rsi_layout.addWidget(self.lbl_rsi_5m)
@@ -1803,30 +1807,30 @@ class ShinseonCockpit(QMainWindow):
         self.add_log(f"🛡️ [스마트 스탑] 오프셋 {offset_val:.2f}% {act_str} 요청 전송!")
 
     # ----------------------------------------------------
-    # 3중 RSI 실시간 신호등 & 정규 다이버전스 자동 탐지 갱신
+    # 3중 스토캐스틱 RSI 실시간 신호등 & 정규 다이버전스 자동 탐지 갱신
     # ----------------------------------------------------
-    def on_rsi_updated(self, rsi_1m, rsi_5m, rsi_15m, div_5m, div_15m):
-        def get_badge_info(prefix, rsi_val):
-            if rsi_val >= 70.0:
-                style = "background-color: rgba(255, 82, 82, 0.3); border: 1px solid #FF5252; color: #FF6666; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
-                text = f"{prefix}: {rsi_val:.1f}% 🔴"
-            elif rsi_val <= 30.0:
-                style = "background-color: rgba(0, 230, 118, 0.3); border: 1px solid #00E676; color: #00FFCC; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
-                text = f"{prefix}: {rsi_val:.1f}% 🟢"
+    def on_rsi_updated(self, k_1m, k_5m, k_15m, div_5m, div_15m):
+        def get_badge_info(prefix, k_val):
+            if k_val >= 80.0:
+                style = "background: rgba(255, 51, 102, 0.25); border: 1px solid #FF3366; color: #FF6688; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
+                text = f"{prefix}: {k_val:.1f}% 🔴"
+            elif k_val <= 20.0:
+                style = "background: rgba(0, 230, 118, 0.25); border: 1px solid #00E676; color: #00FFCC; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
+                text = f"{prefix}: {k_val:.1f}% 🟢"
             else:
-                style = "background-color: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #BDBDBD; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
-                text = f"{prefix}: {rsi_val:.1f}% ⚪"
+                style = "background: rgba(60, 60, 60, 0.3); border: 1px solid #757575; color: #CBD5E1; font-weight: bold; border-radius: 4px; padding: 2px 4px; font-size: 11px;"
+                text = f"{prefix}: {k_val:.1f}% ⚪"
             return style, text
 
-        s_1m, t_1m = get_badge_info("1m RSI", rsi_1m)
+        s_1m, t_1m = get_badge_info("1m Stoch", k_1m)
         self.lbl_rsi_1m.setStyleSheet(s_1m)
         self.lbl_rsi_1m.setText(t_1m)
 
-        s_5m, t_5m = get_badge_info("5m RSI", rsi_5m)
+        s_5m, t_5m = get_badge_info("5m Stoch", k_5m)
         self.lbl_rsi_5m.setStyleSheet(s_5m)
         self.lbl_rsi_5m.setText(t_5m)
 
-        s_15m, t_15m = get_badge_info("15m RSI", rsi_15m)
+        s_15m, t_15m = get_badge_info("15m Stoch", k_15m)
         self.lbl_rsi_15m.setStyleSheet(s_15m)
         self.lbl_rsi_15m.setText(t_15m)
 
