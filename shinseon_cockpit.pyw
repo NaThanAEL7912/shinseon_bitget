@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.03)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.04)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -47,7 +47,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.03"
+VERSION = "V1.04"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -755,7 +755,7 @@ class ShinseonCockpit(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle(f"[SHINSEON] 황실 수동 콕핏 {self.COCKPIT_VERSION} (가로 500px 초슬림 · 비트겟 직통)")
-        self.resize(500, 750)
+        self.resize(500, 840)
         self.setMinimumWidth(480)
         self.setMaximumWidth(540)
 
@@ -835,8 +835,8 @@ class ShinseonCockpit(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setAlignment(Qt.AlignTop)
-        main_layout.setContentsMargins(10, 8, 10, 8)
-        main_layout.setSpacing(6)
+        main_layout.setContentsMargins(12, 12, 12, 12)
+        main_layout.setSpacing(12)
 
         # ----------------------------------------------------
         # 1. 상단 타이틀 바 & Always on Top & 연결 상태
