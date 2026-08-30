@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.08)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.09)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -48,7 +48,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.08"
+VERSION = "V1.09"
 
 def play_position_sound():
     def _worker():
@@ -207,6 +207,7 @@ def detect_regular_divergence(candles):
     lows = [c['low'] for c in candles]
     k_series, _ = compute_stoch_rsi_series(closes, 14, 14, 3, 3)
     rsi_series = compute_rsi_series(closes, 14)
+    curr_k = k_series[-1] if len(k_series) > 0 else 50.0
 
     n = len(candles)
     peaks = []
@@ -233,7 +234,9 @@ def detect_regular_divergence(candles):
             p2 = distinct_peaks[-1]
             if (n - 1 - p2[0]) <= 6:
                 if p2[1] > p1[1] and (p2[2] < p1[2] or p2[3] < p1[3]) and (p1[2] >= 65 or p1[3] >= 60):
-                    return 'BEARISH'
+                    # [에너지 소진 필터] 이미 가격 및 Stoch RSI가 바닥권(<=40%)까지 하락하여 에너지가 100% 소진된 상태이므로 잔상 뱃지 소멸
+                    if curr_k > 40.0:
+                        return 'BEARISH'
 
     # 2. Bullish Divergence 검사
     if len(troughs) >= 2:
@@ -248,7 +251,9 @@ def detect_regular_divergence(candles):
             t2 = distinct_troughs[-1]
             if (n - 1 - t2[0]) <= 6:
                 if t2[1] < t1[1] and (t2[2] > t1[2] or t2[3] > t1[3]) and (t1[2] <= 35 or t1[3] <= 40):
-                    return 'BULLISH'
+                    # [에너지 소진 필터] 이미 가격 및 Stoch RSI가 천장권(>=60%)까지 상승하여 에너지가 100% 소진된 상태이므로 잔상 뱃지 소멸
+                    if curr_k < 60.0:
+                        return 'BULLISH'
 
     return None
 
