@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.02)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.03)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -47,7 +47,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.02"
+VERSION = "V1.03"
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -755,7 +755,7 @@ class ShinseonCockpit(QMainWindow):
 
     def init_ui(self):
         self.setWindowTitle(f"[SHINSEON] 황실 수동 콕핏 {self.COCKPIT_VERSION} (가로 500px 초슬림 · 비트겟 직통)")
-        self.resize(500, 850)
+        self.resize(500, 750)
         self.setMinimumWidth(480)
         self.setMaximumWidth(540)
 
@@ -841,7 +841,10 @@ class ShinseonCockpit(QMainWindow):
         # ----------------------------------------------------
         # 1. 상단 타이틀 바 & Always on Top & 연결 상태
         # ----------------------------------------------------
-        header_layout = QHBoxLayout()
+        header_widget = QWidget()
+        header_widget.setFixedHeight(32)
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(8)
 
         lbl_crown = QLabel(f"👑 <b style='color:#DEBA9D; font-size:14px;'>황실 수동 콕핏 {self.COCKPIT_VERSION}</b>")
@@ -858,7 +861,7 @@ class ShinseonCockpit(QMainWindow):
         self.lbl_ws_status.setStyleSheet("color: #FF5555; font-weight: bold; font-size: 11px;")
         header_layout.addWidget(self.lbl_ws_status)
 
-        main_layout.addLayout(header_layout)
+        main_layout.addWidget(header_widget)
 
         # ----------------------------------------------------
         # 2. 실시간 오더플로우 레이더 패널
@@ -1327,6 +1330,7 @@ class ShinseonCockpit(QMainWindow):
         self.txt_log.setFixedHeight(120)
         self.txt_log.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] 👑 [SHINSEON] 황실 수동 콕핏 {self.COCKPIT_VERSION} 가동 준비 완료.")
         main_layout.addWidget(self.txt_log)
+        main_layout.addStretch(1)
 
     def apply_thresholds(self):
         try:
