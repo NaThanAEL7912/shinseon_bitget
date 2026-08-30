@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.09)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.10)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
@@ -8,7 +8,7 @@
 2. 1분/5분/15분 3중 스토캐스틱 RSI (Stoch RSI 14, 14, 3, 3) %K 실시간 신호등 뱃지
 3. 1m·5m·15m 3중 스토캐스틱 RSI 동일 색상(올그린🟢/올레드🔴) 동조 시 position.mp3 사운드 알림
 4. 비트겟 본 계정 API 직접 통신 5대 황실 원클릭 주문 및 실시간 포지션 HUD
-5. 청산액 & OI 속도 듀얼 임계치 100% 동시 충족 시에만 맑은 저격 사운드 비프음 송출
+5. 청산액 & OI 속도 듀얼 임계치 100% 동시 충족 시 sound/position.mp3 사운드 직결 재생
 6. 실시간 임계치(청산액, OI속도) 콕핏 화면 내 직접 수정 및 영구 저장 패널
 """
 
@@ -48,15 +48,15 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.09"
+VERSION = "V1.10"
 
 def play_position_sound():
     def _worker():
         try:
             import ctypes
             paths = [
-                r"C:\Working\AI_Trading\sound\position.mp3",
                 os.path.join(BASE_DIR, "sound", "position.mp3"),
+                r"C:\Working\AI_Trading\sound\position.mp3",
                 os.path.join(BASE_DIR, "position.mp3")
             ]
             target = None
@@ -1481,7 +1481,7 @@ class ShinseonCockpit(QMainWindow):
         self.add_log(f"사운드 알림: {stat}")
 
     def check_dual_threshold_sound(self):
-        """오직 청산액과 OI 속도 두 임계치가 100% 동시 충족될 때만 맑은 저격 비프음 송출 (60초 쿨타임)"""
+        """오직 청산액과 OI 속도 두 임계치가 100% 동시 충족될 때만 황실 듀얼 저격 알림 sound/position.mp3 사운드 즉시 송출 (60초 쿨타임)"""
         if not self.sound_enabled:
             return
         if self.rolling_1m_liq >= self.target_liq and abs(self.oi_delta_1m) >= self.target_oi:
@@ -1489,15 +1489,7 @@ class ShinseonCockpit(QMainWindow):
             if now - self._last_beep_time >= 60.0:
                 self._last_beep_time = now
                 self.add_log(f"🎯 [황실 듀얼 저격 알림] 청산액(${int(self.rolling_1m_liq):,} >= ${int(self.target_liq):,}) & OI속도({self.oi_delta_1m:+.4f}% >= {self.target_oi:+.4f}%) 100% 동시 충족!")
-                def _beep_bg():
-                    try:
-                        if winsound:
-                            winsound.Beep(1200, 200)
-                        else:
-                            QApplication.beep()
-                    except Exception:
-                        pass
-                threading.Thread(target=_beep_bg, daemon=True).start()
+                play_position_sound()
 
     # ----------------------------------------------------
     # 웹소켓 및 데이터 통신
