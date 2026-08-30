@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.07)
+[神選 : SHINSEON] 국왕 폐하 전용 황실 수동매매 초슬림 미니 콕핏 위젯 (Cockpit V1.08)
 창 크기: 가로 500px 초슬림 설계 (웹 브라우저 및 트레이딩뷰 차트 옆 밀착 배치용)
 테마: 황실 다크 글래스 테마 (#0b0e14 배경, 골드/네온 액센트, 고대비 가독성)
 기능:
 1. 5분봉/15분봉 정규 다이버전스(Bearish/Bullish) 자동 탐지 및 실시간 저격 뱃지 점등
 2. 1분/5분/15분 3중 스토캐스틱 RSI (Stoch RSI 14, 14, 3, 3) %K 실시간 신호등 뱃지
-3. 비트겟 본 계정 API 직접 통신 5대 황실 원클릭 주문 및 실시간 포지션 HUD
-4. 청산액 & OI 속도 듀얼 임계치 100% 동시 충족 시에만 맑은 저격 사운드 비프음 송출
-5. 실시간 임계치(청산액, OI속도) 콕핏 화면 내 직접 수정 및 영구 저장 패널
+3. 1m·5m·15m 3중 스토캐스틱 RSI 동일 색상(올그린🟢/올레드🔴) 동조 시 position.mp3 사운드 알림
+4. 비트겟 본 계정 API 직접 통신 5대 황실 원클릭 주문 및 실시간 포지션 HUD
+5. 청산액 & OI 속도 듀얼 임계치 100% 동시 충족 시에만 맑은 저격 사운드 비프음 송출
+6. 실시간 임계치(청산액, OI속도) 콕핏 화면 내 직접 수정 및 영구 저장 패널
 """
 
 import sys
@@ -47,7 +48,34 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V1.07"
+VERSION = "V1.08"
+
+def play_position_sound():
+    def _worker():
+        try:
+            import ctypes
+            paths = [
+                r"C:\Working\AI_Trading\sound\position.mp3",
+                os.path.join(BASE_DIR, "sound", "position.mp3"),
+                os.path.join(BASE_DIR, "position.mp3")
+            ]
+            target = None
+            for p in paths:
+                if os.path.exists(p):
+                    target = p
+                    break
+            if target:
+                alias = f"pos_snd_{int(time.time()*1000)}"
+                ctypes.windll.winmm.mciSendStringW(f'open "{target}" type mpegvideo alias {alias}', None, 0, None)
+                ctypes.windll.winmm.mciSendStringW(f'play {alias}', None, 0, None)
+                time.sleep(2.5)
+                ctypes.windll.winmm.mciSendStringW(f'stop {alias}', None, 0, None)
+                ctypes.windll.winmm.mciSendStringW(f'close {alias}', None, 0, None)
+            elif winsound:
+                winsound.Beep(1200, 200)
+        except Exception:
+            pass
+    threading.Thread(target=_worker, daemon=True).start()
 
 # --- 국내 통신사 DNS 차단 우회용 Google DoH 패치 ---
 original_getaddrinfo = socket.getaddrinfo
@@ -742,6 +770,7 @@ class ShinseonCockpit(QMainWindow):
         self._prev_div_15m = ""
 
         self._last_beep_time = 0.0
+        self._last_stoch_sound_time = 0.0
 
         self.init_ui()
         self.load_config()
@@ -1939,6 +1968,20 @@ class ShinseonCockpit(QMainWindow):
         s_15m, t_15m = get_badge_info("15m Stoch", k_15m)
         self.lbl_rsi_15m.setStyleSheet(s_15m)
         self.lbl_rsi_15m.setText(t_15m)
+
+        # 3중 스토캐스틱 RSI 동일 색상 (올그린 🟢 / 올레드 🔴) 동조 시 position.mp3 고품질 사운드 재생
+        now = time.time()
+        is_all_green = (k_1m <= 20.0 and k_5m <= 20.0 and k_15m <= 20.0)
+        is_all_red = (k_1m >= 80.0 and k_5m >= 80.0 and k_15m >= 80.0)
+
+        if is_all_green or is_all_red:
+            if self.sound_enabled and (now - self._last_stoch_sound_time >= 60.0):
+                self._last_stoch_sound_time = now
+                play_position_sound()
+                if is_all_green:
+                    self.add_log("🟢🟢🟢 [스토캐스틱 동조] 1m·5m·15m 3중 올그린 극과매도 포착! (황실 저격 사운드 송출)")
+                else:
+                    self.add_log("🔴🔴🔴 [스토캐스틱 동조] 1m·5m·15m 3중 올레드 극과매수 포착! (황실 저격 사운드 송출)")
 
         # 다이버전스 상태 변경 감지 및 로깅
         if div_5m != self._prev_div_5m:
