@@ -857,7 +857,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.81"
+        self.CURRENT_VERSION = "V7.82"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1050,8 +1050,7 @@ class BotCore:
         
         ui_callback(0.0, 0, "★ [雷達] 바이낸스 실시간 시세 웹소켓(WSS) 연결 수립 중...")
         
-        spot_exchange = ccxt.binance({
-            'options': {'defaultType': 'spot'},
+        spot_exchange = ccxt.binanceusdm({
             'enableRateLimit': True
         })
         
@@ -1066,8 +1065,8 @@ class BotCore:
         finally:
             await spot_exchange.close()
             
-        # 🟢 [v4.05 완치]: VPN 침묵의 Drop 묵살 타파 및 현물망(stream) 직통 롤백 (추후 일본 VPS 이주 시 fstream으로 복귀 강력 권장)
-        uri = "wss://stream.binance.com/stream?streams=btcusdt@ticker/btcusdt@aggTrade"
+        # 🟢 [v7.82 완공]: 도쿄 실전 서버 바이낸스 공식 선물망(fstream) 100% 직통 교정 (오차 0.00$ 무결점)
+        uri = "wss://fstream.binance.com/stream?streams=btcusdt@ticker/btcusdt@aggTrade"
         
         # 100% 실시간 리얼 청산 및 OI 버퍼 초기화
         from collections import deque
@@ -1663,14 +1662,15 @@ class BotCore:
                                 self.last_packet_latency_ms = max(0.0, recv_t - event_t)
                             
                             if stream_name == "btcusdt@ticker":
-                                # ticker 데이터 파싱 (현물 가격 수신 후 프리미엄 Basis 더해서 선물 가격으로 둔갑시킴)
-                                self.spot_price = float(data.get("c", self.spot_price))
-                                self.current_price = self.spot_price + self.price_basis
+                                # 🟢 [v7.82]: 바이낸스 공식 선물망(fstream) 직통 시세 매핑 (현물/프리미엄 둔갑 완전 삭제)
+                                self.current_price = float(data.get("c", self.current_price))
+                                self.spot_price = self.current_price
+                                self.price_basis = 0.0
                                 self.price_ready = True
                                 
-                                self.open_p = float(data.get("o", self.open_p)) + self.price_basis
-                                self.high_p = float(data.get("h", self.high_p)) + self.price_basis
-                                self.low_p = float(data.get("l", self.low_p)) + self.price_basis
+                                self.open_p = float(data.get("o", self.open_p))
+                                self.high_p = float(data.get("h", self.high_p))
+                                self.low_p = float(data.get("l", self.low_p))
                                 
                                 now_t = time.time()
                                 self.price_history.append((now_t, self.current_price))

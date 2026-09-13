@@ -1,9 +1,9 @@
 {
-    "CURRENT_VERSION": "V7.81",
+    "CURRENT_VERSION": "V7.82",
     "auto_start": false,
     "manual_threshold": false,
-    "target_liq": "500000",
-    "target_oi": "0.15",
+    "target_liq": "1000000",
+    "target_oi": "0.17",
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
