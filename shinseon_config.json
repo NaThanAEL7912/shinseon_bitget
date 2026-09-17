@@ -7,16 +7,16 @@
     "target_slippage": "0.15",
     "session_thresholds": {
         "asia": {
-            "liq": 600000.0,
-            "oi": 0.12,
-            "sl": -0.6,
-            "enabled": false
+            "liq": 1000000.0,
+            "oi": 0.17,
+            "sl": -0.8,
+            "enabled": true
         },
         "europe": {
             "liq": 1000000.0,
-            "oi": 0.15,
+            "oi": 0.17,
             "sl": -0.8,
-            "enabled": false
+            "enabled": true
         },
         "us": {
             "liq": 1000000.0,
@@ -25,32 +25,32 @@
             "enabled": true
         },
         "pacific": {
-            "liq": 500000.0,
-            "oi": 0.12,
+            "liq": 1000000.0,
+            "oi": 0.17,
             "sl": -1.0,
             "enabled": false
         },
         "weekend_asia": {
-            "liq": 200000.0,
-            "oi": 0.12,
+            "liq": 1000000.0,
+            "oi": 0.17,
             "sl": -0.6,
-            "enabled": false
+            "enabled": true
         },
         "weekend_europe": {
-            "liq": 300000.0,
-            "oi": 0.15,
+            "liq": 1000000.0,
+            "oi": 0.17,
             "sl": -0.6,
-            "enabled": false
+            "enabled": true
         },
         "weekend_us": {
-            "liq": 500000.0,
-            "oi": 0.18,
+            "liq": 1000000.0,
+            "oi": 0.17,
             "sl": -0.8,
-            "enabled": false
+            "enabled": true
         },
         "weekend_pacific": {
-            "liq": 150000.0,
-            "oi": 0.11,
+            "liq": 1000000.0,
+            "oi": 0.17,
             "sl": -0.5,
             "enabled": false
         }
@@ -82,9 +82,9 @@
         },
         "us": {
             "leverage": 30,
-            "betting_ratio": 2250.0,
-            "split_entry_1_ratio": 1500.0,
-            "split_entry_2_ratio": 750.0,
+            "betting_ratio": 3750.0,
+            "split_entry_1_ratio": 2500.0,
+            "split_entry_2_ratio": 1250.0,
             "split_entry_2_trigger_pct": -0.3,
             "split_entry_3_ratio": 0.0,
             "split_entry_3_trigger_pct": 0.0,

@@ -198,7 +198,7 @@ QCheckBox::indicator:checked {
 class ShinseonBacktesterGUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.79 [SHINSEON BACKTESTER]")
+        self.setWindowTitle("신선(神選) 오더플로우 전문 독립 전략 백테스터 V7.84 [SHINSEON BACKTESTER]")
         self.resize(1400, 920)
         self.setStyleSheet(DARK_GOLD_STYLE)
 
@@ -253,7 +253,7 @@ class ShinseonBacktesterGUI(QMainWindow):
         layout.setSpacing(8)
 
         top_h = QHBoxLayout()
-        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.79 (황실 콕핏 qasync 딜레이 보정 & 마스터 백서 동기화)</span>")
+        title_lbl = QLabel("<b style='font-size: 16px; color: #ffd700;'>神選 [SHINSEON] 전략 백테스터</b> <span style='color: #8b949e;'>V7.84 (46일 전수 실측 데이터 통합 & 미장 스나이퍼 백테스트)</span>")
         top_h.addWidget(title_lbl)
         top_h.addStretch()
 
@@ -282,19 +282,19 @@ class ShinseonBacktesterGUI(QMainWindow):
         date_h.setSpacing(8)
 
         date_h.addWidget(QLabel("<b style='color: #00ffcc;'>시작 일시:</b>"))
-        self.dt_start = QDateTimeEdit(QDateTime.fromString("2026-08-17 00:00:00", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_start = QDateTimeEdit(QDateTime.fromString("2026-08-07 00:00:00", "yyyy-MM-dd HH:mm:ss"))
         self.dt_start.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.dt_start.setMinimumDateTime(QDateTime.fromString("2026-08-01 00:00:00", "yyyy-MM-dd HH:mm:ss"))
-        self.dt_start.setMaximumDateTime(QDateTime.fromString("2026-08-31 23:59:59", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_start.setMaximumDateTime(QDateTime.fromString("2026-12-31 23:59:59", "yyyy-MM-dd HH:mm:ss"))
         self.dt_start.setCalendarPopup(True)
         self.dt_start.dateTimeChanged.connect(self.update_period_preview)
         date_h.addWidget(self.dt_start)
 
         date_h.addWidget(QLabel("<b style='color: #ff3366;'>종료 일시:</b>"))
-        self.dt_end = QDateTimeEdit(QDateTime.fromString("2026-08-21 23:59:59", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_end = QDateTimeEdit(QDateTime.fromString("2026-09-17 23:59:59", "yyyy-MM-dd HH:mm:ss"))
         self.dt_end.setDisplayFormat("yyyy-MM-dd HH:mm:ss")
         self.dt_end.setMinimumDateTime(QDateTime.fromString("2026-08-01 00:00:00", "yyyy-MM-dd HH:mm:ss"))
-        self.dt_end.setMaximumDateTime(QDateTime.fromString("2026-08-31 23:59:59", "yyyy-MM-dd HH:mm:ss"))
+        self.dt_end.setMaximumDateTime(QDateTime.fromString("2026-12-31 23:59:59", "yyyy-MM-dd HH:mm:ss"))
         self.dt_end.setCalendarPopup(True)
         self.dt_end.dateTimeChanged.connect(self.update_period_preview)
         date_h.addWidget(self.dt_end)
