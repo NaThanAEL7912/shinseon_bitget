@@ -857,7 +857,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.84"
+        self.CURRENT_VERSION = "V7.85"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1626,7 +1626,10 @@ class BotCore:
                                     rolling_tot = sum(val for t, val in self.liq_buffer if now_t - t <= 60.0)
                                     cur_price = getattr(self, "current_price", 0.0)
                                     log_msg = f"💥 [바이낸스 청산포착] {side_label} 신규 강제 청산 ${usd_val:,.0f} 발생! (1분 누적: ${rolling_tot:,.0f})"
-                                    asyncio.create_task(self.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": cur_price}))
+                                    if self.ui_cb:
+                                        self.ui_cb(cur_price, 1, log_msg)
+                                    if ws_server:
+                                        asyncio.create_task(ws_server.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": cur_price}))
                                     
                 except Exception as stream_err:
                     self.liq_wss_connected = False
