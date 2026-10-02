@@ -48,7 +48,7 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION = "V7.83"
+VERSION = "V7.84"
 
 def play_position_sound():
     def _worker():

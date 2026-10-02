@@ -857,7 +857,7 @@ def append_daily_csv_record(row_str):
 # ---- BOT CORE AND ENGINE ----
 class BotCore:
     def __init__(self):
-        self.CURRENT_VERSION = "V7.83"
+        self.CURRENT_VERSION = "V7.84"
         from collections import deque
         self.c_total = 20000.0
         self.m_bitget = 20000.0
@@ -1065,9 +1065,6 @@ class BotCore:
         finally:
             await spot_exchange.close()
             
-        # 🟢 [v7.82 완공]: 도쿄 실전 서버 바이낸스 공식 선물망(fstream) 100% 직통 교정 (오차 0.00$ 무결점)
-        uri = "wss://fstream.binance.com/stream?streams=btcusdt@ticker/btcusdt@aggTrade"
-        
         # 100% 실시간 리얼 청산 및 OI 버퍼 초기화
         from collections import deque
         import aiohttp
@@ -1552,41 +1549,90 @@ class BotCore:
 
         asyncio.create_task(run_background_latency_logger())
         
-        # [실전 연동 1]: 바이낸스 공식 선물 실시간 청산 주문 WSS 백그라운드 수집 테스크 (2초 연결 타임아웃 제한 장착!)
-        async def run_liquidation_wss():
-            liq_uri = "wss://fstream.binance.com/ws/btcusdt@forceOrder"
+        # [실전 연동 1]: 바이낸스 선물 공식 복합 웹소켓 엔진 (aggTrade + forceOrder 단일 초저지연 직통 스트림)
+        async def run_binance_market_stream():
+            stream_uri = "wss://fstream.binance.com/market/stream?streams=btcusdt@aggTrade/btcusdt@forceOrder"
+            retry_delay = 0.1
             while self.is_running:
                 try:
-                    # 방심위 차단 무한 Pending을 방지하기 위해 2.0초 연결 타임아웃 제한 강제화
-                    liq_ws = await asyncio.wait_for(websockets.connect(liq_uri), timeout=2.0)
+                    # 방심위 차단 무한 Pending 방지 및 연결 유지 설정 (ping_interval=20, ping_timeout=10)
+                    stream_ws = await asyncio.wait_for(
+                        websockets.connect(stream_uri, ping_interval=20, ping_timeout=10),
+                        timeout=5.0
+                    )
                     self.liq_wss_connected = True
-                    async with liq_ws:
+                    retry_delay = 0.1
+                    ui_callback(self.current_price, 0, "✔ [雷達] 바이낸스 공식 복합 웹소켓(aggTrade+forceOrder) 연결 완료! 초저지연 스트리밍 가동.", current_session="실전 대기 중")
+                    logger.info("✔ [바이낸스] 공식 선물 복합 웹소켓(aggTrade+forceOrder) 직통 연결 성공")
+                    async with stream_ws:
                         while self.is_running:
-                            msg = await liq_ws.recv()
-                            liq_data = json.loads(msg)
-                            o = liq_data.get("o", {})
-                            if o:
-                                self.last_real_forceorder_time = time.time()
-                                q = float(o.get("q", 0.0))
-                                p = float(o.get("p", 0.0))
-                                usd_val = q * p
-                                now_t = time.time()
-                                self.liq_buffer.append((now_t, usd_val))
-                                side_label = "SHORT" if o.get("S") == "BUY" else "LONG"
-                                if o.get("S") == "BUY":
-                                    self.buy_liq_buffer.append((now_t, usd_val))
-                                elif o.get("S") == "SELL":
-                                    self.sell_liq_buffer.append((now_t, usd_val))
+                            msg = await stream_ws.recv()
+                            packet = json.loads(msg)
+                            stream = packet.get("stream", "")
+                            payload = packet.get("data", {})
+                            
+                            if stream == "btcusdt@aggTrade":
+                                price = float(payload.get("p", self.current_price))
+                                qty = float(payload.get("q", 0.0))
+                                is_buyer_maker = payload.get("m", False)
                                 
-                                # 💥 바이낸스 신규 강제 청산 발생 시 실시간 금액 로그 브로드캐스트
-                                rolling_tot = sum(val for t, val in self.liq_buffer if now_t - t <= 60.0)
-                                cur_price = getattr(self, "current_price", 0.0)
-                                log_msg = f"💥 [바이낸스 청산포착] {side_label} 신규 강제 청산 ${usd_val:,.0f} 발생! (1분 누적: ${rolling_tot:,.0f})"
-                                asyncio.create_task(self.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": cur_price}))
-                except Exception as liq_err:
+                                # CVD 실시간 볼륨 누적 (buyer maker면 매도 체결, 아니면 매수 체결)
+                                if is_buyer_maker:
+                                    self.agg_sell_vol += qty
+                                else:
+                                    self.agg_buy_vol += qty
+                                    
+                                self.current_price = price
+                                self.spot_price = price
+                                self.price_basis = 0.0
+                                self.price_ready = True
+                                
+                                event_t_ms = payload.get("E", time.time() * 1000)
+                                self.last_binance_time_ms = event_t_ms
+                                self.last_packet_latency_ms = round(max(0.0, (time.time() * 1000.0) - event_t_ms), 1)
+                                
+                                now_t = time.time()
+                                self.price_history.append((now_t, price))
+                                while self.price_history and now_t - self.price_history[0][0] > 60.0:
+                                    self.price_history.popleft()
+                                    
+                                # 하이페리온 및 클라이언트 전용 초고속 market_ticker 실시간 브로드캐스트
+                                if ws_server:
+                                    ticker_pkt = {
+                                        "symbol": "BTCUSDT",
+                                        "source": "binance_futures_wss",
+                                        "price": price,
+                                        "latency_ms": self.last_packet_latency_ms,
+                                        "timestamp": now_t
+                                    }
+                                    asyncio.create_task(ws_server.broadcast_event("market_ticker", ticker_pkt))
+                                    
+                            elif stream == "btcusdt@forceOrder":
+                                o = payload.get("o", {})
+                                if o:
+                                    self.last_real_forceorder_time = time.time()
+                                    q = float(o.get("q", 0.0))
+                                    p = float(o.get("p", 0.0))
+                                    usd_val = q * p
+                                    now_t = time.time()
+                                    self.liq_buffer.append((now_t, usd_val))
+                                    side_label = "SHORT" if o.get("S") == "BUY" else "LONG"
+                                    if o.get("S") == "BUY":
+                                        self.buy_liq_buffer.append((now_t, usd_val))
+                                    elif o.get("S") == "SELL":
+                                        self.sell_liq_buffer.append((now_t, usd_val))
+                                    
+                                    # 💥 바이낸스 신규 강제 청산 발생 시 실시간 금액 로그 브로드캐스트
+                                    rolling_tot = sum(val for t, val in self.liq_buffer if now_t - t <= 60.0)
+                                    cur_price = getattr(self, "current_price", 0.0)
+                                    log_msg = f"💥 [바이낸스 청산포착] {side_label} 신규 강제 청산 ${usd_val:,.0f} 발생! (1분 누적: ${rolling_tot:,.0f})"
+                                    asyncio.create_task(self.broadcast_event("ui_update", {"msg": log_msg, "log_type": 1, "price": cur_price}))
+                                    
+                except Exception as stream_err:
                     self.liq_wss_connected = False
-                    logger.warning(f"선물 청산 WSS 연결 장애: {liq_err}")
-                    await asyncio.sleep(0.5)
+                    logger.warning(f"바이낸스 복합 웹소켓 연결 장애 ➡️ 재연결 시도 중: {stream_err}")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay = min(retry_delay * 2, 1.0)
                     
         # [실전 연동 2]: 바이낸스 공식 선물 실시간 OI REST API 초고속(0.2초 주기) 폴링 테스크
         async def run_oi_polling():
@@ -1615,7 +1661,7 @@ class BotCore:
                         pass
                     await asyncio.sleep(0.2)
                     
-        # [실전 연동 4]: 바이낸스 100% 정밀 실시간 네트워크 패킷 레이턴시(Ping) 실측 데몬 (2초 주기)
+        # [실전 연동 3]: 바이낸스 100% 정밀 실시간 네트워크 패킷 레이턴시(Ping) 실측 데몬 (2초 주기)
         async def run_real_latency_ping():
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=0.8)) as session:
                 while self.is_running:
@@ -1629,50 +1675,9 @@ class BotCore:
                         pass
                     await asyncio.sleep(2.0)
 
-        asyncio.create_task(run_liquidation_wss())
+        asyncio.create_task(run_binance_market_stream())
         asyncio.create_task(run_oi_polling())
         asyncio.create_task(run_real_latency_ping())
-        
-        # [실전 연동 3]: 바이낸스 100% 선물 실시간 시세 0.1초(100ms) 초고속 폴링 엔진 (지오블로킹 15초 타임아웃 완전 박멸 & 2.9ms 극초음속 수신)
-        async def run_futures_price_polling():
-            price_url = "https://fapi.binance.com/fapi/v1/ticker/price?symbol=BTCUSDT"
-            connector = aiohttp.TCPConnector(limit=10, keepalive_timeout=60.0)
-            async with aiohttp.ClientSession(connector=connector, timeout=aiohttp.ClientTimeout(total=0.5)) as session:
-                ui_callback(self.current_price, 0, "✔ [雷達] 바이낸스 선물 0.1초 초고속 시세 엔진 가동 완료! 실시간 감시 작동.", current_session="실전 대기 중")
-                while self.is_running:
-                    try:
-                        t0 = time.time()
-                        async with session.get(price_url) as resp:
-                            if resp.status == 200:
-                                data = await resp.json()
-                                price = float(data.get("price", self.current_price))
-                                self.current_price = price
-                                self.spot_price = price
-                                self.price_basis = 0.0
-                                self.price_ready = True
-                                
-                                now_t = time.time()
-                                lat_ms = (now_t - t0) * 1000.0
-                                self.last_packet_latency_ms = round(lat_ms, 1)
-                                self.price_history.append((now_t, price))
-                                while self.price_history and now_t - self.price_history[0][0] > 60.0:
-                                    self.price_history.popleft()
-                                    
-                                # 하이페리온 및 클라이언트 전용 초고속 market_ticker 실시간 브로드캐스트
-                                if ws_server:
-                                    ticker_pkt = {
-                                        "symbol": "BTCUSDT",
-                                        "source": "binance_futures",
-                                        "price": price,
-                                        "latency_ms": self.last_packet_latency_ms,
-                                        "timestamp": now_t
-                                    }
-                                    asyncio.create_task(ws_server.broadcast_event("market_ticker", ticker_pkt))
-                    except Exception as poll_err:
-                        pass
-                    await asyncio.sleep(0.1)
-
-        asyncio.create_task(run_futures_price_polling())
 
         # 메인 엔진 루프 유지
         while self.is_running:
